@@ -30,12 +30,13 @@ const SETUP_TTL_MS = 72 * 3600_000;
 const RESET_TTL_MS = 24 * 3600_000;
 
 /** Stored without dashes (codes are matched after normaliseCode strips them); shown as ADM-NAME-XXXX. */
-export function newAdminReferralCode(username: string): string {
-  const name = username.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 8) || "ADMIN";
-  const bytes = randomBytes(4);
-  return `ADM${name}${[...bytes].map((b) => ALPHABET[b % ALPHABET.length]).join("")}`;
+/** "ADM" + 8 random symbols. Nothing about the admin (name, username) is in it: codes are shared publicly. */
+export function newAdminReferralCode(): string {
+  const bytes = randomBytes(8);
+  return `ADM${[...bytes].map((b) => ALPHABET[b % ALPHABET.length]).join("")}`;
 }
-export const formatReferralCode = (code: string, staff: boolean) => (staff && code.startsWith("ADM") && code.length > 7 ? `ADM-${code.slice(3, -4)}-${code.slice(-4)}` : code);
+/** ADMXXXXXXXX -> ADM-XXXX-XXXX for reading aloud; anything else is shown as stored. */
+export const formatReferralCode = (code: string, staff: boolean) => (staff && /^ADM[A-Z0-9]{8}$/.test(code) ? `ADM-${code.slice(3, 7)}-${code.slice(7)}` : code);
 
 const accessSnapshot = (u: Pick<User, "role" | "status" | "adminRoleId" | "permGrants" | "permDenials">) => ({
   role: u.role,
@@ -82,8 +83,8 @@ export async function createAdmin(actor: User, input: NewAdmin, ip?: string) {
       if (input.adminRoleId && !(await tx.adminRole.findUnique({ where: { id: input.adminRoleId } }))) throw new AdminError("BAD_ROLE", "That role doesn't exist", 422);
       const taken = await tx.user.findFirst({ where: { OR: [{ email: input.email }, { adminUsername: input.username }] }, select: { email: true } });
       if (taken) throw taken.email === input.email ? new AdminError("EMAIL_TAKEN", "An account with this email already exists") : new AdminError("USERNAME_TAKEN", "That username is taken");
-      let code = newAdminReferralCode(input.username);
-      for (let i = 0; i < 5 && (await tx.user.findUnique({ where: { referralCode: code }, select: { id: true } })); i++) code = newAdminReferralCode(input.username);
+      let code = newAdminReferralCode();
+      for (let i = 0; i < 5 && (await tx.user.findUnique({ where: { referralCode: code }, select: { id: true } })); i++) code = newAdminReferralCode();
       const user = await tx.user.create({
         data: {
           email: input.email,

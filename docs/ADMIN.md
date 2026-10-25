@@ -45,9 +45,10 @@ Permission catalogue (`src/lib/permissions.ts`):
 
 ## Referrals
 
-Each admin gets a permanent, unique code `ADM-<USERNAME up to 8>-<4 random>`, stored without
-dashes (`ADMFELIX7X2K`); typed codes are matched case- and dash-insensitively. The link is
-`<SITE_URL>/register?ref=<code>`.
+Each admin gets a permanent, unique code `ADM-XXXX-XXXX` (8 random symbols, nothing from the
+admin's name or username), stored without dashes (`ADMH9ZQHQDG`); typed codes are matched case- and
+dash-insensitively. The link is `<SITE_URL>/register?ref=<code>`. Players don't have referral
+codes: only an admin's code is accepted at sign-up.
 
 At sign-up the server validates the code and writes `referredById`, `referredAt` and
 `referralSource` (`LINK` or `CODE`) **once**; nothing updates them afterwards, so attribution

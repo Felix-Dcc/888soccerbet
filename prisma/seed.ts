@@ -4,6 +4,7 @@ import { hashPassword } from "../src/lib/auth";
 import { houseAccountId, userAccountId, postTransaction } from "../src/lib/ledger";
 import { toPesewas } from "../src/lib/money";
 import { syncFixtures } from "../src/lib/sync";
+import { newAdminReferralCode } from "../src/lib/admins";
 
 async function main() {
   // House singleton accounts.
@@ -21,7 +22,7 @@ async function main() {
       kycStatus: "VERIFIED",
       dateOfBirth: new Date("1990-01-01"),
       phone: "0240000002",
-      referralCode: "ADMNKING",
+      referralCode: newAdminReferralCode(),
     },
     update: { role: "SUPER_ADMIN", phone: "0240000002" },
   });

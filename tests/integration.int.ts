@@ -967,8 +967,9 @@ describe("admin system", () => {
   it("creates an admin with a unique ADM code and a single-use setup link", async () => {
     const sa = await makeSuper();
     const { user, token } = await newAdmin(sa, { permGrants: ["referrals.view", "not.a.permission"] });
-    expect(user.referralCode).toMatch(/^ADMFELIX[A-Z0-9]{0,3}[ACDEFGHJKLMNPQRSTUVWXYZ2345679]{4}$/); // ADM + up to 8 of the username + 4 random
-    expect(formatReferralCode(user.referralCode, true)).toMatch(/^ADM-FELIX[A-Z0-9]{0,3}-[A-Z0-9]{4}$/);
+    expect(user.referralCode).toMatch(/^ADM[ACDEFGHJKLMNPQRSTUVWXYZ2345679]{8}$/); // ADM + 8 random: no name in it
+    expect(user.referralCode).not.toMatch(/FELIX/i);
+    expect(formatReferralCode(user.referralCode, true)).toMatch(/^ADM-[A-Z0-9]{4}-[A-Z0-9]{4}$/);
     expect(user.permGrants).toEqual(["referrals.view"]); // junk dropped
     await expect(consumeAccessToken(token, "a-strong-password")).resolves.toMatchObject({ userId: user.id });
     await expect(consumeAccessToken(token, "another-password1")).rejects.toMatchObject({ code: "BAD_LINK" }); // single use
