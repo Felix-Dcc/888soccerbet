@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { NETWORKS } from "./providers/payments/types";
 
 // Messages here are shown to players verbatim (see errorResponse), so forms carry no helper text.
 const email = z.string().email("Enter a valid email").max(200).transform((s) => s.toLowerCase().trim());
@@ -52,16 +53,21 @@ export const placeBetSchema = z.object({
 });
 export type PlaceBetInput = z.infer<typeof placeBetSchema>;
 
+// Optional: older clients omit it and the server guesses from the number prefix.
+export const network = z.enum(NETWORKS, { errorMap: () => ({ message: "Choose your mobile money network" }) }).optional();
+
 export const depositSchema = z.object({
   amountGhs,
   idempotencyKey: z.string().min(8).max(100),
   msisdn,
+  network,
 });
 
 export const withdrawSchema = z.object({
   amountGhs,
   idempotencyKey: z.string().min(8).max(100),
   msisdn,
+  network,
 });
 
 // --- Admin: manually created games ---

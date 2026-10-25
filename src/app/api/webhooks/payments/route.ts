@@ -5,17 +5,22 @@ import { json } from "@/lib/http";
 export const dynamic = "force-dynamic";
 
 /**
- * Payment provider callback. The ONLY place a deposit gets credited. Signature is
- * verified before anything is trusted; processing is idempotent.
+ * Payment provider callback (Flutterwave: set this URL and the secret hash on its webhook page).
+ * The ONLY place a deposit gets credited. Authenticity is checked before anything is trusted,
+ * and processing is idempotent. 200 = handled (or nothing to do); 401 = not from the PSP;
+ * 500 = try again later (the PSP retries).
  */
 export async function POST(req: Request) {
-  const raw = await req.text();
-  const signature = req.headers.get("x-stakra-signature");
-  const provider = paymentProvider();
-
-  const event = provider.verifyWebhook(raw, signature);
-  if (!event) return json({ error: "invalid signature" }, { status: 401 });
-
-  const result = await processPaymentEvent(provider.name, event);
-  return json({ result });
+  try {
+    const raw = await req.text();
+    const provider = paymentProvider();
+    const verified = await provider.verifyWebhook(raw, req.headers);
+    if (!verified.ok) return json({ error: "invalid signature" }, { status: 401 });
+    if (!verified.event) return json({ result: "ignored" });
+    const result = await processPaymentEvent(provider.name, verified.event);
+    return json({ result });
+  } catch (e) {
+    console.error("[webhook] payment callback failed, provider will retry:", e);
+    return json({ error: "temporarily unavailable" }, { status: 500 });
+  }
 }

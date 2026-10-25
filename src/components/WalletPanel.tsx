@@ -1,7 +1,10 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { newId } from "@/lib/clientId";
+import { NETWORKS, guessNetwork, type Network } from "@/lib/providers/payments/types";
+
+const NETWORK_LABEL: Record<Network, string> = { MTN: "MTN MoMo", TELECEL: "Telecel Cash", AIRTELTIGO: "AirtelTigo Money" };
 
 type Mode = "deposit" | "withdraw";
 interface Verification {
@@ -22,9 +25,36 @@ export function WalletPanel({ minDepositGhs, verification }: { minDepositGhs: nu
   // Hidden until a big win makes it apply (or money is already held for review).
   const showVerification = verification.required || verification.heldGhs > 0;
   const [msisdn, setMsisdn] = useState("");
+  const [network, setNetwork] = useState<Network>("MTN");
+  const [networkPicked, setNetworkPicked] = useState(false); // once chosen by hand, the prefix guess stops overriding it
   const [busy, setBusy] = useState(false);
   const [pending, setPending] = useState<string | null>(null);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+
+  // Back from the payment provider's approval page (it adds ?status=&tx_ref= to our wallet URL).
+  useEffect(() => {
+    const q = new URLSearchParams(window.location.search);
+    const status = q.get("status");
+    if (!q.get("tx_ref") || !status) return;
+    setMsg(
+      /cancel/i.test(status)
+        ? { ok: false, text: "Payment cancelled. Nothing was taken." }
+        : { ok: true, text: "Payment submitted. Your balance updates as soon as it's confirmed." },
+    );
+    window.history.replaceState(null, "", window.location.pathname);
+    window.dispatchEvent(new Event("stakra:refresh"));
+  }, []);
+
+  const onNumber = (v: string) => {
+    setMsisdn(v);
+    if (!networkPicked && /^0\d{2}/.test(v)) setNetwork(guessNetwork(v));
+  };
+
+  /** Off to the provider's page to approve, when it has one; otherwise the sandbox confirm panel. */
+  const afterCharge = (d: { intent: { ref: string }; redirectUrl?: string | null }) => {
+    if (d.redirectUrl) window.location.assign(d.redirectUrl);
+    else setPending(d.intent.ref);
+  };
 
   async function initiate(e: React.FormEvent) {
     e.preventDefault();
@@ -33,15 +63,15 @@ export function WalletPanel({ minDepositGhs, verification }: { minDepositGhs: nu
     const res = await fetch(`/api/wallet/${mode}`, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ amountGhs: Number(amount), msisdn, idempotencyKey: newId() }),
+      body: JSON.stringify({ amountGhs: Number(amount), msisdn, network, idempotencyKey: newId() }),
     });
     const d = await res.json();
     setBusy(false);
     if (res.status === 202) {
       if (mode === "deposit") {
-        setPending(d.intent.ref);
+        afterCharge(d);
       } else {
-        setMsg({ ok: true, text: `Withdrawal ${d.intent.ref} pending` });
+        setMsg({ ok: true, text: `Withdrawal ${d.intent.ref} sent. It reaches your mobile money shortly.` });
         window.dispatchEvent(new Event("stakra:refresh"));
         router.refresh();
       }
@@ -57,11 +87,11 @@ export function WalletPanel({ minDepositGhs, verification }: { minDepositGhs: nu
     const res = await fetch("/api/wallet/verify", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ msisdn, idempotencyKey: newId() }),
+      body: JSON.stringify({ msisdn, network, idempotencyKey: newId() }),
     });
     const d = await res.json();
     setBusy(false);
-    if (res.status === 202) setPending(d.intent.ref);
+    if (res.status === 202) afterCharge(d);
     else setMsg({ ok: false, text: d.error ?? "Request failed" });
   }
 
@@ -122,7 +152,25 @@ export function WalletPanel({ minDepositGhs, verification }: { minDepositGhs: nu
         </div>
         <div>
           <label className="label" htmlFor="msisdn">Mobile money number</label>
-          <input id="msisdn" type="tel" inputMode="numeric" autoComplete="tel-national" maxLength={10} required className="input" value={msisdn} onChange={(e) => setMsisdn(e.target.value)} />
+          <input id="msisdn" type="tel" inputMode="numeric" autoComplete="tel-national" maxLength={10} required className="input" value={msisdn} onChange={(e) => onNumber(e.target.value)} />
+        </div>
+        <div>
+          <label className="label" htmlFor="network">Network</label>
+          <select
+            id="network"
+            className="input"
+            value={network}
+            onChange={(e) => {
+              setNetwork(e.target.value as Network);
+              setNetworkPicked(true);
+            }}
+          >
+            {NETWORKS.map((n) => (
+              <option key={n} value={n}>
+                {NETWORK_LABEL[n]}
+              </option>
+            ))}
+          </select>
         </div>
         <button className="btn-lime w-full py-3" disabled={busy || locked}>
           {busy ? "Working…" : mode === "deposit" ? "Deposit" : locked ? "Verify to withdraw" : "Withdraw"}

@@ -144,6 +144,25 @@ first), `worker` (same code with `SERVICE_ROLE=worker`), `Postgres`, and `db-bac
 `railway up --service web` / `--service worker` from this folder. kingzbet.live points at `web` via
 Cloudflare DNS.
 
+## Going live with Flutterwave
+
+The Flutterwave adapter (`src/lib/providers/payments/flutterwave.ts`) is built and tested; the site
+uses the sandbox until it is switched on. On Flutterwave's dashboard (test mode first):
+
+1. Settings > Webhooks: URL `https://kingzbet.live/api/webhooks/payments`, type a long random
+   **Secret hash**, and turn webhooks on.
+2. Settings > API keys: copy the **Secret key**.
+3. Railway > kingzbet > `web` > Variables: set `FLW_SECRET_KEY`, `FLW_SECRET_HASH` (same value as
+   step 1), then `PAYMENT_PROVIDER=flutterwave`. Railway redeploys; System in the admin console
+   shows Payments as flutterwave (sandbox while the key is a TEST key).
+4. Make one small deposit and one withdrawal on each network (MTN, Telecel, AirtelTigo). Then
+   repeat steps 1-3 with the live keys.
+
+Deposits send the player to Flutterwave's approval page and are credited only by the webhook,
+after the amount, currency and reference are re-checked with Flutterwave's API. Withdrawals hold
+the money first, then ask Flutterwave to pay; a clear refusal returns the money at once, an
+unclear reply leaves it held until the webhook settles it.
+
 ## Backups
 
 `db-backup` is a Railway cron job (`ops/db-backup/`) that runs at 03:00 UTC every night: it

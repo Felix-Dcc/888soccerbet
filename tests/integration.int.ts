@@ -12,6 +12,12 @@ vi.mock("../src/lib/providers/odds", async (load) => {
   const real = await load<typeof import("../src/lib/providers/odds")>();
   return { ...real, oddsProvider: () => feed.override ?? real.oddsProvider() };
 });
+// Lets a test swap in a fake payment provider (e.g. one that refuses payouts).
+const psp = vi.hoisted(() => ({ override: null as import("../src/lib/providers/payments").PaymentProvider | null }));
+vi.mock("../src/lib/providers/payments", async (load) => {
+  const real = await load<typeof import("../src/lib/providers/payments")>();
+  return { ...real, paymentProvider: () => psp.override ?? real.paymentProvider() };
+});
 // Capture emails instead of calling Brevo.
 const mail = vi.hoisted(() => ({ sent: [] as { to: string; subject: string; text: string }[] }));
 vi.mock("../src/lib/email", async (load) => {
@@ -211,6 +217,39 @@ describe("wallet", () => {
     const ev = { providerEventId: `evt_${randomUUID()}`, ourRef: intent.ref, status: "FAILED" as const, amountPesewas: intent.amount };
     await processPaymentEvent("sandbox", ev);
     expect(await userCashBalance(prisma, user.id)).toBe(toPesewas(100)); // refunded
+    expect(await ledgerIsBalanced()).toBe(true);
+  });
+
+  it("never credits a deposit for a different amount or a payment of the wrong kind", async () => {
+    const user = await fundedUser(0);
+    const intent = await initiateDeposit(user.id, 50, "0201234567", randomUUID());
+    expect(intent.metadata).toMatchObject({ msisdn: "0201234567", network: "TELECEL" }); // network guessed from the prefix
+    const base = { ourRef: intent.ref, status: "SUCCEEDED" as const };
+    expect(await processPaymentEvent("sandbox", { ...base, providerEventId: `evt_${randomUUID()}`, amountPesewas: toPesewas(5000) })).toBe("ignored");
+    expect(await processPaymentEvent("sandbox", { ...base, providerEventId: `evt_${randomUUID()}`, amountPesewas: intent.amount, direction: "WITHDRAWAL" })).toBe("ignored");
+    expect(await userCashBalance(prisma, user.id)).toBe(0n);
+    expect(await processPaymentEvent("sandbox", { ...base, providerEventId: `evt_${randomUUID()}`, amountPesewas: intent.amount, direction: "DEPOSIT" })).toBe("processed");
+    expect(await userCashBalance(prisma, user.id)).toBe(toPesewas(50));
+  });
+
+  it("gives the money back when the provider refuses a payout, and keeps it held when the outcome is unclear", async () => {
+    const user = await fundedUser(100);
+    await prisma.user.update({ where: { id: user.id }, data: { kycStatus: "VERIFIED" } });
+    const fake = (initiate: import("../src/lib/providers/payments").PaymentProvider["initiate"]) =>
+      ({ name: "sandbox", isSandbox: true, initiate, verifyWebhook: async () => ({ ok: false as const }) });
+    try {
+      psp.override = fake(async (r) => (r.direction === "WITHDRAWAL" ? { providerRef: null, status: "FAILED" } : { providerRef: null, status: "PENDING" }));
+      await expect(initiateWithdrawal(user.id, 40, "0241234567", randomUUID())).rejects.toMatchObject({ code: "PAYOUT_REFUSED" });
+      expect(await userCashBalance(prisma, user.id)).toBe(toPesewas(100)); // returned at once
+      psp.override = fake(async () => {
+        throw new Error("timeout");
+      });
+      const unclear = await initiateWithdrawal(user.id, 40, "0241234567", randomUUID());
+      expect(unclear.status).toBe("PENDING");
+      expect(await userCashBalance(prisma, user.id)).toBe(toPesewas(60)); // still held until the webhook says
+    } finally {
+      psp.override = null;
+    }
     expect(await ledgerIsBalanced()).toBe(true);
   });
 

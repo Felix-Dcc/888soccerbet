@@ -9,7 +9,8 @@ import { accountBalance, postTransaction, userAccountId, houseAccountId, userCas
 import { formatPesewas, toPesewas } from "./money";
 import { payRef } from "./ids";
 import { paymentProvider } from "./providers/payments";
-import type { NormalisedEvent } from "./providers/payments/types";
+import { guessNetwork, type Network, type NormalisedEvent } from "./providers/payments/types";
+import { FlutterwaveError } from "./providers/payments/flutterwave";
 import { notifyPayment } from "./emailFlows";
 
 export class WalletError extends Error {
@@ -79,14 +80,23 @@ async function checkDepositAllowed(userId: string, amount: bigint) {
 }
 
 /** Shared by deposits and verification payments: one idempotent payment intent with the PSP. */
-async function createDepositIntent(userId: string, amount: bigint, msisdn: string, idempotencyKey: string, purpose?: "VERIFICATION") {
+async function createDepositIntent(userId: string, amount: bigint, msisdn: string, network: Network, idempotencyKey: string, purpose?: "VERIFICATION") {
   const existing = await prisma.paymentIntent.findUnique({ where: { idempotencyKey } });
   if (existing) return existing;
   await checkDepositAllowed(userId, amount);
 
   const provider = paymentProvider();
   const ref = payRef(purpose ? "VER" : "DEP");
-  const charge = await provider.initiate({ ref, amountPesewas: amount, msisdn, direction: "DEPOSIT" });
+  const user = await prisma.user.findUniqueOrThrow({ where: { id: userId }, select: { email: true, displayName: true } });
+  let charge;
+  try {
+    charge = await provider.initiate({ ref, amountPesewas: amount, msisdn, network, direction: "DEPOSIT", email: user.email, name: user.displayName });
+  } catch (e) {
+    if (e instanceof FlutterwaveError) throw new WalletError("PAYMENT_REFUSED", e.message);
+    throw e;
+  }
+  // The approval page (if the PSP has one) is kept on the intent so a retried request gets it back.
+  const meta = { msisdn, network, ...(purpose ? { purpose } : {}), ...(charge.redirectUrl ? { redirectUrl: charge.redirectUrl } : {}) };
   try {
     return await prisma.paymentIntent.create({
       data: {
@@ -98,7 +108,7 @@ async function createDepositIntent(userId: string, amount: bigint, msisdn: strin
         provider: provider.name,
         providerRef: charge.providerRef,
         idempotencyKey,
-        metadata: purpose ? { msisdn, purpose } : { msisdn },
+        metadata: meta,
       },
     });
   } catch (e) {
@@ -108,21 +118,21 @@ async function createDepositIntent(userId: string, amount: bigint, msisdn: strin
   }
 }
 
-export async function initiateDeposit(userId: string, amountGhs: number, msisdn: string, idempotencyKey: string) {
+export async function initiateDeposit(userId: string, amountGhs: number, msisdn: string, idempotencyKey: string, network: Network = guessNetwork(msisdn)) {
   const amount = toPesewas(amountGhs);
   if (amount <= 0n) throw new WalletError("BAD_AMOUNT", "Amount must be positive");
   const min = minDeposit();
   if (amount < min) throw new WalletError("DEPOSIT_TOO_LOW", `Minimum deposit is GHS ${min / 100n}`);
-  return createDepositIntent(userId, amount, msisdn, idempotencyKey);
+  return createDepositIntent(userId, amount, msisdn, network, idempotencyKey);
 }
 
 /** One verification payment (fixed amount). Refused once verified or while both are awaiting review. */
-export async function initiateVerificationPayment(userId: string, msisdn: string, idempotencyKey: string) {
+export async function initiateVerificationPayment(userId: string, msisdn: string, idempotencyKey: string, network: Network = guessNetwork(msisdn)) {
   const v = await verificationState(userId);
   if (v.status === "VERIFIED") throw new WalletError("ALREADY_VERIFIED", "Your account is already verified");
   if (!v.required && v.held === 0n) throw new WalletError("NOT_REQUIRED", "Verification isn't needed yet — you can withdraw");
   if (v.paid >= v.needed) throw new WalletError("AWAITING_REVIEW", "Both verification payments are in — awaiting review");
-  return createDepositIntent(userId, v.perPayment, msisdn, idempotencyKey, "VERIFICATION");
+  return createDepositIntent(userId, v.perPayment, msisdn, network, idempotencyKey, "VERIFICATION");
 }
 
 /** Admin decision on a player's verification. Either way the held money goes to their balance. */
@@ -146,21 +156,22 @@ export async function reviewVerification(userId: string, approve: boolean): Prom
   });
 }
 
-export async function initiateWithdrawal(userId: string, amountGhs: number, msisdn: string, idempotencyKey: string) {
+export async function initiateWithdrawal(userId: string, amountGhs: number, msisdn: string, idempotencyKey: string, network: Network = guessNetwork(msisdn)) {
   const amount = toPesewas(amountGhs);
   if (amount <= 0n) throw new WalletError("BAD_AMOUNT", "Amount must be positive");
 
   const existing = await prisma.paymentIntent.findUnique({ where: { idempotencyKey } });
   if (existing) return existing;
 
-  const user = await prisma.user.findUniqueOrThrow({ where: { id: userId }, select: { kycStatus: true } });
+  const user = await prisma.user.findUniqueOrThrow({ where: { id: userId }, select: { kycStatus: true, email: true, displayName: true } });
   if (user.kycStatus !== "VERIFIED" && (await verificationRequired(prisma, userId)))
     throw new WalletError("VERIFICATION_REQUIRED", "Complete withdrawal verification before withdrawing");
 
   const provider = paymentProvider();
   const ref = payRef("WDR");
+  let intent;
   try {
-    return await prisma.$transaction(async (tx) => {
+    intent = await prisma.$transaction(async (tx) => {
       const cashId = await userAccountId(tx, userId, "USER_CASH");
       await tx.$queryRaw`SELECT id FROM "LedgerAccount" WHERE id = ${cashId} FOR UPDATE`;
       const balance = await userCashBalance(tx, userId);
@@ -170,7 +181,7 @@ export async function initiateWithdrawal(userId: string, amountGhs: number, msis
       const intent = await tx.paymentIntent.create({
         data: {
           ref, userId, direction: "WITHDRAWAL", amount, status: "PENDING",
-          provider: provider.name, idempotencyKey, metadata: { msisdn },
+          provider: provider.name, idempotencyKey, metadata: { msisdn, network },
         },
       });
       // Hold the funds now so they can't be spent while the payout is in flight.
@@ -185,6 +196,23 @@ export async function initiateWithdrawal(userId: string, amountGhs: number, msis
       return prisma.paymentIntent.findUniqueOrThrow({ where: { idempotencyKey } });
     throw e;
   }
+
+  // The money is held (committed above) before the payout is asked for, so it can't be spent twice.
+  let payout;
+  try {
+    payout = await provider.initiate({ ref: intent.ref, amountPesewas: amount, msisdn, network, direction: "WITHDRAWAL", email: user.email, name: user.displayName });
+  } catch (e) {
+    // Unclear outcome (timeout, 5xx): the payout may exist, so keep the hold; the webhook settles it.
+    console.error(`[wallet] payout ${intent.ref} outcome unknown, left pending:`, e);
+    return intent;
+  }
+  if (payout.status === "FAILED") {
+    // The PSP refused it outright: hand the money back through the normal failed-payment path.
+    await processPaymentEvent(provider.name, { providerEventId: `refused:${intent.ref}`, ourRef: intent.ref, status: "FAILED", amountPesewas: amount });
+    throw new WalletError("PAYOUT_REFUSED", "The payout couldn't be sent, so your balance is back. Check the number and network and try again");
+  }
+  if (payout.providerRef) return prisma.paymentIntent.update({ where: { id: intent.id }, data: { providerRef: payout.providerRef } });
+  return intent;
 }
 
 /**
@@ -209,6 +237,16 @@ export async function processPaymentEvent(provider: string, ev: NormalisedEvent)
   }
   if (intent.status !== "PENDING") {
     await prisma.webhookEvent.update({ where: { provider_providerEventId: { provider, providerEventId: ev.providerEventId } }, data: { status: "IGNORED", processedAt: new Date() } });
+    return "ignored";
+  }
+  // Money moves only for exactly what we asked: a different amount or kind of payment is flagged, never applied.
+  const mismatch =
+    ev.direction && ev.direction !== intent.direction ? `direction ${ev.direction} != ${intent.direction}`
+    : ev.amountPesewas !== intent.amount ? `amount ${ev.amountPesewas} != ${intent.amount}`
+    : null;
+  if (mismatch) {
+    console.error(`[wallet] payment event for ${intent.ref} rejected: ${mismatch}`);
+    await prisma.webhookEvent.update({ where: { provider_providerEventId: { provider, providerEventId: ev.providerEventId } }, data: { status: "FAILED", processedAt: new Date(), error: mismatch } });
     return "ignored";
   }
 

@@ -7,7 +7,7 @@
  * without a live PSP. Swap this adapter for Paystack/Hubtel/Flutterwave in production.
  */
 import { hmacHex, safeEqualHex } from "../../auth";
-import type { PaymentProvider, ChargeRequest, ChargeResult, NormalisedEvent } from "./types";
+import type { PaymentProvider, ChargeRequest, ChargeResult, WebhookResult } from "./types";
 
 function secret(): string {
   return process.env.PAYMENT_WEBHOOK_SECRET ?? "dev-webhook-secret";
@@ -35,22 +35,18 @@ export class SandboxMomoProvider implements PaymentProvider {
     return { providerRef: `sbx_${req.ref}`, status: "PENDING" };
   }
 
-  verifyWebhook(rawBody: string, signature: string | null): NormalisedEvent | null {
-    if (!signature) return null;
+  async verifyWebhook(rawBody: string, headers: Headers): Promise<WebhookResult> {
+    const signature = headers.get("x-stakra-signature");
+    if (!signature) return { ok: false };
     const expected = hmacHex(secret(), rawBody);
-    if (!safeEqualHex(expected, signature)) return null;
+    if (!safeEqualHex(expected, signature)) return { ok: false };
     let p: SandboxEventPayload;
     try {
       p = JSON.parse(rawBody);
     } catch {
-      return null;
+      return { ok: false };
     }
-    if (!p.id || !p.ref || (p.status !== "SUCCEEDED" && p.status !== "FAILED")) return null;
-    return {
-      providerEventId: p.id,
-      ourRef: p.ref,
-      status: p.status,
-      amountPesewas: BigInt(p.amountPesewas),
-    };
+    if (!p.id || !p.ref || (p.status !== "SUCCEEDED" && p.status !== "FAILED")) return { ok: false };
+    return { ok: true, event: { providerEventId: p.id, ourRef: p.ref, status: p.status, amountPesewas: BigInt(p.amountPesewas) } };
   }
 }

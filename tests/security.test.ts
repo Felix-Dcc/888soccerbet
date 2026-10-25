@@ -19,21 +19,20 @@ describe("password hashing", () => {
 
 describe("webhook signature verification", () => {
   const provider = new SandboxMomoProvider();
-  it("accepts a correctly signed event", () => {
+  const signed = (signature: string | null) => new Headers(signature ? { "x-stakra-signature": signature } : {});
+  it("accepts a correctly signed event", async () => {
     const { body, signature } = signSandboxEvent({ id: "e1", ref: "DEP-ABC", status: "SUCCEEDED", amountPesewas: "5000" });
-    const ev = provider.verifyWebhook(body, signature);
-    expect(ev).not.toBeNull();
-    expect(ev!.ourRef).toBe("DEP-ABC");
-    expect(ev!.amountPesewas).toBe(5000n);
+    const r = await provider.verifyWebhook(body, signed(signature));
+    expect(r.ok && r.event).toMatchObject({ ourRef: "DEP-ABC", amountPesewas: 5000n });
   });
-  it("rejects a tampered body", () => {
+  it("rejects a tampered body", async () => {
     const { body, signature } = signSandboxEvent({ id: "e2", ref: "DEP-ABC", status: "SUCCEEDED", amountPesewas: "5000" });
     const tampered = body.replace("5000", "500000");
-    expect(provider.verifyWebhook(tampered, signature)).toBeNull();
+    expect(await provider.verifyWebhook(tampered, signed(signature))).toEqual({ ok: false });
   });
-  it("rejects a missing signature", () => {
+  it("rejects a missing signature", async () => {
     const { body } = signSandboxEvent({ id: "e3", ref: "DEP-ABC", status: "SUCCEEDED", amountPesewas: "5000" });
-    expect(provider.verifyWebhook(body, null)).toBeNull();
+    expect(await provider.verifyWebhook(body, signed(null))).toEqual({ ok: false });
   });
 });
 

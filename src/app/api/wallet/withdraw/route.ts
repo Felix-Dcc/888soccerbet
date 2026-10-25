@@ -14,7 +14,7 @@ export async function POST(req: Request) {
     if (!rateLimit(`withdraw:${user.id}`, 10, 60_000).ok)
       return json({ error: "Too many requests", code: "RATE_LIMIT" }, { status: 429 });
     const input = withdrawSchema.parse(await req.json());
-    const intent = await initiateWithdrawal(user.id, input.amountGhs, input.msisdn, input.idempotencyKey);
+    const intent = await initiateWithdrawal(user.id, input.amountGhs, input.msisdn, input.idempotencyKey, input.network);
     return json({ intent: { ref: intent.ref, status: intent.status, amount: intent.amount } }, { status: 202 });
   } catch (e) {
     return errorResponse(e);

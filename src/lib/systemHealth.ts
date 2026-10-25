@@ -27,7 +27,14 @@ export async function systemHealth() {
   const unsettledH = env("UNSETTLED_AFTER_HOURS", 4);
   const pendingMin = env("PENDING_PAYMENT_ALERT_MINUTES", 60);
   const odds = oddsProvider();
-  const pay = paymentProvider();
+  // A misconfigured PSP must show up here, not take this page down with it.
+  let pay: { name: string; isSandbox: boolean } | null = null;
+  let payError = "";
+  try {
+    pay = paymentProvider();
+  } catch (e) {
+    payError = e instanceof Error ? e.message : String(e);
+  }
 
   const [lastSync, staleMarkets, unsettled, failedPay, stuckPay, failedHooks, jobs, balanced, chain] = await Promise.all([
     prisma.fixture.aggregate({ where: { providerRef: { not: null } }, _max: { lastSyncedAt: true } }),
@@ -74,12 +81,13 @@ export async function systemHealth() {
       ? { level: "warn", title: "Background jobs failed", detail: `${failedJobs} failed jobs` }
       : { level: "ok", title: "Background jobs", detail: "No failed jobs recorded" },
   ];
+  if (payError) alerts.unshift({ level: "critical", title: "Payments misconfigured", detail: payError });
 
   return {
     alerts,
     providers: [
       { name: "Odds feed", value: odds.name, sandbox: odds.isSandbox, extra: odds.creditsRemaining != null ? `${odds.creditsRemaining} credits left` : "Credits shown after this server's next sync" },
-      { name: "Payments", value: pay.name, sandbox: pay.isSandbox, extra: null as string | null },
+      { name: "Payments", value: pay?.name ?? "not configured", sandbox: pay?.isSandbox ?? true, extra: (payError || null) as string | null },
     ],
     lastSync: syncedAt,
   };
