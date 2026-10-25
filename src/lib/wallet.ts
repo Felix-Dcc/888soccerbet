@@ -8,9 +8,9 @@ import { prisma } from "./db";
 import { accountBalance, postTransaction, userAccountId, houseAccountId, userCashBalance } from "./ledger";
 import { formatPesewas, toPesewas } from "./money";
 import { payRef } from "./ids";
-import { paymentProvider } from "./providers/payments";
-import { guessNetwork, type Network, type NormalisedEvent } from "./providers/payments/types";
-import { FlutterwaveError } from "./providers/payments/flutterwave";
+import { MANUAL_PAYOUT_PROVIDERS, paymentProvider } from "./providers/payments";
+import { audit } from "./audit";
+import { guessNetwork, PspError, type Network, type NormalisedEvent } from "./providers/payments/types";
 import { notifyPayment } from "./emailFlows";
 
 export class WalletError extends Error {
@@ -92,11 +92,17 @@ async function createDepositIntent(userId: string, amount: bigint, msisdn: strin
   try {
     charge = await provider.initiate({ ref, amountPesewas: amount, msisdn, network, direction: "DEPOSIT", email: user.email, name: user.displayName });
   } catch (e) {
-    if (e instanceof FlutterwaveError) throw new WalletError("PAYMENT_REFUSED", e.message);
+    if (e instanceof PspError) throw new WalletError("PAYMENT_REFUSED", e.message);
     throw e;
   }
   // The approval page (if the PSP has one) is kept on the intent so a retried request gets it back.
-  const meta = { msisdn, network, ...(purpose ? { purpose } : {}), ...(charge.redirectUrl ? { redirectUrl: charge.redirectUrl } : {}) };
+  const meta = {
+    msisdn,
+    network,
+    ...(purpose ? { purpose } : {}),
+    ...(charge.redirectUrl ? { redirectUrl: charge.redirectUrl } : {}),
+    ...(charge.prompt ? { prompt: charge.prompt } : {}),
+  };
   try {
     return await prisma.paymentIntent.create({
       data: {
@@ -196,6 +202,9 @@ export async function initiateWithdrawal(userId: string, amountGhs: number, msis
       return prisma.paymentIntent.findUniqueOrThrow({ where: { idempotencyKey } });
     throw e;
   }
+
+  // Manual payouts: the money stays held until an admin sends it and marks it paid (or failed: refunded).
+  if (provider.payouts === "manual") return intent;
 
   // The money is held (committed above) before the payout is asked for, so it can't be spent twice.
   let payout;
@@ -301,6 +310,46 @@ export async function processPaymentEvent(provider: string, ev: NormalisedEvent)
   });
   if (notice) notifyPayment(intent.userId, notice, intent.amount, intent.ref);
   return "processed";
+}
+
+/** Withdrawals waiting for an admin to send the money (providers that can't pay players), oldest first. */
+export function manualPayoutQueue() {
+  return prisma.paymentIntent.findMany({
+    where: { direction: "WITHDRAWAL", status: "PENDING", provider: { in: [...MANUAL_PAYOUT_PROVIDERS] } },
+    orderBy: { createdAt: "asc" },
+    take: 100,
+    include: { user: { select: { id: true, email: true, displayName: true, phone: true } } },
+  });
+}
+
+/**
+ * An admin records a withdrawal they paid by hand. PAID: the held money is the payout (player is
+ * emailed). FAILED: it goes back to the player's balance. Exactly one decision per withdrawal, even
+ * if two admins click at once (the webhook-event key "manual:<ref>" is unique).
+ */
+export async function recordManualPayout(actorId: string, ref: string, outcome: "PAID" | "FAILED", ip?: string | null) {
+  const intent = await prisma.paymentIntent.findUnique({ where: { ref } });
+  if (!intent || intent.direction !== "WITHDRAWAL") throw new WalletError("NOT_FOUND", "Withdrawal not found");
+  // Never for payouts a PSP is sending itself: marking one failed while the PSP pays would pay twice.
+  if (!MANUAL_PAYOUT_PROVIDERS.has(intent.provider)) throw new WalletError("NOT_MANUAL", "This withdrawal is paid by the payment provider, not by hand");
+  if (intent.status !== "PENDING") throw new WalletError("ALREADY_DONE", "This withdrawal has already been settled");
+  const result = await processPaymentEvent("manual", {
+    providerEventId: `manual:${ref}`,
+    ourRef: ref,
+    status: outcome === "PAID" ? "SUCCEEDED" : "FAILED",
+    amountPesewas: intent.amount,
+    direction: "WITHDRAWAL",
+  });
+  if (result !== "processed") throw new WalletError("ALREADY_DONE", "This withdrawal has already been settled");
+  const meta = intent.metadata as { msisdn?: string; network?: string } | null;
+  await audit({
+    actorUserId: actorId,
+    action: outcome === "PAID" ? "PAYOUT_MARKED_PAID" : "PAYOUT_MARKED_FAILED",
+    targetType: "PaymentIntent",
+    targetId: intent.id,
+    after: { ref, userId: intent.userId, amount: intent.amount.toString(), msisdn: meta?.msisdn ?? null, network: meta?.network ?? null },
+    ip: ip ?? undefined,
+  });
 }
 
 /** Players with verification money held or awaiting review, for the admin console. */

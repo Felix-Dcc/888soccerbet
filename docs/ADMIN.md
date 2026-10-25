@@ -23,6 +23,7 @@ Permission catalogue (`src/lib/permissions.ts`):
 | `wallets.adjust` | Correct a player balance with a ledger adjustment |
 | `bets.view` | Bet history, open exposure |
 | `payments.view` | Deposits and withdrawals on player profiles |
+| `payments.payout` | Withdrawals to pay by hand (trading desk): mark paid, or failed to refund |
 | `verification.review` | Approve / reject withdrawal verification |
 | `settlement.manage` | Settle and void matches |
 | `fixtures.manage` | Add manual games |

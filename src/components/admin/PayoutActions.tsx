@@ -1,0 +1,46 @@
+"use client";
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { ConfirmDialog, send } from "./ConfirmDialog";
+
+/** Paid / Failed for one hand-paid withdrawal. Both re-ask the admin's password. */
+export function PayoutActions({ refCode, amount, msisdn, network }: { refCode: string; amount: string; msisdn: string; network: string }) {
+  const router = useRouter();
+  const [open, setOpen] = useState<"PAID" | "FAILED" | null>(null);
+  const record = async (password: string) => {
+    const { error } = await send("/api/admin/payouts", "POST", { ref: refCode, outcome: open, password });
+    if (!error) router.refresh();
+    return error;
+  };
+  return (
+    <>
+      <div className="flex gap-2">
+        <button type="button" onClick={() => setOpen("PAID")} className="inline-flex h-8 items-center rounded-md bg-lime px-3 text-xs font-bold text-lime-ink hover:bg-lime-600">
+          Paid
+        </button>
+        <button type="button" onClick={() => setOpen("FAILED")} className="inline-flex h-8 items-center rounded-md border border-[#FF5A5F]/50 px-3 text-xs font-semibold text-[#FF8A8D] hover:bg-[#FF5A5F]/10">
+          Failed
+        </button>
+      </div>
+      <ConfirmDialog
+        open={open !== null}
+        title={open === "PAID" ? "Mark as paid" : "Mark as failed"}
+        confirmLabel={open === "PAID" ? "Mark paid" : "Mark failed"}
+        danger={open === "FAILED"}
+        message={
+          open === "PAID" ? (
+            <>
+              Only after you have sent <strong>GHS {amount}</strong> to <strong>{msisdn}</strong> ({network}). The player is emailed that it&apos;s paid.
+            </>
+          ) : (
+            <>
+              <strong>GHS {amount}</strong> goes back to the player&apos;s balance. Only if the money was <strong>not</strong> sent.
+            </>
+          )
+        }
+        onConfirm={record}
+        onClose={() => setOpen(null)}
+      />
+    </>
+  );
+}

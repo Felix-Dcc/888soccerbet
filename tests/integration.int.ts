@@ -29,7 +29,7 @@ import { prisma } from "../src/lib/db";
 import { houseAccountId, userAccountId, postTransaction, userCashBalance, ledgerIsBalanced } from "../src/lib/ledger";
 import { placeBet, BetError } from "../src/lib/betEngine";
 import { settleBet, settleFixture, voidFixture, SettlementError } from "../src/lib/settlement";
-import { initiateDeposit, initiateWithdrawal, initiateVerificationPayment, processPaymentEvent, reviewVerification, verificationState } from "../src/lib/wallet";
+import { initiateDeposit, initiateWithdrawal, initiateVerificationPayment, manualPayoutQueue, processPaymentEvent, recordManualPayout, reviewVerification, verificationState } from "../src/lib/wallet";
 import { toPesewas } from "../src/lib/money";
 import { referralCode } from "../src/lib/ids";
 import { createBooking, loadBooking, resolvePicks } from "../src/lib/bookings";
@@ -236,7 +236,7 @@ describe("wallet", () => {
     const user = await fundedUser(100);
     await prisma.user.update({ where: { id: user.id }, data: { kycStatus: "VERIFIED" } });
     const fake = (initiate: import("../src/lib/providers/payments").PaymentProvider["initiate"]) =>
-      ({ name: "sandbox", isSandbox: true, initiate, verifyWebhook: async () => ({ ok: false as const }) });
+      ({ name: "sandbox", isSandbox: true, payouts: "api" as const, initiate, verifyWebhook: async () => ({ ok: false as const }) });
     try {
       psp.override = fake(async (r) => (r.direction === "WITHDRAWAL" ? { providerRef: null, status: "FAILED" } : { providerRef: null, status: "PENDING" }));
       await expect(initiateWithdrawal(user.id, 40, "0241234567", randomUUID())).rejects.toMatchObject({ code: "PAYOUT_REFUSED" });
@@ -250,6 +250,36 @@ describe("wallet", () => {
     } finally {
       psp.override = null;
     }
+    expect(await ledgerIsBalanced()).toBe(true);
+  });
+
+  it("holds withdrawals for a provider that can't pay out, until an admin records paid or failed, once", async () => {
+    const sa = await prisma.user.create({ data: { email: `sa_${randomUUID()}@t.gh`, passwordHash: "x", role: "SUPER_ADMIN", referralCode: referralCode() } });
+    const user = await fundedUser(100);
+    await prisma.user.update({ where: { id: user.id }, data: { kycStatus: "VERIFIED" } });
+    const initiate = vi.fn(async () => ({ providerRef: null, status: "PENDING" as const }));
+    psp.override = { name: "shinobipay", isSandbox: true, payouts: "manual", initiate, verifyWebhook: async () => ({ ok: false }) };
+    try {
+      const paid = await initiateWithdrawal(user.id, 40, "0241234567", randomUUID());
+      const refused = await initiateWithdrawal(user.id, 25, "0241234567", randomUUID());
+      expect(initiate).not.toHaveBeenCalled(); // nobody asks the PSP to pay
+      expect(await userCashBalance(prisma, user.id)).toBe(toPesewas(35)); // both held
+      expect((await manualPayoutQueue()).map((i) => i.ref)).toEqual(expect.arrayContaining([paid.ref, refused.ref]));
+
+      await recordManualPayout(sa.id, paid.ref, "PAID");
+      await expect(recordManualPayout(sa.id, paid.ref, "FAILED")).rejects.toMatchObject({ code: "ALREADY_DONE" }); // one decision
+      await vi.waitFor(() => expect(mail.sent.some((m) => m.to === user.email && m.subject === "Withdrawal paid: GHS 40.00")).toBe(true));
+      await recordManualPayout(sa.id, refused.ref, "FAILED");
+      expect(await userCashBalance(prisma, user.id)).toBe(toPesewas(60)); // 25 back, 40 gone
+      const statuses = await prisma.paymentIntent.findMany({ where: { ref: { in: [paid.ref, refused.ref] } }, select: { ref: true, status: true } });
+      expect(Object.fromEntries(statuses.map((i) => [i.ref, i.status]))).toEqual({ [paid.ref]: "SUCCEEDED", [refused.ref]: "FAILED" });
+      expect(await prisma.auditLog.count({ where: { action: { in: ["PAYOUT_MARKED_PAID", "PAYOUT_MARKED_FAILED"] }, actorUserId: sa.id } })).toBe(2);
+    } finally {
+      psp.override = null;
+    }
+    // A payout the PSP is sending itself can never be marked by hand (that could pay twice).
+    const auto = await initiateWithdrawal(user.id, 10, "0241234567", randomUUID());
+    await expect(recordManualPayout(sa.id, auto.ref, "FAILED")).rejects.toMatchObject({ code: "NOT_MANUAL" });
     expect(await ledgerIsBalanced()).toBe(true);
   });
 

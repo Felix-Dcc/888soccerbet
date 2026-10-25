@@ -3,18 +3,19 @@ import { prisma } from "@/lib/db";
 import { adminPage } from "@/lib/adminPage";
 import { can } from "@/lib/permissions";
 import { openExposure } from "@/lib/adminStats";
-import { verificationQueue } from "@/lib/wallet";
+import { manualPayoutQueue, verificationQueue } from "@/lib/wallet";
 import { formatPesewas } from "@/lib/money";
 import { kickoffDay, kickoffTime } from "@/lib/time";
 import { Crest } from "@/components/Crest";
 import { SyncButton, SettleForm, ManualGameForm, VerificationReview } from "@/components/AdminTools";
+import { PayoutActions } from "@/components/admin/PayoutActions";
 import { BarList, EmptyState, Figure, Head, Icon, Panel, Pill, Strip, Tabs, ago, ghs, ghsShort } from "@/components/admin/kit";
 
 export const dynamic = "force-dynamic";
 
-/** Trading desk: results to enter, verifications to review, open exposure, manual games, the odds sync. Each part needs its own permission. */
+/** Trading desk: results to enter, withdrawals to pay by hand, verifications to review, open exposure, manual games, the odds sync. Each part needs its own permission. */
 export default async function OperationsPage({ searchParams }: { searchParams: Promise<{ queue?: string }> }) {
-  const gate = await adminPage(["settlement.manage", "fixtures.manage", "verification.review", "odds.sync", "bets.view"]);
+  const gate = await adminPage(["settlement.manage", "fixtures.manage", "verification.review", "odds.sync", "bets.view", "payments.payout"]);
   if (!gate.ok) return gate.deny;
   const u = gate.user;
   const want = (await searchParams).queue;
@@ -25,7 +26,7 @@ export default async function OperationsPage({ searchParams }: { searchParams: P
     status: { in: ["SCHEDULED", "LIVE"] },
     OR: queue === "manual" ? [{ providerRef: null }] : queue === "started" ? [{ startsAt: { lte: now } }] : [{ providerRef: null }, { startsAt: { lte: now } }],
   };
-  const [toSettle, counts, competitions, verifications, exposure, lastSync] = await Promise.all([
+  const [toSettle, counts, competitions, verifications, exposure, lastSync, payouts] = await Promise.all([
     can(u, "settlement.manage")
       ? prisma.fixture.findMany({
           where: settleWhere,
@@ -45,6 +46,7 @@ export default async function OperationsPage({ searchParams }: { searchParams: P
     can(u, "verification.review") ? verificationQueue() : null,
     can(u, "bets.view") ? openExposure() : null,
     prisma.fixture.aggregate({ where: { providerRef: { not: null } }, _max: { lastSyncedAt: true } }),
+    can(u, "payments.payout") ? manualPayoutQueue() : null,
   ]);
   const exposureTotal = exposure?.reduce((n, e) => n + e.openStake, 0n) ?? 0n;
   const ready = verifications?.filter((v) => v.complete).length ?? 0;
@@ -59,6 +61,29 @@ export default async function OperationsPage({ searchParams }: { searchParams: P
         <Figure label="Open exposure" value={exposure ? ghsShort(exposureTotal) : "—"} note={exposure ? `${exposure.length} matches` : undefined} title="Stake on open bets with a leg on each match" />
         <Figure label="Odds synced" value={ago(lastSync._max.lastSyncedAt)} />
       </Strip>
+
+      {payouts && payouts.length > 0 && (
+        <Panel title="Withdrawals to pay" icon="coins" flush actions={<span className="text-xs text-fog">{ghs(payouts.reduce((n, p) => n + p.amount, 0n))} total</span>}>
+          <ul className="divide-y divide-white/[0.05]">
+            {payouts.map((p) => {
+              const m = (p.metadata ?? {}) as { msisdn?: string; network?: string };
+              return (
+                <li key={p.id} className="flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3">
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm font-semibold text-white">
+                      {ghs(p.amount)} <span className="font-normal text-fog">to</span> <span className="font-mono">{m.msisdn ?? "—"}</span> <span className="text-fog">{m.network ?? ""}</span>
+                    </span>
+                    <span className="block truncate text-xs text-fog">
+                      {p.user.displayName ?? p.user.email} · {p.ref} · asked {ago(p.createdAt)}
+                    </span>
+                  </span>
+                  <PayoutActions refCode={p.ref} amount={formatPesewas(p.amount)} msisdn={m.msisdn ?? "?"} network={m.network ?? "?"} />
+                </li>
+              );
+            })}
+          </ul>
+        </Panel>
+      )}
 
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
         <div className="min-w-0 space-y-5">

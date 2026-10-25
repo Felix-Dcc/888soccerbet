@@ -19,7 +19,12 @@ export interface ChargeResult {
   status: "PENDING" | "SUCCEEDED" | "FAILED";
   /** Page where the player approves the payment, when the PSP needs one. */
   redirectUrl?: string;
+  /** The PSP pushed an approval prompt to the player's phone (USSD code to dial if it doesn't show). */
+  prompt?: { ussdFallback: string | null };
 }
+
+/** The PSP refused a request outright (bad number, declined...): nothing happened, safe to tell the player. */
+export class PspError extends Error {}
 export interface NormalisedEvent {
   providerEventId: string;
   ourRef: string; // PaymentIntent.ref this event concerns
@@ -35,6 +40,8 @@ export type WebhookResult = { ok: false } | { ok: true; event: NormalisedEvent |
 export interface PaymentProvider {
   readonly name: string;
   readonly isSandbox: boolean;
+  /** "api": withdrawals are sent through the PSP. "manual": the PSP can't pay players, so an admin pays and records it. */
+  readonly payouts: "api" | "manual";
   /** Start a charge (deposit) or payout (withdrawal) with the PSP. */
   initiate(req: ChargeRequest): Promise<ChargeResult>;
   /** Authenticate a webhook and return the normalised event, confirmed with the PSP where it allows. */

@@ -10,7 +10,7 @@
  */
 import { createHash, timingSafeEqual } from "node:crypto";
 import { toPesewas } from "../../money";
-import type { ChargeRequest, ChargeResult, Network, PaymentProvider, WebhookResult } from "./types";
+import { PspError, type ChargeRequest, type ChargeResult, type Network, type PaymentProvider, type WebhookResult } from "./types";
 
 const API = "https://api.flutterwave.com/v3";
 
@@ -23,10 +23,11 @@ const ghsAmount = (pesewas: bigint) => Number(pesewas) / 100;
 const intl = (msisdn: string) => `233${msisdn.slice(1)}`; // 0241234567 -> 233241234567
 const sha = (s: string) => createHash("sha256").update(s).digest();
 
-export class FlutterwaveError extends Error {}
+export class FlutterwaveError extends PspError {}
 
 export class FlutterwaveProvider implements PaymentProvider {
   readonly name = "flutterwave";
+  readonly payouts = "api" as const;
   readonly isSandbox: boolean;
 
   constructor(

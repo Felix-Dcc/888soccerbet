@@ -50,9 +50,12 @@ export function WalletPanel({ minDepositGhs, verification }: { minDepositGhs: nu
     if (!networkPicked && /^0\d{2}/.test(v)) setNetwork(guessNetwork(v));
   };
 
-  /** Off to the provider's page to approve, when it has one; otherwise the sandbox confirm panel. */
-  const afterCharge = (d: { intent: { ref: string }; redirectUrl?: string | null }) => {
-    if (d.redirectUrl) window.location.assign(d.redirectUrl);
+  /** How the player approves: a prompt already on their phone, the provider's page, or (sandbox) the confirm panel. */
+  const afterCharge = (d: { intent: { ref: string }; redirectUrl?: string | null; prompt?: { ussdFallback: string | null } | null }) => {
+    if (d.prompt) {
+      const dial = d.prompt.ussdFallback ? ` No prompt? Dial ${d.prompt.ussdFallback} and approve it there.` : "";
+      setMsg({ ok: true, text: `Approve the payment on your phone.${dial} Your balance updates as soon as it's confirmed.` });
+    } else if (d.redirectUrl) window.location.assign(d.redirectUrl);
     else setPending(d.intent.ref);
   };
 

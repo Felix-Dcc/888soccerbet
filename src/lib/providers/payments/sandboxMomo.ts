@@ -29,6 +29,7 @@ export function signSandboxEvent(payload: SandboxEventPayload): { body: string; 
 export class SandboxMomoProvider implements PaymentProvider {
   readonly name = "sandbox";
   readonly isSandbox = true;
+  readonly payouts = "api" as const;
 
   async initiate(req: ChargeRequest): Promise<ChargeResult> {
     // A real provider would trigger an STK push here and return its own reference.

@@ -144,6 +144,24 @@ first), `worker` (same code with `SERVICE_ROLE=worker`), `Postgres`, and `db-bac
 `railway up --service web` / `--service worker` from this folder. kingzbet.live points at `web` via
 Cloudflare DNS.
 
+## Going live with ShinobiPay
+
+ShinobiPay (`src/lib/providers/payments/shinobipay.ts`) takes deposits; it has no API to pay
+players, so withdrawals are paid by an admin. On ShinobiPay's dashboard (test keys first):
+
+1. Register the webhook URL `https://kingzbet.live/api/webhooks/payments`; copy the **signing secret**
+   (`whsec_...`, shown once).
+2. Copy the **secret key** (`sk_test_...`).
+3. Railway > kingzbet > `web` > Variables: set `SHINOBI_SECRET_KEY`, `SHINOBI_WEBHOOK_SECRET`, then
+   `PAYMENT_PROVIDER=shinobipay`.
+4. Test: a deposit (approve the prompt on the phone), then a withdrawal. It appears in admin >
+   Trading desk > **Withdrawals to pay**; send the MoMo, then click **Paid** (or **Failed** to refund).
+   ShinobiPay's test mode settles by the reference, so test deposits succeed. Then switch to `sk_live_`.
+
+Deposits are credited only from a signed webhook (HMAC-SHA256, 5-minute window) after the intent is
+re-read from ShinobiPay's API. Admins need the `payments.payout` permission to mark withdrawals,
+each decision asks for their password and is recorded in the audit trail.
+
 ## Going live with Flutterwave
 
 The Flutterwave adapter (`src/lib/providers/payments/flutterwave.ts`) is built and tested; the site

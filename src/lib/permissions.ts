@@ -16,6 +16,7 @@ export const PERMISSIONS = {
   "wallets.adjust": "Correct a player's balance with a ledger adjustment",
   "bets.view": "See bets and settlement status",
   "payments.view": "See deposits and withdrawals",
+  "payments.payout": "Pay out withdrawals by hand and mark them paid or failed",
   "verification.review": "Approve or reject withdrawal verification",
   "settlement.manage": "Settle and void matches",
   "fixtures.manage": "Add manual games",
