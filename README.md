@@ -139,6 +139,23 @@ odds, and referral/phone/email registration and login.
 npm run build && npm start
 ```
 
+Production runs on Railway (project `kingzbet`): `web` (the site; `npm start` applies migrations
+first), `worker` (same code with `SERVICE_ROLE=worker`), `Postgres`, and `db-backup`. Deploy with
+`railway up --service web` / `--service worker` from this folder. kingzbet.live points at `web` via
+Cloudflare DNS.
+
+## Backups
+
+`db-backup` is a Railway cron job (`ops/db-backup/`) that runs at 03:00 UTC every night: it
+`pg_dump`s the production database into the private `db-backups` bucket as
+`daily/kingzbet-<UTC time>.sql.gz` and deletes copies older than 30 days. Its credentials are Railway
+variable references to `Postgres` and `db-backups`, so no secret is stored in this repo.
+
+- Run one now: `railway cron run --service db-backup --yes`; check with `railway logs --service db-backup`.
+- Restore: download the file from the bucket (Railway dashboard → db-backups), then
+  `gunzip -c kingzbet-<time>.sql.gz | psql "<empty database URL>"`. Restore into a new, empty
+  database first and check it before pointing the site at it.
+
 Deployment notes, security checklist and launch blockers are in
 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) and
 [`docs/LAUNCH-READINESS.md`](docs/LAUNCH-READINESS.md). Brand and design rationale are in
