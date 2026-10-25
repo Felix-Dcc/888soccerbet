@@ -1,0 +1,46 @@
+{
+  "name": "kingzbet",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Kingz Bet \u2014 sandbox sportsbook platform (not licensed for real-money operation)",
+  "scripts": {
+    "dev": "next dev",
+    "build": "prisma generate && next build",
+    "start": "if [ \"$SERVICE_ROLE\" = worker ]; then tsx src/worker.ts; else prisma migrate deploy && next start; fi",
+    "lint": "next lint",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:int": "vitest run --config vitest.int.config.ts",
+    "db:migrate": "prisma migrate dev",
+    "db:deploy": "prisma migrate deploy",
+    "db:seed": "tsx prisma/seed.ts",
+    "db:reset": "prisma migrate reset --force",
+    "worker": "tsx src/worker.ts"
+  },
+  "prisma": {
+    "seed": "tsx prisma/seed.ts"
+  },
+  "dependencies": {
+    "@prisma/client": "6.3.1",
+    "next": "15.1.11",
+    "prisma": "6.3.1",
+    "react": "19.0.0",
+    "react-dom": "19.0.0",
+    "tsx": "4.19.2",
+    "zod": "3.24.1"
+  },
+  "devDependencies": {
+    "@types/node": "22.10.7",
+    "@types/react": "19.0.7",
+    "@types/react-dom": "19.0.3",
+    "autoprefixer": "10.4.20",
+    "postcss": "8.5.1",
+    "tailwindcss": "3.4.17",
+    "typescript": "5.7.3",
+    "vitest": "3.0.4"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

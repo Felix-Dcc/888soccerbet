@@ -1,0 +1,505 @@
+// Stakra data model. Money is stored as BigInt minor units (pesewas; 100 = GHS 1).
+// Odds are stored as integer milli-odds (2.50 => 2500) so all bet math is exact integers.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------- Accounts & auth
+
+enum Role {
+  USER
+  ADMIN // staff: access comes from permissions (AdminRole + per-user grants/denials)
+  SUPER_ADMIN // every permission; the only role that can manage admins and roles
+}
+
+enum UserStatus {
+  ACTIVE
+  SUSPENDED
+  CLOSED
+}
+
+enum KycStatus {
+  UNVERIFIED
+  PENDING
+  VERIFIED
+  REJECTED
+}
+
+model User {
+  id                String     @id @default(cuid())
+  email             String     @unique
+  termsAcceptedAt   DateTime? // consent given at sign-up (Terms + Privacy Policy)
+  termsVersion      String? // which version was accepted (lib/legal.ts TERMS_VERSION)
+  passwordHash      String
+  role              Role       @default(USER)
+  status            UserStatus @default(ACTIVE)
+  kycStatus         KycStatus  @default(UNVERIFIED)
+  displayName       String?
+  phone             String?    @unique // normalised Ghana format 0XXXXXXXXX; login by phone
+  dateOfBirth       DateTime?
+  referralCode      String     @unique // this user's own code, shared as /register?ref=CODE
+  referredById      String?
+  referredBy        User?      @relation("referrals", fields: [referredById], references: [id])
+  referrals         User[]     @relation("referrals")
+  referredAt        DateTime? // when the referral was attributed (set once, at sign-up)
+  referralSource    String? // LINK (arrived on a referral link) | CODE (typed it in)
+  // Staff only
+  adminUsername     String?    @unique
+  adminRoleId       String?
+  adminRole         AdminRole? @relation(fields: [adminRoleId], references: [id])
+  permGrants        String[]   @default([]) // extra permissions on top of the role
+  permDenials       String[]   @default([]) // permissions removed from the role for this admin
+  lastLoginAt       DateTime?
+  emailVerifiedAt   DateTime? // set when the player enters the code we emailed (or resets their password by email)
+  country           String     @default("GH")
+  // Responsible gambling
+  dailyDepositLimit BigInt? // pesewas
+  maxStakeLimit     BigInt? // pesewas
+  selfExcludedUntil DateTime?
+  createdAt         DateTime   @default(now())
+  updatedAt         DateTime   @updatedAt
+
+  sessions       Session[]
+  ledgerAccounts LedgerAccount[]
+  bets           Bet[]
+  paymentIntents PaymentIntent[]
+  auditLogs      AuditLog[]      @relation("actor")
+  supportTickets SupportTicket[]
+  bookingCodes   BookingCode[]
+  accountTokens  AccountToken[]
+
+  @@index([status])
+  @@index([referredById])
+}
+
+/**
+ * A named set of admin permissions (e.g. "Referral partner", "Finance").
+ */
+model AdminRole {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  description String?
+  permissions String[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  users       User[]
+}
+
+/**
+ * Single-use links: admin account setup and password reset. Only the hash is stored.
+ */
+model AccountToken {
+  id          String    @id @default(cuid())
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  purpose     String // ADMIN_SETUP | PASSWORD_RESET | EMAIL_VERIFY
+  tokenHash   String    @unique
+  expiresAt   DateTime
+  usedAt      DateTime?
+  createdById String?
+  createdAt   DateTime  @default(now())
+
+  @@index([userId])
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  ip        String?
+  userAgent String?
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+// ---------------------------------------------------------------- Sports catalogue
+
+model Sport {
+  key          String        @id // "football", "basketball"
+  name         String
+  active       Boolean       @default(true)
+  position     Int           @default(0)
+  competitions Competition[]
+  fixtures     Fixture[]
+}
+
+model Competition {
+  id              String    @id @default(cuid())
+  sportKey        String
+  sport           Sport     @relation(fields: [sportKey], references: [key])
+  name            String
+  country         String?
+  providerRef     String?
+  // Official artwork from TheSportsDB (see src/lib/assets.ts); null until resolved.
+  displayName     String?
+  badgeUrl        String?
+  bannerUrl       String?
+  assetsCheckedAt DateTime?
+  fixtures        Fixture[]
+
+  @@unique([sportKey, name])
+}
+
+// Cached team-badge lookups, including misses, so each team is resolved once.
+model TeamAsset {
+  id        String   @id @default(cuid())
+  sportKey  String
+  name      String // team name exactly as the odds feed spells it
+  badgeUrl  String?
+  status    String // FOUND | MISSING
+  sourceRef String? // TheSportsDB idTeam
+  checkedAt DateTime @default(now())
+
+  @@unique([sportKey, name])
+}
+
+enum FixtureStatus {
+  SCHEDULED
+  LIVE
+  FINISHED
+  CANCELLED
+}
+
+model Fixture {
+  id            String        @id @default(cuid())
+  code          Int           @unique @default(autoincrement()) // short public match ID shown on rows
+  sportKey      String
+  sport         Sport         @relation(fields: [sportKey], references: [key])
+  competitionId String
+  competition   Competition   @relation(fields: [competitionId], references: [id])
+  homeTeam      String
+  awayTeam      String
+  homeTeamLogo  String?
+  awayTeamLogo  String?
+  venue         String?
+  season        String?
+  startsAt      DateTime
+  status        FixtureStatus @default(SCHEDULED)
+  homeScore     Int?
+  awayScore     Int?
+  providerRef   String?       @unique
+  lastSyncedAt  DateTime?
+  updatedAt     DateTime      @default(now()) @updatedAt // any change (score, status): pages poll for it
+  createdAt     DateTime      @default(now())
+
+  markets       Market[]
+  betSelections BetSelection[]
+
+  @@index([sportKey, status, startsAt])
+  @@index([status])
+}
+
+enum MarketType {
+  MATCH_RESULT // 1X2
+  DOUBLE_CHANCE // 1X, 12, X2
+  OVER_UNDER // goals/points totals (uses line)
+  BTTS // both teams to score
+  HANDICAP // handicap / point spread; line = home team's handicap (whole or half lines only)
+  MONEYLINE // basketball 2-way winner
+  DRAW_NO_BET // 2-way winner, stake returned on a draw
+  ALT_TOTAL // over/under at the extra lines beside the main one (uses line)
+  ALT_HANDICAP // handicap at the extra lines; line = home team's handicap
+  HOME_TOTAL // home team's own goals/points over/under (uses line)
+  AWAY_TOTAL // away team's own goals/points over/under (uses line)
+  CORRECT_SCORE // exact final score; selection code "home-away", e.g. "2-1"
+  ODD_EVEN // total goals odd or even; codes ODD / EVEN
+}
+
+enum MarketStatus {
+  OPEN
+  SUSPENDED
+  SETTLED
+}
+
+model Market {
+  id         String       @id @default(cuid())
+  fixtureId  String
+  fixture    Fixture      @relation(fields: [fixtureId], references: [id], onDelete: Cascade)
+  type       MarketType
+  name       String
+  line       Decimal?     @db.Decimal(6, 2) // e.g. 2.5, -1.0
+  status     MarketStatus @default(OPEN)
+  updatedAt  DateTime     @default(now()) @updatedAt
+  selections Selection[]
+
+  @@unique([fixtureId, type, line])
+  @@index([fixtureId])
+}
+
+enum SelectionStatus {
+  OPEN
+  SUSPENDED
+  WON
+  LOST
+  VOID
+}
+
+model Selection {
+  id        String          @id @default(cuid())
+  marketId  String
+  market    Market          @relation(fields: [marketId], references: [id], onDelete: Cascade)
+  name      String // "Home", "Draw", "Over 2.5"
+  code      String // "1","X","2","OVER","UNDER","BTTS_YES"...
+  milliOdds Int // 2500 == 2.50
+  status    SelectionStatus @default(OPEN)
+  updatedAt DateTime        @updatedAt
+
+  betSelections BetSelection[]
+
+  @@unique([marketId, code])
+  @@index([marketId])
+}
+
+// ---------------------------------------------------------------- Ledger (double-entry)
+
+enum AccountKind {
+  USER_CASH // liability to a specific user
+  HOUSE_CASH // house settlement account
+  BET_ESCROW // staked funds held against open bets
+  HOUSE_PNL // house profit/loss on settled bets
+  PAYMENT_CLEARING // in-flight deposits/withdrawals with the PSP
+  BONUS // promotional balance
+  VERIFICATION_HOLD // a player's withdrawal-verification payments, held until an admin reviews them
+}
+
+model LedgerAccount {
+  id       String        @id @default(cuid())
+  userId   String?
+  user     User?         @relation(fields: [userId], references: [id])
+  kind     AccountKind
+  currency String        @default("GHS")
+  entries  LedgerEntry[]
+
+  @@unique([userId, kind, currency])
+  @@index([kind])
+}
+
+model LedgerTransaction {
+  id        String        @id @default(cuid())
+  kind      String // "DEPOSIT","BET_STAKE","BET_PAYOUT","BET_LOSS","WITHDRAWAL","VOID_REFUND"
+  reference String        @unique
+  metadata  Json?
+  createdAt DateTime      @default(now())
+  entries   LedgerEntry[]
+
+  @@index([kind])
+  @@index([createdAt])
+}
+
+model LedgerEntry {
+  id            String            @id @default(cuid())
+  transactionId String
+  transaction   LedgerTransaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  accountId     String
+  account       LedgerAccount     @relation(fields: [accountId], references: [id])
+  amount        BigInt // signed pesewas; entries within one transaction sum to 0
+  createdAt     DateTime          @default(now())
+
+  @@index([accountId])
+  @@index([transactionId])
+}
+
+// ---------------------------------------------------------------- Betting
+
+enum BetType {
+  SINGLE
+  ACCUMULATOR
+}
+
+enum BetStatus {
+  PENDING
+  WON
+  LOST
+  VOID
+  REJECTED
+  CASHED_OUT // unused: a full cash out settles as WON (Postgres can't drop an enum value in place)
+}
+
+model Bet {
+  id                String         @id @default(cuid())
+  ref               String         @unique // human-facing, e.g. "STK-7F3A9C"
+  verifyCode        String?        @unique // public ticket check, e.g. "KB7QH3...": unguessable, shareable
+  userId            String
+  user              User           @relation(fields: [userId], references: [id])
+  type              BetType
+  stake             BigInt // pesewas
+  combinedMilliOdds Int
+  potentialPayout   BigInt // pesewas
+  status            BetStatus      @default(PENDING)
+  idempotencyKey    String         @unique
+  placedAt          DateTime       @default(now())
+  settledAt         DateTime?
+  winSeenAt         DateTime? // when the player dismissed the "You won" pop-up for this bet
+  // Auto cash out: one rule per bet. Fires when the offer rises to (above=true) or falls to the target.
+  autoCashoutTarget BigInt? // pesewas
+  autoCashoutAbove  Boolean?
+  selections        BetSelection[]
+  cashouts          Cashout[]
+
+  @@index([userId, status])
+  @@index([status])
+}
+
+/**
+ * One cash out of a bet: full (settles it) or partial (the rest of the stake stays live).
+ */
+model Cashout {
+  id             String   @id @default(cuid())
+  betId          String
+  bet            Bet      @relation(fields: [betId], references: [id], onDelete: Cascade)
+  amount         BigInt // pesewas paid to the player
+  stakePortion   BigInt // pesewas of stake this cash out closed
+  full           Boolean
+  auto           Boolean  @default(false)
+  idempotencyKey String   @unique
+  createdAt      DateTime @default(now())
+
+  @@index([betId])
+  @@index([createdAt])
+}
+
+model BetSelection {
+  id                   String          @id @default(cuid())
+  betId                String
+  bet                  Bet             @relation(fields: [betId], references: [id], onDelete: Cascade)
+  selectionId          String
+  selection            Selection       @relation(fields: [selectionId], references: [id])
+  fixtureId            String
+  fixture              Fixture         @relation(fields: [fixtureId], references: [id])
+  milliOddsAtPlacement Int
+  status               SelectionStatus @default(OPEN)
+  marketName           String
+  selectionName        String
+  fixtureName          String
+
+  @@index([betId])
+  @@index([fixtureId, status])
+}
+
+// ---------------------------------------------------------------- Payments
+
+enum PaymentDirection {
+  DEPOSIT
+  WITHDRAWAL
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCEEDED
+  FAILED
+  CANCELLED
+}
+
+model PaymentIntent {
+  id             String           @id @default(cuid())
+  ref            String           @unique
+  userId         String
+  user           User             @relation(fields: [userId], references: [id])
+  direction      PaymentDirection
+  amount         BigInt // pesewas
+  currency       String           @default("GHS")
+  status         PaymentStatus    @default(PENDING)
+  provider       String
+  providerRef    String?
+  idempotencyKey String           @unique
+  metadata       Json?
+  createdAt      DateTime         @default(now())
+  settledAt      DateTime?
+
+  @@index([userId, direction])
+  @@index([status])
+}
+
+// Processed-callback ledger: guarantees a provider event is handled at most once.
+model WebhookEvent {
+  id              String    @id @default(cuid())
+  provider        String
+  providerEventId String
+  payloadHash     String
+  status          String    @default("RECEIVED") // RECEIVED | PROCESSED | IGNORED | FAILED
+  receivedAt      DateTime  @default(now())
+  processedAt     DateTime?
+  error           String?
+
+  @@unique([provider, providerEventId])
+}
+
+// ---------------------------------------------------------------- Ops
+
+model AuditLog {
+  id          String   @id @default(cuid())
+  actorUserId String?
+  actor       User?    @relation("actor", fields: [actorUserId], references: [id])
+  action      String
+  targetType  String?
+  targetId    String?
+  metadata    Json?
+  before      Json?
+  after       Json?
+  ip          String?
+  createdAt   DateTime @default(now())
+  // Tamper evidence: each entry's hash covers its content and the previous entry's hash.
+  seq         Int      @unique @default(autoincrement())
+  prevHash    String?
+  hash        String?
+
+  @@index([action])
+  @@index([createdAt])
+  @@index([actorUserId])
+  @@index([targetType, targetId])
+}
+
+enum JobStatus {
+  QUEUED
+  RUNNING
+  DONE
+  FAILED
+}
+
+// DB-backed job queue (no Redis in this environment). The worker polls runAt<=now.
+model Job {
+  id        String    @id @default(cuid())
+  type      String // "SYNC_ODDS","SETTLE_FIXTURE"
+  payload   Json?
+  status    JobStatus @default(QUEUED)
+  runAt     DateTime  @default(now())
+  attempts  Int       @default(0)
+  lastError String?
+  lockedAt  DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([status, runAt])
+}
+
+// A shareable betslip. Stores selection ids only; odds are re-read live when the code is loaded.
+model BookingCode {
+  code         String   @id
+  selectionIds String[]
+  createdById  String?
+  createdBy    User?    @relation(fields: [createdById], references: [id])
+  createdAt    DateTime @default(now())
+
+  @@index([createdAt])
+}
+
+model SupportTicket {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  subject   String
+  body      String
+  status    String   @default("OPEN") // OPEN | ANSWERED | CLOSED
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}

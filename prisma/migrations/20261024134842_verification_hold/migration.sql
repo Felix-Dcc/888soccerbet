@@ -1,0 +1,2 @@
+-- AlterEnum
+ALTER TYPE "AccountKind" ADD VALUE 'VERIFICATION_HOLD';

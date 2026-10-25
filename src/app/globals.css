@@ -1,0 +1,497 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Light palette (default). Values are "R G B" so Tailwind opacity modifiers work. */
+:root {
+  color-scheme: light;
+  --fg: 11 18 32;
+  --ink-900: 238 241 245; /* page: cool grey so white cards read as surfaces */
+  --ink-800: 255 255 255; /* inputs, header */
+  --ink-700: 255 255 255; /* cards */
+  --ink-600: 238 241 245; /* odds cells */
+  --ink-500: 227 232 239;
+  --ink-400: 203 211 222;
+  --line: 226 231 238;
+  --fog: 75 85 101;
+  --fog-muted: 95 104 118; /* >= 4.5:1 on white, page and chip greys */
+  --lime: 12 124 54; /* brand green: >= 4.5:1 as text on white/page, and white text on it */
+  --lime-600: 10 104 45;
+  --lime-ink: 255 255 255;
+  --teal: 10 133 112;
+  --danger: 220 38 38;
+  --warn: 180 83 9;
+  --shadow-card: 0 1px 2px rgb(16 24 40 / 0.05), 0 1px 3px rgb(16 24 40 / 0.06);
+  --shadow-lift: 0 4px 6px -2px rgb(16 24 40 / 0.05), 0 12px 24px -6px rgb(16 24 40 / 0.12);
+}
+
+/* Dark palette, scoped: photo heroes and image panels keep light-on-dark text. */
+.theme-dark {
+  color-scheme: dark;
+  --fg: 255 255 255;
+  --ink-900: 8 11 16;
+  --ink-800: 14 19 27;
+  --ink-700: 19 26 36;
+  --ink-600: 26 35 48;
+  --ink-500: 36 48 66;
+  --ink-400: 51 66 87;
+  --line: 34 48 68;
+  --fog: 169 182 200;
+  --fog-muted: 140 152 170;
+  --lime: 198 242 78;
+  --lime-600: 178 221 56;
+  --lime-ink: 11 15 20;
+  --teal: 22 209 180;
+  --danger: 255 90 95;
+  --warn: 255 176 32;
+  --shadow-card: 0 1px 0 0 rgb(255 255 255 / 0.04) inset, 0 10px 30px -12px rgb(0 0 0 / 0.6);
+  --shadow-lift: 0 1px 0 0 rgb(255 255 255 / 0.06) inset, 0 18px 40px -16px rgb(0 0 0 / 0.75);
+  color: rgb(var(--fg));
+}
+
+html,
+body {
+  background-color: rgb(var(--ink-900));
+  color: rgb(var(--fg));
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgb(var(--ink-400)) transparent;
+}
+*::-webkit-scrollbar {
+  height: 8px;
+  width: 8px;
+}
+*::-webkit-scrollbar-thumb {
+  background: rgb(var(--ink-400));
+  border-radius: 999px;
+}
+
+@layer components {
+  .card {
+    @apply rounded-lg border border-line bg-ink-700 shadow-card;
+  }
+  .card-hover {
+    @apply transition duration-200 hover:border-ink-400 hover:shadow-lift;
+  }
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-lg font-semibold transition active:translate-y-px disabled:pointer-events-none disabled:opacity-40;
+  }
+  .btn-lime {
+    @apply btn bg-lime text-lime-ink shadow-lime hover:bg-lime-600;
+  }
+  .btn-ghost {
+    @apply btn border border-line text-fog hover:border-fog-muted hover:text-white;
+  }
+  .input {
+    @apply w-full rounded-lg border border-line bg-ink-800 px-3 py-2.5 text-white outline-none transition placeholder:text-fog-muted focus:border-lime focus:ring-2 focus:ring-lime/30;
+  }
+  .label {
+    @apply mb-1.5 block text-sm font-medium text-fog;
+  }
+  .chip {
+    @apply inline-flex items-center gap-2 whitespace-nowrap rounded-full border border-line bg-ink-700 px-3.5 py-1.5 text-sm font-semibold text-fog transition hover:border-fog-muted hover:text-white;
+  }
+  .chip-active {
+    @apply border-lime bg-lime text-lime-ink hover:border-lime hover:text-lime-ink;
+  }
+  /* Odds cell: one look everywhere (tables, hero, fixture page). */
+  /* Odds cell: one look everywhere — solid brand green, dark when on the slip. */
+  .odd {
+    @apply flex h-10 flex-col items-center justify-center rounded-md border border-transparent bg-lime leading-tight text-lime-ink transition duration-150 hover:bg-lime-600;
+  }
+  .odd-active {
+    @apply animate-pop bg-white text-ink-800 shadow-lift hover:bg-white;
+  }
+  /* Match page board: neutral tiles with green prices; the picked one turns solid green. */
+  .odds-board .odd {
+    @apply border-line bg-ink-600 text-white hover:border-lime/40 hover:bg-ink-500;
+  }
+  .odds-board .odd:not(.odd-active) .odd-price {
+    @apply text-lime;
+  }
+  .odds-board .odd.odd-active {
+    @apply border-lime bg-lime text-lime-ink shadow-none hover:bg-lime-600;
+  }
+  .section-title {
+    @apply font-display text-lg font-bold tracking-tight text-white;
+  }
+  .skeleton {
+    @apply relative overflow-hidden rounded-lg bg-ink-600;
+  }
+  .skeleton::after {
+    @apply absolute inset-0 -translate-x-full animate-shimmer;
+    content: "";
+    background: linear-gradient(90deg, transparent, rgb(var(--fg) / 0.05), transparent);
+  }
+}
+
+:focus-visible {
+  outline: 2px solid rgb(var(--lime));
+  outline-offset: 2px;
+}
+/* --- Live data motion: odds moves and goals --- */
+.kb-odd-up {
+  animation: kb-odd-up 1.1s ease-out 2;
+}
+.kb-odd-down {
+  animation: kb-odd-down 1.1s ease-out 2;
+}
+@keyframes kb-odd-up {
+  0% {
+    box-shadow: 0 0 0 0 rgb(198 242 78 / 0.9);
+  }
+  100% {
+    box-shadow: 0 0 0 6px rgb(198 242 78 / 0);
+  }
+}
+@keyframes kb-odd-down {
+  0% {
+    box-shadow: 0 0 0 0 rgb(255 90 95 / 0.9);
+  }
+  100% {
+    box-shadow: 0 0 0 6px rgb(255 90 95 / 0);
+  }
+}
+.kb-goal {
+  animation: kb-goal 0.55s cubic-bezier(0.2, 0.8, 0.2, 1.5) both, kb-goal-glow 1.2s 0.55s ease-in-out 3;
+}
+@keyframes kb-goal {
+  from {
+    opacity: 0;
+    transform: scale(0.2) rotate(-12deg);
+  }
+}
+@keyframes kb-goal-glow {
+  50% {
+    box-shadow: 0 0 12px 2px rgb(var(--lime) / 0.55);
+  }
+}
+.kb-score-pop {
+  display: inline-block;
+  animation: kb-score-pop 0.6s cubic-bezier(0.2, 0.8, 0.2, 1.6) both;
+}
+@keyframes kb-score-pop {
+  from {
+    transform: scale(2.2);
+  }
+}
+
+/* --- Spinning ball with orbit trails (empty states) --- */
+.kb-ball {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: kb-spin 4s linear infinite;
+}
+.kb-orbit {
+  stroke-dasharray: 18 160;
+  animation: kb-orbit 1.8s linear infinite;
+}
+.kb-orbit.kb-orbit-2 {
+  animation-duration: 2.6s;
+  animation-direction: reverse;
+}
+@keyframes kb-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes kb-orbit {
+  to {
+    stroke-dashoffset: -178;
+  }
+}
+
+/* --- Hero banner motion (matchday-poster style) --- */
+/* Copy enters each time its slide becomes the active one: inactive slides (aria-hidden) hold
+   "animation: none", and switching back to a named animation restarts it. */
+.kb-enter {
+  animation: kb-enter 0.6s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+.kb-enter.kb-from-left {
+  animation-name: kb-from-left;
+}
+.kb-enter.kb-from-right {
+  animation-name: kb-from-right;
+}
+.kb-enter.kb-pop {
+  animation-name: kb-pop-in;
+}
+[aria-hidden="true"] .kb-enter {
+  animation: none;
+}
+@keyframes kb-enter {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+}
+@keyframes kb-from-left {
+  from {
+    opacity: 0;
+    transform: translateX(-28px) rotate(-8deg);
+  }
+}
+@keyframes kb-from-right {
+  from {
+    opacity: 0;
+    transform: translateX(28px) rotate(8deg);
+  }
+}
+@keyframes kb-pop-in {
+  from {
+    opacity: 0;
+    transform: scale(0.3);
+  }
+}
+/* Slow push-in on the banner photo. */
+.kb-zoom {
+  animation: kb-zoom 14s ease-in-out infinite alternate;
+}
+@keyframes kb-zoom {
+  to {
+    transform: scale(1.1);
+  }
+}
+/* A light streak sweeps across the banner every few seconds. */
+.kb-streak {
+  overflow: hidden;
+}
+.kb-streak::before {
+  content: "";
+  position: absolute;
+  top: -20%;
+  bottom: -20%;
+  left: 0;
+  width: 18%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.16), rgba(198, 242, 78, 0.12), transparent);
+  transform: translateX(-150%) skewX(-18deg);
+  animation: kb-streak 6s 1.2s ease-in-out infinite;
+}
+@keyframes kb-streak {
+  0% {
+    transform: translateX(-150%) skewX(-18deg);
+  }
+  22%,
+  100% {
+    transform: translateX(650%) skewX(-18deg);
+  }
+}
+
+/* --- Opening loading screen (see src/components/Splash.tsx) --- */
+#kb-splash {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  overflow: hidden;
+  background: radial-gradient(120% 90% at 50% 40%, #0f5a33 0%, #0b4a2a 45%, #062a17 100%);
+  transition: opacity 0.45s ease, visibility 0.45s ease;
+}
+.kb-splash-done #kb-splash {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+.kb-splash-off #kb-splash {
+  display: none;
+}
+.kb-splash-glow {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 420px;
+  height: 420px;
+  margin: -250px 0 0 -210px;
+  border-radius: 9999px;
+  background: radial-gradient(circle, rgba(245, 196, 81, 0.26), transparent 65%);
+  animation: kb-fade 0.8s 0.5s ease-out both, kb-glow 2s 1.3s ease-in-out infinite;
+}
+/* Soft spotlight from above, with a few gold sparks drifting down through it. */
+.kb-splash-beam {
+  position: absolute;
+  inset: 0 auto 0 50%;
+  width: 560px;
+  margin-left: -280px;
+  background: linear-gradient(180deg, rgba(255, 231, 163, 0.2), rgba(255, 231, 163, 0.04) 55%, transparent 75%);
+  clip-path: polygon(40% 0, 60% 0, 100% 100%, 0 100%);
+  animation: kb-fade 0.9s ease-out both;
+}
+.kb-splash-sparks {
+  position: absolute;
+  inset: 0 auto 0 50%;
+  width: 360px;
+  margin-left: -180px;
+  overflow: hidden;
+}
+.kb-splash-sparks > span {
+  position: absolute;
+  top: 8%;
+  width: 3px;
+  height: 3px;
+  border-radius: 9999px;
+  background: #ffe7a3;
+  box-shadow: 0 0 6px 1px rgba(255, 216, 107, 0.8);
+  opacity: 0;
+  animation: kb-spark 2s ease-in infinite;
+}
+.kb-crown {
+  position: relative;
+  width: 132px;
+  height: auto;
+  overflow: visible;
+  filter: drop-shadow(0 10px 22px rgba(0, 0, 0, 0.45));
+  animation: kb-bob 2.4s 1.6s ease-in-out infinite;
+}
+.kb-crown-line path {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 0;
+  animation: kb-draw 0.75s 0.1s cubic-bezier(0.65, 0, 0.35, 1) both;
+}
+.kb-crown-line {
+  opacity: 0.35;
+  animation: kb-line-settle 0.5s 0.75s ease-out both;
+}
+.kb-crown-fill {
+  animation: kb-fade 0.45s 0.6s ease-out both;
+}
+.kb-crown-glint {
+  transform: translateX(40px);
+  animation: kb-glint 0.6s 1.05s ease-in-out both;
+}
+.kb-jewel {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: kb-pop 0.35s cubic-bezier(0.2, 0.8, 0.2, 1.4) both;
+}
+.kb-splash-word {
+  position: relative;
+  line-height: 1;
+  animation: kb-track 0.75s 0.55s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+/* The wordmark's little crown lands on the "z" last. */
+.kb-splash-word svg {
+  animation: kb-drop 0.45s 1.3s cubic-bezier(0.3, 0.9, 0.3, 1.35) both;
+}
+.kb-splash-bar {
+  position: relative;
+  width: 168px;
+  height: 4px;
+  margin-top: 6px;
+  overflow: hidden;
+  border-radius: 9999px;
+  background: rgba(255, 255, 255, 0.15);
+  animation: kb-fade 0.5s 1s ease-out both;
+}
+.kb-splash-bar > span {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 40%;
+  border-radius: 9999px;
+  background: linear-gradient(90deg, #f5c451, #c6f24e);
+  animation: kb-load 1.1s ease-in-out infinite;
+}
+@keyframes kb-draw {
+  from {
+    stroke-dashoffset: 1;
+  }
+}
+@keyframes kb-line-settle {
+  from {
+    opacity: 1;
+  }
+}
+@keyframes kb-fade {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes kb-glint {
+  from {
+    transform: translateX(0);
+  }
+}
+@keyframes kb-pop {
+  from {
+    opacity: 0;
+    transform: scale(0);
+  }
+}
+@keyframes kb-track {
+  from {
+    opacity: 0;
+    letter-spacing: 0.55em;
+    filter: blur(10px);
+  }
+}
+@keyframes kb-drop {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -220%) scale(0.5);
+  }
+}
+@keyframes kb-spark {
+  0% {
+    opacity: 0;
+    transform: translateY(0);
+  }
+  20% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(360px);
+  }
+}
+@keyframes kb-bob {
+  50% {
+    transform: translateY(-5px);
+  }
+}
+@keyframes kb-glow {
+  50% {
+    opacity: 0.55;
+    transform: scale(1.08);
+  }
+}
+@keyframes kb-load {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(260%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Winning pop-up: twinkling sparkles and a light sweep across the trophy. */
+@keyframes kb-twinkle {
+  0%, 100% { opacity: 0; transform: scale(0.4) rotate(0deg); }
+  50% { opacity: 1; transform: scale(1) rotate(45deg); }
+}
+@keyframes kb-shine {
+  0%, 55% { transform: translateX(-140px) skewX(-20deg); }
+  100% { transform: translateX(260px) skewX(-20deg); }
+}
+@keyframes kb-glow {
+  0%, 100% { opacity: 0.65; transform: scale(0.96); }
+  50% { opacity: 1; transform: scale(1.04); }
+}
+.kb-twinkle { animation: kb-twinkle 2.4s ease-in-out infinite; }
+.kb-shine { animation: kb-shine 3.2s 0.9s ease-in-out infinite; }
+.kb-glow { animation: kb-glow 3s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) {
+  .kb-twinkle, .kb-shine, .kb-glow { animation: none; }
+}
