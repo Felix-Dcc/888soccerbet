@@ -42,7 +42,7 @@ import { audit, verifyAuditChain } from "../src/lib/audit";
 import { listFixtures, listResults, dataVersion } from "../src/lib/queries";
 import { applyMarkets, goLiveManualFixtures, updateLiveScores } from "../src/lib/sync";
 import { createManualFixture, rescheduleManualFixture } from "../src/lib/manualFixtures";
-import { planDemoCleanup, runDemoCleanup } from "../src/lib/demoCleanup";
+import { isTestAccount, planDemoCleanup, runDemoCleanup } from "../src/lib/demoCleanup";
 import { manualFixtureSchema } from "../src/lib/validation";
 import { generateMatch } from "../src/lib/matchGenerator";
 import { advanceScriptedMatches, buildScript, scriptLengthMin } from "../src/lib/scriptedMatches";
@@ -1342,7 +1342,9 @@ describe("clearing demo data", () => {
     const demo = await fundedUser(100);
     const m = await makeMatch({ home: 2.0, draw: 3.0, away: 4.0 });
     await placeBet(demo.id, { idempotencyKey: randomUUID(), stakeGhs: 10, acceptOddsChange: false, selections: [{ selectionId: m.home.id, expectedMilliOdds: 2000 }] });
-    const staffBefore = await prisma.user.count({ where: { role: { not: "USER" } } });
+    // Somebody who signed up for real and never deposited must survive the cleanup.
+    const keeper = await prisma.user.create({ data: { email: `keeper_${randomUUID()}@gmail.com`, passwordHash: "x", referralCode: referralCode() } });
+    const realStaff = (await prisma.user.findMany({ where: { role: { not: "USER" } }, select: { email: true } })).filter((u) => !isTestAccount(u.email)).length;
 
     const plan = await planDemoCleanup();
     expect(plan.keptPlayers.map((k) => k.email)).toContain(real.email);
@@ -1361,7 +1363,11 @@ describe("clearing demo data", () => {
     expect(await prisma.bet.count()).toBe(0);
     const demoLeft = await prisma.user.findUnique({ where: { id: demo.id } });
     expect(demoLeft === null || demoLeft.status === "CLOSED").toBe(true);
-    expect(await prisma.user.count({ where: { role: { not: "USER" } } })).toBe(staffBefore);
+
+    // A real sign-up with no deposit keeps their account; real staff are untouched.
+    const kept = await prisma.user.findUnique({ where: { id: keeper.id } });
+    expect(kept?.status).toBe("ACTIVE");
+    expect((await prisma.user.findMany({ where: { role: { not: "USER" } }, select: { email: true } })).filter((u) => !isTestAccount(u.email)).length).toBe(realStaff);
 
     // The books still add up, which is the check that would have rolled it all back.
     expect(await ledgerIsBalanced()).toBe(true);

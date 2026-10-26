@@ -1,9 +1,11 @@
 /**
  * Clearing the demo data left over from building and testing, keeping real money.
  *
- * Real = a payment taken through a live provider (anything that isn't the "sandbox" one).
- * Demo = everything else on the player side: sandbox payments, the accounts that only ever used
- * them, every bet staked with that fake money, and the ledger entries behind them.
+ * Demo money = payments through the "sandbox" provider, plus every bet staked with it. That fake
+ * money is removed from whoever holds it, real sign-up or not.
+ * Demo accounts = only the ones built for testing, recognised by their address. Somebody who signed
+ * up for real and never deposited keeps their account; they just lose the fake money.
+ * A real payment (any live provider) and the ledger behind it is never touched.
  *
  * Guarantees, enforced inside one transaction that rolls back if either fails:
  *  - the ledger still sums to zero (transactions are deleted whole, never one side);
@@ -17,10 +19,15 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "./db";
 
+/** Addresses only ever used for testing. A real sign-up never matches, so it is never removed. */
+const TEST_ACCOUNT = /@(example\.test|t\.gh|test\.gh)$|^(verifytest|refplayer|partner\.e2e|local\.tester|demo@)/i;
+export const isTestAccount = (email: string) => TEST_ACCOUNT.test(email);
+
 export interface CleanupPlan {
   realPayments: { provider: string; direction: string; status: string; amount: bigint; email: string }[];
   keptPlayers: { email: string; balanceAfter: bigint; realPaymentsTotal: bigint }[];
   keptStaff: string[];
+  keptPlayersWithoutDeposits: string[];
   demoPayments: { count: number; total: bigint };
   bets: number;
   ledger: { remove: number; keep: number };
@@ -47,11 +54,11 @@ async function assess(): Promise<Doomed> {
 
   const realPays = pays.filter((p) => p.provider !== "sandbox");
   const demoPays = pays.filter((p) => p.provider === "sandbox");
-  const staff = users.filter((u) => u.role !== "USER");
   const realPlayers = new Set(realPays.map((p) => p.userId));
-  const staffIds = new Set(staff.map((u) => u.id));
-  const demoUsers = users.filter((u) => !staffIds.has(u.id) && !realPlayers.has(u.id));
+  // Only test accounts go. Never a super admin, and never anyone who has put real money in.
+  const demoUsers = users.filter((u) => isTestAccount(u.email) && u.role !== "SUPER_ADMIN" && !realPlayers.has(u.id));
   const demoUserIds = new Set(demoUsers.map((u) => u.id));
+  const staff = users.filter((u) => u.role !== "USER" && !demoUserIds.has(u.id));
 
   // Every ledger transaction that touches a demo account, came from a sandbox payment, or paid a bet.
   const entries = await prisma.ledgerEntry.findMany({ select: { transactionId: true, account: { select: { userId: true } } } });
@@ -90,6 +97,7 @@ async function assess(): Promise<Doomed> {
           realPaymentsTotal: realPays.filter((p) => p.userId === u.id && p.status === "SUCCEEDED").reduce((n, p) => n + (p.direction === "DEPOSIT" ? p.amount : -p.amount), 0n),
         })),
       keptStaff: staff.map((u) => u.email),
+      keptPlayersWithoutDeposits: users.filter((u) => u.role === "USER" && !realPlayers.has(u.id) && !demoUserIds.has(u.id)).map((u) => u.email),
       demoPayments: { count: demoPays.length, total: demoPays.reduce((n, p) => n + p.amount, 0n) },
       bets: bets.length,
       ledger: { remove: doomed.length, keep: txs.length - doomed.length },

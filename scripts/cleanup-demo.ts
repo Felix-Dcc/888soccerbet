@@ -10,7 +10,7 @@ import { prisma } from "../src/lib/db";
 import { planDemoCleanup, runDemoCleanup, type CleanupPlan } from "../src/lib/demoCleanup";
 
 const ghs = (p: bigint) => `GHS ${(Number(p) / 100).toFixed(2)}`;
-const list = (xs: string[], n = 6) => (xs.length === 0 ? "none" : xs.length <= n ? xs.join(", ") : `${xs.slice(0, n).join(", ")} … +${xs.length - n} more`);
+const list = (xs: string[]) => (xs.length === 0 ? "none" : xs.join(", "));
 
 function show(p: CleanupPlan) {
   console.log("REAL MONEY (kept)");
@@ -19,6 +19,7 @@ function show(p: CleanupPlan) {
   for (const k of p.keptPlayers)
     console.log(`  keeps ${k.email}: balance ${ghs(k.balanceAfter)} (real payments total ${ghs(k.realPaymentsTotal)})${k.balanceAfter === k.realPaymentsTotal ? "" : "  <-- check this"}`);
   console.log(`  staff kept:   ${list(p.keptStaff)}`);
+  console.log(`  sign-ups kept with no deposit (${p.keptPlayersWithoutDeposits.length}): ${list(p.keptPlayersWithoutDeposits)}`);
   console.log("\nTO REMOVE");
   console.log(`  demo payments:          ${p.demoPayments.count}  (${ghs(p.demoPayments.total)} of fake money)`);
   console.log(`  bets:                   ${p.bets}`);
