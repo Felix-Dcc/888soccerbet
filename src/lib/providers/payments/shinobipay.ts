@@ -80,6 +80,17 @@ export class ShinobiPayProvider implements PaymentProvider {
     throw new ShinobiPayError(err?.message || `ShinobiPay refused the payment (${err?.code ?? `HTTP ${http}`})`);
   }
 
+  async checkDeposit(providerRef: string): Promise<{ status: "SUCCEEDED" | "FAILED"; amountPesewas: bigint } | null> {
+    if (!/^[\w-]+$/.test(providerRef)) return null;
+    const { http, json } = await this.call("GET", `/v1/payment_intents/${providerRef}`);
+    if (http !== 200) return null; // unknown or unavailable: try again later
+    const live = json as { status?: string; amount?: number; currency?: string };
+    if (live.currency !== "GHS" || !Number.isInteger(live.amount)) return null;
+    if (live.status === "succeeded") return { status: "SUCCEEDED", amountPesewas: BigInt(live.amount!) };
+    if (live.status === "failed") return { status: "FAILED", amountPesewas: BigInt(live.amount!) };
+    return null; // requires_action / processing / unknown: not settled yet
+  }
+
   async verifyWebhook(rawBody: string, headers: Headers): Promise<WebhookResult> {
     const header = headers.get("x-akwapay-signature");
     if (!header || !this.webhookSecret) return { ok: false };

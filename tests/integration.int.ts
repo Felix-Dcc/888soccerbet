@@ -29,7 +29,7 @@ import { prisma } from "../src/lib/db";
 import { houseAccountId, userAccountId, postTransaction, userCashBalance, ledgerIsBalanced } from "../src/lib/ledger";
 import { placeBet, BetError } from "../src/lib/betEngine";
 import { settleBet, settleFixture, voidFixture, SettlementError } from "../src/lib/settlement";
-import { initiateDeposit, initiateWithdrawal, initiateVerificationPayment, manualPayoutQueue, processPaymentEvent, recordManualPayout, reviewVerification, verificationState } from "../src/lib/wallet";
+import { initiateDeposit, initiateWithdrawal, initiateVerificationPayment, manualPayoutQueue, processPaymentEvent, reconcilePendingDeposits, recordManualPayout, reviewVerification, verificationState } from "../src/lib/wallet";
 import { toPesewas } from "../src/lib/money";
 import { referralCode } from "../src/lib/ids";
 import { createBooking, loadBooking, resolvePicks } from "../src/lib/bookings";
@@ -281,6 +281,32 @@ describe("wallet", () => {
     // A payout the PSP is sending itself can never be marked by hand (that could pay twice).
     const auto = await initiateWithdrawal(user.id, 10, "0241234567", randomUUID());
     await expect(recordManualPayout(sa.id, auto.ref, "FAILED")).rejects.toMatchObject({ code: "NOT_MANUAL" });
+    expect(await ledgerIsBalanced()).toBe(true);
+  });
+
+  it("credits a deposit whose webhook was lost once the provider confirms it, and never twice", async () => {
+    const user = await fundedUser(0);
+    const checkDeposit = vi.fn(async () => ({ status: "SUCCEEDED" as const, amountPesewas: toPesewas(1.02) })); // GHS 1 + 2% fee
+    psp.override = {
+      name: "shinobipay", isSandbox: false, payouts: "manual", checkDeposit,
+      initiate: async () => ({ providerRef: `pi_${randomUUID().slice(0, 8)}`, status: "PENDING" as const }),
+      verifyWebhook: async () => ({ ok: false as const }),
+    };
+    try {
+      const intent = await initiateDeposit(user.id, 1, "0244123456", randomUUID());
+      expect(await reconcilePendingDeposits(user.id)).toBe(0); // under a minute old: left for the webhook
+      expect(checkDeposit).not.toHaveBeenCalled();
+      await prisma.paymentIntent.update({ where: { id: intent.id }, data: { createdAt: new Date(Date.now() - 5 * 60_000) } });
+      expect(await reconcilePendingDeposits(user.id)).toBe(1);
+      expect(await userCashBalance(prisma, user.id)).toBe(toPesewas(1)); // exactly what was asked
+      expect(await reconcilePendingDeposits(user.id)).toBe(0); // settled: not asked again
+      // The webhook finally turns up: already settled, so nothing more is credited.
+      const late = await processPaymentEvent("shinobipay", { providerEventId: `evt_${randomUUID()}`, ourRef: intent.ref, status: "SUCCEEDED", amountPesewas: toPesewas(1.02), direction: "DEPOSIT" });
+      expect(late).toBe("ignored");
+      expect(await userCashBalance(prisma, user.id)).toBe(toPesewas(1));
+    } finally {
+      psp.override = null;
+    }
     expect(await ledgerIsBalanced()).toBe(true);
   });
 

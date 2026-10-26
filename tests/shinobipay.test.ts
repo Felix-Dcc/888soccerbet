@@ -104,3 +104,16 @@ describe("provider selection", () => {
     vi.unstubAllEnvs();
   });
 });
+
+describe("ShinobiPay status check (missed webhooks)", () => {
+  it("reports a final outcome, and null while it's still open or unknown", async () => {
+    const f = stubFetch(reply({ id: "pi_01", status: "succeeded", amount: 102, currency: "GHS" }));
+    expect(await sp().checkDeposit("pi_01")).toEqual({ status: "SUCCEEDED", amountPesewas: 102n });
+    expect(call(f).url).toBe("https://api.shinobi.test/v1/payment_intents/pi_01");
+    stubFetch(reply({ id: "pi_01", status: "requires_action", amount: 102, currency: "GHS" }));
+    expect(await sp().checkDeposit("pi_01")).toBeNull();
+    stubFetch(reply({ error: { code: "not_found" } }, 404));
+    expect(await sp().checkDeposit("pi_01")).toBeNull();
+    expect(await sp().checkDeposit("../admin")).toBeNull(); // never builds a URL from junk
+  });
+});

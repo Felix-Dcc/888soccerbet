@@ -46,6 +46,8 @@ export interface PaymentProvider {
   initiate(req: ChargeRequest): Promise<ChargeResult>;
   /** Authenticate a webhook and return the normalised event, confirmed with the PSP where it allows. */
   verifyWebhook(rawBody: string, headers: Headers): Promise<WebhookResult>;
+  /** Ask the PSP for a deposit's final outcome by its id (catches a missed webhook). null = not final yet. */
+  checkDeposit?(providerRef: string): Promise<{ status: "SUCCEEDED" | "FAILED"; amountPesewas: bigint } | null>;
 }
 
 /** The network a number was issued on, from its prefix. Only a default: numbers can be ported, so players can change it. */

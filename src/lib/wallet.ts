@@ -314,6 +314,41 @@ export async function processPaymentEvent(provider: string, ev: NormalisedEvent)
   return "processed";
 }
 
+/**
+ * Ask the PSP about deposits still pending after a minute (a webhook can be lost, e.g. sent to the wrong
+ * URL). A confirmed outcome goes through processPaymentEvent like a webhook, so it is credited once: a
+ * webhook arriving later finds the deposit already settled and is ignored. Runs when a player opens
+ * their wallet (their own deposits only).
+ */
+export async function reconcilePendingDeposits(userId: string): Promise<number> {
+  const provider = paymentProvider();
+  if (!provider.checkDeposit) return 0;
+  const now = Date.now();
+  const pending = await prisma.paymentIntent.findMany({
+    where: { userId, direction: "DEPOSIT", status: "PENDING", provider: provider.name, providerRef: { not: null }, createdAt: { lt: new Date(now - 60_000), gt: new Date(now - 7 * 86_400_000) } },
+    orderBy: { createdAt: "asc" },
+    take: 5,
+  });
+  let settled = 0;
+  for (const intent of pending) {
+    try {
+      const r = await provider.checkDeposit(intent.providerRef!);
+      if (!r) continue;
+      const res = await processPaymentEvent(provider.name, {
+        providerEventId: `check:${intent.providerRef}:${r.status}`,
+        ourRef: intent.ref,
+        status: r.status,
+        amountPesewas: r.amountPesewas,
+        direction: "DEPOSIT",
+      });
+      if (res === "processed") settled++;
+    } catch (e) {
+      console.error(`[wallet] status check for ${intent.ref} failed:`, e instanceof Error ? e.message : e);
+    }
+  }
+  return settled;
+}
+
 /** Withdrawals waiting for an admin to send the money (providers that can't pay players), oldest first. */
 export function manualPayoutQueue() {
   return prisma.paymentIntent.findMany({

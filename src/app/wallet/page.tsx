@@ -4,7 +4,7 @@ import { prisma } from "@/lib/db";
 import { userCashBalance } from "@/lib/ledger";
 import { formatPesewas } from "@/lib/money";
 import { WalletPanel } from "@/components/WalletPanel";
-import { minDeposit, verificationState } from "@/lib/wallet";
+import { minDeposit, reconcilePendingDeposits, verificationState } from "@/lib/wallet";
 import { PageHero } from "@/components/PageHero";
 import { photos } from "@/lib/photos";
 
@@ -13,6 +13,8 @@ export const dynamic = "force-dynamic";
 export default async function WalletPage() {
   const user = await getCurrentUser();
   if (!user) return <SignedOut title="Wallet" />;
+  // Settle any deposit whose webhook never came, before showing the balance. Never blocks the page.
+  await reconcilePendingDeposits(user.id).catch((e) => console.error("[wallet] reconcile failed:", e instanceof Error ? e.message : e));
 
   const [balance, intents, verification] = await Promise.all([
     userCashBalance(prisma, user.id),
