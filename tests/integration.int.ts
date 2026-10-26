@@ -29,7 +29,7 @@ import { prisma } from "../src/lib/db";
 import { houseAccountId, userAccountId, postTransaction, userCashBalance, ledgerIsBalanced } from "../src/lib/ledger";
 import { placeBet, BetError } from "../src/lib/betEngine";
 import { settleBet, settleFixture, voidFixture, SettlementError } from "../src/lib/settlement";
-import { initiateDeposit, initiateWithdrawal, initiateVerificationPayment, manualPayoutQueue, processPaymentEvent, reconcilePendingDeposits, recordManualPayout, reviewVerification, verificationState } from "../src/lib/wallet";
+import { initiateDeposit, initiateWithdrawal, initiateVerificationPayment, confirmDeposit, manualPayoutQueue, processPaymentEvent, reconcilePendingDeposits, recordManualPayout, reviewVerification, verificationState } from "../src/lib/wallet";
 import { toPesewas } from "../src/lib/money";
 import { referralCode } from "../src/lib/ids";
 import { createBooking, loadBooking, resolvePicks } from "../src/lib/bookings";
@@ -308,6 +308,35 @@ describe("wallet", () => {
       psp.override = null;
     }
     expect(await ledgerIsBalanced()).toBe(true);
+  });
+
+  it("confirms a deposit the moment the player taps 'I've approved it', once, and only their own", async () => {
+    const user = await fundedUser(0);
+    const other = await fundedUser(0);
+    let outcome: { status: "SUCCEEDED" | "FAILED"; amountPesewas: bigint } | null = null;
+    const checkDeposit = vi.fn(async () => outcome);
+    psp.override = {
+      name: "shinobipay", isSandbox: false, payouts: "manual", checkDeposit,
+      initiate: async () => ({ providerRef: `pi_${randomUUID().slice(0, 8)}`, status: "PENDING" as const, prompt: { ussdFallback: null } }),
+      verifyWebhook: async () => ({ ok: false as const }),
+    };
+    try {
+      const intent = await initiateDeposit(user.id, 50, "0244123456", randomUUID());
+      await expect(confirmDeposit(other.id, intent.ref)).rejects.toMatchObject({ code: "NOT_FOUND" });
+      expect(await confirmDeposit(user.id, intent.ref)).toMatchObject({ status: "PENDING" }); // not approved yet
+      outcome = { status: "SUCCEEDED", amountPesewas: toPesewas(51) };
+      expect(await confirmDeposit(user.id, intent.ref)).toMatchObject({ status: "SUCCEEDED", amount: toPesewas(50) });
+      expect(await confirmDeposit(user.id, intent.ref)).toMatchObject({ status: "SUCCEEDED" }); // tapped again
+      expect(await userCashBalance(prisma, user.id)).toBe(toPesewas(50)); // credited once
+      expect(checkDeposit).toHaveBeenCalledTimes(2); // not asked again once settled
+
+      const failed = await initiateDeposit(user.id, 20, "0244123456", randomUUID());
+      outcome = { status: "FAILED", amountPesewas: toPesewas(20) };
+      expect(await confirmDeposit(user.id, failed.ref)).toMatchObject({ status: "FAILED" });
+      expect(await userCashBalance(prisma, user.id)).toBe(toPesewas(50));
+    } finally {
+      psp.override = null;
+    }
   });
 
   it("blocks a withdrawal above balance", async () => {

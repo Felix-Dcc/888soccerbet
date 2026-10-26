@@ -2,6 +2,8 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { newId } from "@/lib/clientId";
+import { formatPesewas } from "@/lib/money";
+import { FLASH_KEY } from "@/components/FlashNotice";
 import { NETWORKS, guessNetwork, type Network } from "@/lib/providers/payments/types";
 
 const NETWORK_LABEL: Record<Network, string> = { MTN: "MTN MoMo", TELECEL: "Telecel Cash", AIRTELTIGO: "AirtelTigo Money" };
@@ -30,6 +32,10 @@ export function WalletPanel({ minDepositGhs, verification }: { minDepositGhs: nu
   const [busy, setBusy] = useState(false);
   const [pending, setPending] = useState<string | null>(null);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  // A deposit waiting for the player to approve the prompt on their phone.
+  const [approving, setApproving] = useState<{ ref: string; amount: string; ussd: string | null } | null>(null);
+  const [checking, setChecking] = useState(false);
+  const [approveNote, setApproveNote] = useState<string | null>(null);
 
   // Back from the payment provider's approval page (it adds ?status=&tx_ref= to our wallet URL).
   useEffect(() => {
@@ -51,13 +57,50 @@ export function WalletPanel({ minDepositGhs, verification }: { minDepositGhs: nu
   };
 
   /** How the player approves: a prompt already on their phone, the provider's page, or (sandbox) the confirm panel. */
-  const afterCharge = (d: { intent: { ref: string }; redirectUrl?: string | null; prompt?: { ussdFallback: string | null } | null }) => {
+  const afterCharge = (d: { intent: { ref: string; amount: string }; redirectUrl?: string | null; prompt?: { ussdFallback: string | null } | null }) => {
     if (d.prompt) {
-      const dial = d.prompt.ussdFallback ? ` No prompt? Dial ${d.prompt.ussdFallback} and approve it there.` : "";
-      setMsg({ ok: true, text: `Approve the payment on your phone.${dial} Your balance updates as soon as it's confirmed.` });
+      setApproveNote(null);
+      setApproving({ ref: d.intent.ref, amount: formatPesewas(BigInt(d.intent.amount)), ussd: d.prompt.ussdFallback });
     } else if (d.redirectUrl) window.location.assign(d.redirectUrl);
     else setPending(d.intent.ref);
   };
+
+  /** "I've approved it": check now; once credited, go home with the new balance already showing. */
+  async function confirmApproved() {
+    if (!approving) return;
+    setChecking(true);
+    setApproveNote(null);
+    try {
+      const res = await fetch("/api/wallet/deposit/confirm", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ ref: approving.ref }) });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) return setApproveNote(d.error ?? "Couldn't check right now. Try again in a moment.");
+      if (d.status === "SUCCEEDED") {
+        window.dispatchEvent(new Event("stakra:refresh"));
+        if (d.purpose === "VERIFICATION") {
+          // Held for review, not spendable: stay on the wallet and show the updated verification bar.
+          setApproving(null);
+          setMsg({ ok: true, text: "Verification payment received." });
+          return router.refresh();
+        }
+        try {
+          sessionStorage.setItem(FLASH_KEY, `GHS ${formatPesewas(BigInt(d.amount))} added.`);
+        } catch {
+          /* storage blocked: the balance still shows the new amount */
+        }
+        router.push("/");
+        return router.refresh();
+      }
+      if (d.status === "FAILED") {
+        setApproving(null);
+        return setMsg({ ok: false, text: "The payment didn't go through. Nothing was taken." });
+      }
+      setApproveNote("We haven't received it yet. Approve the prompt on your phone, then tap again.");
+    } catch {
+      setApproveNote("Network error. Try again.");
+    } finally {
+      setChecking(false);
+    }
+  }
 
   async function initiate(e: React.FormEvent) {
     e.preventDefault();
@@ -134,6 +177,45 @@ export function WalletPanel({ minDepositGhs, verification }: { minDepositGhs: nu
 
       {showVerification && <VerificationBar v={verification} busy={busy || !!pending} onPay={payVerification} />}
 
+      {approving ? (
+        <section aria-labelledby="approve-title" className="rounded-xl border border-[#EF9F27] bg-[#FAEEDA] p-4">
+          <h3 id="approve-title" className="flex items-center gap-2 font-display text-base font-bold text-[#633806]">
+            <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+              <rect x="7" y="2.5" width="10" height="19" rx="2" />
+              <path d="M11 18h2" />
+            </svg>
+            {checking ? "Confirming your payment" : "Approve on your phone"}
+          </h3>
+          <p className="mt-1 text-sm leading-relaxed text-[#854F0B]">
+            {checking ? (
+              "Checking with your network. This takes a few seconds."
+            ) : (
+              <>
+                GHS {approving.amount} to Kingz Bet. Enter your MoMo PIN on the prompt.
+                {approving.ussd && <> No prompt? Dial {approving.ussd}.</>}
+              </>
+            )}
+          </p>
+          {approveNote && (
+            <p role="status" className="mt-2 text-sm font-semibold text-[#633806]">
+              {approveNote}
+            </p>
+          )}
+          <button
+            type="button"
+            onClick={confirmApproved}
+            disabled={checking}
+            className={`mt-3 w-full rounded-lg py-3 text-[15px] font-bold transition ${checking ? "bg-[#97C459] text-[#173404]" : "bg-[#16A34A] text-white hover:brightness-110"}`}
+          >
+            {checking ? "Checking…" : "I've approved it"}
+          </button>
+          {!checking && (
+            <button type="button" onClick={() => setApproving(null)} className="mt-2 w-full py-1 text-center text-xs font-semibold text-[#854F0B] hover:underline">
+              Cancel deposit
+            </button>
+          )}
+        </section>
+      ) : (
       <form onSubmit={initiate} className="space-y-4">
         <div>
           <label className="label" htmlFor="amt">Amount (GHS)</label>
@@ -179,6 +261,7 @@ export function WalletPanel({ minDepositGhs, verification }: { minDepositGhs: nu
           {busy ? "Working…" : mode === "deposit" ? "Deposit" : locked ? "Verify to withdraw" : "Withdraw"}
         </button>
       </form>
+      )}
 
       {msg && (
         <div role={msg.ok ? "status" : "alert"} className={`mt-4 rounded-lg border p-3 text-sm ${msg.ok ? "border-win/40 bg-win/10 text-win" : "border-danger/40 bg-danger/10 text-danger"}`}>

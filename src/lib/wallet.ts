@@ -330,23 +330,45 @@ export async function reconcilePendingDeposits(userId: string): Promise<number> 
     take: 5,
   });
   let settled = 0;
-  for (const intent of pending) {
-    try {
-      const r = await provider.checkDeposit(intent.providerRef!);
-      if (!r) continue;
-      const res = await processPaymentEvent(provider.name, {
-        providerEventId: `check:${intent.providerRef}:${r.status}`,
-        ourRef: intent.ref,
-        status: r.status,
-        amountPesewas: r.amountPesewas,
-        direction: "DEPOSIT",
-      });
-      if (res === "processed") settled++;
-    } catch (e) {
-      console.error(`[wallet] status check for ${intent.ref} failed:`, e instanceof Error ? e.message : e);
-    }
-  }
+  for (const intent of pending) if (await settleFromProvider(provider, intent)) settled++;
   return settled;
+}
+
+/** Ask the PSP about one pending deposit and apply a final answer once. True if it was settled now. */
+async function settleFromProvider(provider: ReturnType<typeof paymentProvider>, intent: { ref: string; providerRef: string | null }): Promise<boolean> {
+  if (!provider.checkDeposit || !intent.providerRef) return false;
+  try {
+    const r = await provider.checkDeposit(intent.providerRef);
+    if (!r) return false;
+    const res = await processPaymentEvent(provider.name, {
+      providerEventId: `check:${intent.providerRef}:${r.status}`,
+      ourRef: intent.ref,
+      status: r.status,
+      amountPesewas: r.amountPesewas,
+      direction: "DEPOSIT",
+    });
+    return res === "processed";
+  } catch (e) {
+    console.error(`[wallet] status check for ${intent.ref} failed:`, e instanceof Error ? e.message : e);
+    return false;
+  }
+}
+
+/**
+ * The player says they've approved a deposit: check it with the PSP now (no waiting for the webhook)
+ * and report where it stands. Credited at most once, whichever of this, the webhook or the wallet
+ * check gets there first.
+ */
+export async function confirmDeposit(userId: string, ref: string): Promise<{ status: "SUCCEEDED" | "PENDING" | "FAILED"; amount: bigint; purpose: string | null }> {
+  const intent = await prisma.paymentIntent.findUnique({ where: { ref } });
+  if (!intent || intent.userId !== userId || intent.direction !== "DEPOSIT") throw new WalletError("NOT_FOUND", "Deposit not found");
+  if (intent.status === "PENDING") {
+    const provider = paymentProvider();
+    if (intent.provider === provider.name) await settleFromProvider(provider, intent);
+  }
+  const now = await prisma.paymentIntent.findUniqueOrThrow({ where: { id: intent.id } });
+  const status = now.status === "SUCCEEDED" || now.status === "PENDING" ? now.status : "FAILED";
+  return { status, amount: now.amount, purpose: (now.metadata as { purpose?: string } | null)?.purpose ?? null };
 }
 
 /** Withdrawals waiting for an admin to send the money (providers that can't pay players), oldest first. */

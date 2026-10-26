@@ -8,6 +8,7 @@ import { Header } from "./Header";
 import { WinningPopup } from "./WinningPopup";
 import { SportIcon } from "./SportIcon";
 import { LiveRefresh } from "./LiveRefresh";
+import { FlashNotice } from "./FlashNotice";
 
 /** Mobile tab bar with the betslip in the centre, as on native sportsbook apps. */
 function BottomNav({ onSlip }: { onSlip: () => void }) {
@@ -125,6 +126,7 @@ export function AppShell({ sidebar, minStakeGhs, children }: { sidebar: React.Re
             <div className="sticky top-[76px] max-h-[calc(100vh-92px)] overflow-y-auto pb-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">{sidebar}</div>
           </aside>
           <main id="main" tabIndex={-1} className="min-w-0 outline-none">
+            <FlashNotice />
             {children}
           </main>
           <aside className="hidden lg:block" aria-label="Betslip">
