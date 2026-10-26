@@ -11,12 +11,16 @@ import { AdminError } from "./admins";
 import { ZodError } from "zod";
 import { clientIpFromHeaders } from "./rateLimit";
 
-/** JSON response that serialises bigint as a string (pesewas) instead of throwing. */
+/**
+ * JSON response that serialises bigint as a string (pesewas) instead of throwing.
+ * Never cached: these carry per-player state (balance, bets), and a cached one left a fresh
+ * deposit invisible until the page was reloaded several times.
+ */
 export function json(data: unknown, init?: ResponseInit): NextResponse {
   const body = JSON.stringify(data, (_k, v) => (typeof v === "bigint" ? v.toString() : v));
   return new NextResponse(body, {
     ...init,
-    headers: { "content-type": "application/json", ...(init?.headers ?? {}) },
+    headers: { "content-type": "application/json", "cache-control": "no-store", ...(init?.headers ?? {}) },
   });
 }
 

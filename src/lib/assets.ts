@@ -117,12 +117,15 @@ export async function enrichCompetitions(): Promise<number> {
   return updated;
 }
 
-/** Copy cached badges onto fixtures that don't have one (new fixtures arrive without). */
+/** A badge we drew ourselves from the team's name, which a real one should replace. */
+const noRealBadge = [{ equals: null }, { startsWith: "/api/crest/" }];
+
+/** Copy cached badges onto fixtures that don't have a real one (new fixtures arrive without). */
 export async function applyCachedBadges(): Promise<void> {
   const found = await prisma.teamAsset.findMany({ where: { status: "FOUND" } });
   for (const a of found) {
-    await prisma.fixture.updateMany({ where: { sportKey: a.sportKey, homeTeam: a.name, homeTeamLogo: null }, data: { homeTeamLogo: a.badgeUrl } });
-    await prisma.fixture.updateMany({ where: { sportKey: a.sportKey, awayTeam: a.name, awayTeamLogo: null }, data: { awayTeamLogo: a.badgeUrl } });
+    await prisma.fixture.updateMany({ where: { sportKey: a.sportKey, homeTeam: a.name, OR: noRealBadge.map((homeTeamLogo) => ({ homeTeamLogo })) }, data: { homeTeamLogo: a.badgeUrl } });
+    await prisma.fixture.updateMany({ where: { sportKey: a.sportKey, awayTeam: a.name, OR: noRealBadge.map((awayTeamLogo) => ({ awayTeamLogo })) }, data: { awayTeamLogo: a.badgeUrl } });
   }
 }
 

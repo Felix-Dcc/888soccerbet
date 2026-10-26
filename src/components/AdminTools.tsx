@@ -1,6 +1,7 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { generateScoreline } from "@/lib/matchGenerator";
 
 export function SyncButton() {
   const router = useRouter();
@@ -49,8 +50,8 @@ const toLocalInput = (iso: string) => {
  *  - started: update the live score (no payout), settle with the final score, or void.
  */
 export function SettleForm({
-  fixtureId, home, away, started, manual = false, startsAt, homeScore, awayScore,
-}: { fixtureId: string; home: string; away: string; started: boolean; manual?: boolean; startsAt: string; homeScore?: number | null; awayScore?: number | null }) {
+  fixtureId, home, away, started, manual = false, startsAt, homeScore, awayScore, script,
+}: { fixtureId: string; home: string; away: string; started: boolean; manual?: boolean; startsAt: string; homeScore?: number | null; awayScore?: number | null; script?: { ht: [number, number]; ft: [number, number] } | null }) {
   const router = useRouter();
   const [h, setH] = useState(homeScore != null ? String(homeScore) : "");
   const [a, setA] = useState(awayScore != null ? String(awayScore) : "");
@@ -90,7 +91,12 @@ export function SettleForm({
           </button>
         </>
       )}
-      {started && (
+      {started && script && (
+        <span className="rounded-full bg-lime/10 px-2.5 py-1 text-xs font-semibold text-lime" title="This match plays itself out; it settles on the final whistle">
+          Playing out · HT {script.ht[0]}–{script.ht[1]} → FT {script.ft[0]}–{script.ft[1]}
+        </span>
+      )}
+      {started && !script && (
         <>
           <input aria-label={`${home} score`} inputMode="numeric" placeholder="0" value={h} onChange={(e) => setH(e.target.value.replace(/\D/g, "").slice(0, 3))} className="input w-14 py-1.5 text-center" />
           <span className="text-fog-muted">:</span>
@@ -127,33 +133,78 @@ export function SettleForm({
   );
 }
 
-/** One click creates a random fictional match (fictional teams, odds, future kick-off) and opens it for betting. */
-export function GenerateMatchButton() {
+/**
+ * Generate a fictional match: the admin picks the sport and the score it should finish on (pre-filled
+ * with a plausible one). The teams, competition and odds are invented on the server; the match then
+ * plays itself out live from kick-off and settles on the final whistle.
+ */
+export function GenerateMatchForm() {
   const router = useRouter();
+  const [sport, setSport] = useState<Sport>("football");
+  const [ht, setHt] = useState<[string, string]>(["0", "0"]);
+  const [ft, setFt] = useState<[string, string]>(["0", "0"]);
   const [busy, setBusy] = useState(false);
-  const [msg, setMsg] = useState<string>("");
+  const [msg, setMsg] = useState<{ ok: boolean; msg: string } | null>(null);
+
+  // A plausible scoreline for the chosen sport, which the admin can overwrite.
+  useEffect(() => {
+    const s = generateScoreline(sport);
+    setHt([String(s.ht[0]), String(s.ht[1])]);
+    setFt([String(s.ft[0]), String(s.ft[1])]);
+  }, [sport]);
+
+  const n = (v: string) => (/^\d{1,3}$/.test(v) ? Number(v) : NaN);
+  const nums = [n(ht[0]), n(ht[1]), n(ft[0]), n(ft[1])];
+  const filled = nums.every((x) => Number.isInteger(x));
+  const ordered = filled && nums[2]! >= nums[0]! && nums[3]! >= nums[1]!;
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!ordered) return setMsg({ ok: false, msg: "Full time can't be lower than half time" });
+    setBusy(true);
+    setMsg(null);
+    try {
+      const r = await fetch("/api/admin/fixtures", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ generate: true, sportKey: sport, scoreline: { htHome: nums[0], htAway: nums[1], ftHome: nums[2], ftAway: nums[3] } }),
+      });
+      const d = await r.json().catch(() => ({}));
+      setMsg({ ok: r.ok, msg: r.ok ? `${d.teams} · HT ${nums[0]}–${nums[1]} → FT ${nums[2]}–${nums[3]} (#${d.fixture?.code})` : d.error ?? "Could not generate" });
+      if (r.ok) router.refresh();
+    } catch {
+      setMsg({ ok: false, msg: "Network error — try again" });
+    }
+    setBusy(false);
+  }
+
+  const score = (label: string, v: [string, string], set: (x: [string, string]) => void) => (
+    <div>
+      <span className="label">{label}</span>
+      <div className="flex items-center gap-2">
+        <input aria-label={`${label} home`} inputMode="numeric" value={v[0]} onChange={(e) => set([e.target.value.replace(/\D/g, "").slice(0, 3), v[1]])} className="input w-16 py-2 text-center" />
+        <span className="text-fog-muted">:</span>
+        <input aria-label={`${label} away`} inputMode="numeric" value={v[1]} onChange={(e) => set([v[0], e.target.value.replace(/\D/g, "").slice(0, 3)])} className="input w-16 py-2 text-center" />
+      </div>
+    </div>
+  );
+
   return (
-    <div className="flex items-center gap-3">
-      <button
-        className="btn border border-white/30 px-4 py-2 text-sm text-white hover:bg-white/10"
-        disabled={busy}
-        onClick={async () => {
-          setBusy(true);
-          setMsg("");
-          try {
-            const r = await fetch("/api/admin/fixtures", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ generate: true }) });
-            const d = await r.json().catch(() => ({}));
-            setMsg(r.ok ? `Generated match #${d.fixture?.code} — edit its time below` : d.error ?? "Could not generate");
-            if (r.ok) router.refresh();
-          } finally {
-            setBusy(false);
-          }
-        }}
-      >
+    <form onSubmit={submit} className="flex flex-wrap items-end gap-4">
+      <div>
+        <span className="label">Sport</span>
+        <select value={sport} onChange={(e) => setSport(e.target.value as Sport)} className={field} aria-label="Sport">
+          <option value="football">Football</option>
+          <option value="basketball">Basketball</option>
+        </select>
+      </div>
+      {score("Half time", ht, setHt)}
+      {score("Full time", ft, setFt)}
+      <button className="btn-lime px-4 py-2.5 text-sm" disabled={busy || !ordered}>
         {busy ? "Generating…" : "Generate match"}
       </button>
-      {msg && <span className="text-sm text-white/80">{msg}</span>}
-    </div>
+      {msg && <span role={msg.ok ? "status" : "alert"} className={`text-xs ${msg.ok ? "text-win" : "text-danger"}`}>{msg.msg}</span>}
+    </form>
   );
 }
 

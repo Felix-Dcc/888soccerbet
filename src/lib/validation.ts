@@ -108,6 +108,17 @@ export const adminSettleSchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("void"), fixtureId: z.string().min(1) }),
 ]);
 
+/** Generate a fictional match: the admin picks the sport and the scoreline it should end on. */
+const matchScore = z.number().int().min(0).max(300);
+export const generateFixtureSchema = z.object({
+  generate: z.literal(true),
+  sportKey: z.enum(["football", "basketball"]).optional(),
+  scoreline: z
+    .object({ htHome: matchScore, htAway: matchScore, ftHome: matchScore, ftAway: matchScore })
+    .refine((s) => s.ftHome >= s.htHome && s.ftAway >= s.htAway, { message: "The full-time score can't be lower than the half-time score" })
+    .optional(),
+});
+
 /** Admin moves a manual/generated game's kick-off. Any time up to 60 days out (past = start now). */
 export const rescheduleFixtureSchema = z
   .object({ fixtureId: z.string().min(1), startsAt: z.string().datetime({ offset: true, message: "Enter a valid kick-off time" }) })

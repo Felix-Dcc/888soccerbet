@@ -256,6 +256,39 @@ export interface ActivityItem {
 }
 
 /** Latest registrations, bets and payments in scope, plus admin actions when allowed. */
+/** Audit actions as a person would say them; anything new falls back to its own name. */
+const ACTION_TEXT: Record<string, string> = {
+  GENERATE_FIXTURE: "generated a match",
+  CREATE_MANUAL_FIXTURE: "added a manual game",
+  RESCHEDULE_FIXTURE: "moved a kick-off time",
+  LIVE_SCORE_FIXTURE: "updated a live score",
+  SETTLE_FIXTURE: "settled a match",
+  VOID_FIXTURE: "voided a match",
+  APPROVE_VERIFICATION: "approved a verification",
+  REJECT_VERIFICATION: "rejected a verification",
+  PAYOUT_MARKED_PAID: "paid a withdrawal",
+  PAYOUT_MARKED_FAILED: "returned a withdrawal",
+  BALANCE_ADJUSTMENT: "corrected a balance",
+  PLAYER_SUSPEND: "suspended a player",
+  PLAYER_REACTIVATE: "reactivated a player",
+  ADMIN_CREATE: "added an administrator",
+  ADMIN_SUSPEND: "suspended an administrator",
+  ADMIN_REACTIVATE: "reactivated an administrator",
+  ADMIN_ACCESS_CHANGE: "changed an administrator's access",
+  ADMIN_PROFILE_CHANGE: "edited an administrator's profile",
+  ADMIN_RESET_LINK: "sent a password reset link",
+  ADMIN_SETUP_COMPLETE: "finished setting up their account",
+  PASSWORD_RESET_REQUEST: "asked for a password reset",
+  PASSWORD_RESET_COMPLETE: "reset their password",
+  EMAIL_VERIFIED: "confirmed their email",
+  REPORT_EXPORT: "exported a report",
+  ROLE_CREATE: "created a role",
+  ROLE_UPDATE: "updated a role",
+  ROLE_DELETE: "deleted a role",
+  UPDATE_RG_LIMITS: "changed their betting limits",
+};
+const actionText = (a: string) => ACTION_TEXT[a] ?? a.toLowerCase().replace(/_/g, " ");
+
 export async function recentActivity(scope: Scope, withAudit: boolean, take = 20): Promise<ActivityItem[]> {
   const userWhere =
     scope.kind === "all" ? { role: "USER" as const } : scope.kind === "player" ? { role: "USER" as const, id: scope.userId } : { role: "USER" as const, referredById: scope.adminId };
@@ -270,7 +303,7 @@ export async function recentActivity(scope: Scope, withAudit: boolean, take = 20
     ...regs.map((u) => ({ at: u.createdAt, kind: "registration" as const, text: `${u.email} registered${u.referralSource ? ` (${u.referralSource === "LINK" ? "referral link" : "referral code"})` : ""}`, href: `/admin/users/${u.id}` })),
     ...bets.map((b) => ({ at: b.placedAt, kind: "bet" as const, text: `${b.user.email} placed ${b.ref} · ${ghs(b.stake)}`, href: `/admin/users/${b.userId}` })),
     ...pays.map((p) => ({ at: p.createdAt, kind: "payment" as const, text: `${p.user.email} ${p.direction === "DEPOSIT" ? "deposit" : "withdrawal"} ${ghs(p.amount)} · ${p.status.toLowerCase()}`, href: `/admin/users/${p.userId}` })),
-    ...logs.map((l) => ({ at: l.createdAt, kind: "admin" as const, text: `${l.actor?.email ?? "system"}: ${l.action.toLowerCase().replace(/_/g, " ")}`, href: "/admin/audit" })),
+    ...logs.map((l) => ({ at: l.createdAt, kind: "admin" as const, text: `${l.actor?.email ?? "system"} ${actionText(l.action)}`, href: "/admin/audit" })),
   ];
   return items.sort((a, b) => b.at.getTime() - a.at.getTime()).slice(0, take);
 }

@@ -44,6 +44,7 @@ import { applyMarkets, goLiveManualFixtures, updateLiveScores } from "../src/lib
 import { createManualFixture, rescheduleManualFixture } from "../src/lib/manualFixtures";
 import { manualFixtureSchema } from "../src/lib/validation";
 import { generateMatch } from "../src/lib/matchGenerator";
+import { advanceScriptedMatches, buildScript, scriptLengthMin } from "../src/lib/scriptedMatches";
 import { markWinsSeen, unseenWins } from "../src/lib/wins";
 import { ensureVerifyCode, ticketByVerifyCode, ticketByRef, ticketTotals } from "../src/lib/tickets";
 import { cashOut, quoteForBet, runAutoCashouts, setAutoCashout } from "../src/lib/cashout";
@@ -649,6 +650,52 @@ describe("admin: manual games, void and final results", () => {
     expect(await userCashBalance(prisma, user.id)).toBe(toPesewas(90) + bet.potentialPayout);
     await expect(setLiveScore(id, 3, 0)).rejects.toMatchObject({ code: "ALREADY_SETTLED" }); // no live edits after a result
     expect(await ledgerIsBalanced()).toBe(true);
+  });
+
+  it("plays a generated match out live from its script and settles it on the final whistle", async () => {
+    const input = manualFixtureSchema.parse(generateMatch("football"));
+    const script = buildScript("football", [1, 0], [2, 1]); // home wins, leading at the break
+    const { id } = await createManualFixture(input, script);
+
+    // Bet on the home win while it is still upcoming.
+    const user = await fundedUser(100);
+    const home = await prisma.selection.findFirstOrThrow({ where: { market: { fixtureId: id, type: "MATCH_RESULT" }, code: "1" } });
+    await placeBet(user.id, { idempotencyKey: randomUUID(), stakeGhs: 10, acceptOddsChange: true, selections: [{ selectionId: home.id, expectedMilliOdds: home.milliOdds }] });
+
+    const kickOff = new Date();
+    await rescheduleManualFixture(id, kickOff.toISOString());
+    const at = (min: number) => new Date(kickOff.getTime() + min * 60_000);
+    const read = () => prisma.fixture.findUniqueOrThrow({ where: { id } });
+
+    // Kick-off: live at 0-0, nothing paid.
+    await advanceScriptedMatches(at(0));
+    expect(await read()).toMatchObject({ status: "LIVE", homeScore: 0, awayScore: 0 });
+
+    // Half time: exactly the scripted half-time score, still unsettled.
+    await advanceScriptedMatches(at(script.halfMin));
+    expect(await read()).toMatchObject({ status: "LIVE", homeScore: 1, awayScore: 0 });
+    expect(await userCashBalance(prisma, user.id)).toBe(toPesewas(90)); // staked, not paid
+
+    // Full time: the script settles it and the home win pays out, once.
+    expect(await advanceScriptedMatches(at(scriptLengthMin(script)))).toMatchObject({ settled: 1 });
+    expect(await read()).toMatchObject({ status: "FINISHED", homeScore: 2, awayScore: 1 });
+    const bet = await prisma.bet.findFirstOrThrow({ where: { userId: user.id } });
+    expect(bet.status).toBe("WON");
+    expect(await userCashBalance(prisma, user.id)).toBe(toPesewas(90) + bet.potentialPayout);
+
+    // A later tick finds nothing to do: no second payout.
+    expect(await advanceScriptedMatches(at(scriptLengthMin(script) + 30))).toEqual({ updated: 0, settled: 0 });
+    expect(await userCashBalance(prisma, user.id)).toBe(toPesewas(90) + bet.potentialPayout);
+    expect(await ledgerIsBalanced()).toBe(true);
+  });
+
+  it("leaves hand-entered and feed games alone: only generated ones carry a script", async () => {
+    const plain = await createManualFixture(manualFixtureSchema.parse(generateMatch("football"))); // no script
+    await rescheduleManualFixture(plain.id, new Date(Date.now() - 60_000).toISOString());
+    const feed = await makeMatch({ home: 2, draw: 3, away: 4 }, new Date(Date.now() - 60_000));
+    expect(await advanceScriptedMatches()).toEqual({ updated: 0, settled: 0 });
+    expect((await prisma.fixture.findUniqueOrThrow({ where: { id: plain.id } })).homeScore).toBeNull();
+    expect((await prisma.fixture.findUniqueOrThrow({ where: { id: feed.fixture.id } })).homeScore).toBeNull();
   });
 
   it("rejects bad manual games: same teams, missing draw odds, past kick-off, quarter lines", () => {

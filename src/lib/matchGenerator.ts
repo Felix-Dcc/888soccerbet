@@ -69,3 +69,21 @@ export function generateMatch(sport: Sport = Math.random() < 0.8 ? "football" : 
     btts: { yes: oddsFrom(yes), no: oddsFrom(1 - yes) },
   };
 }
+
+/** A plausible scoreline for a sport: half-time never ahead of full-time. */
+export function generateScoreline(sport: Sport): { ht: [number, number]; ft: [number, number] } {
+  if (sport === "basketball") {
+    const total = () => 95 + Math.floor(Math.random() * 35);
+    const [ftH, ftA] = [total(), total()];
+    const half = (n: number) => Math.round(n * (0.45 + Math.random() * 0.1));
+    return { ht: [half(ftH), half(ftA)], ft: [ftH, ftA] };
+  }
+  // Goals weighted the way football actually finishes: 0-2 common, 4 rare.
+  const goals = () => {
+    const r = Math.random();
+    return r < 0.25 ? 0 : r < 0.55 ? 1 : r < 0.8 ? 2 : r < 0.93 ? 3 : 4;
+  };
+  const [ftH, ftA] = [goals(), goals()];
+  const atHalf = (n: number) => Math.floor(Math.random() * (n + 1));
+  return { ht: [atHalf(ftH), atHalf(ftA)], ft: [ftH, ftA] };
+}

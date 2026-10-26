@@ -5,6 +5,7 @@
  */
 import { syncFixtures, syncEventMarkets, autoSettleFinished, goLiveManualFixtures, updateLiveScores } from "./lib/sync";
 import { enrichCompetitions, enrichTeams } from "./lib/assets";
+import { advanceScriptedMatches } from "./lib/scriptedMatches";
 import { oddsProvider } from "./lib/providers/odds";
 
 // Budget on The Odds API free tier (500 credits/month), measured: bulk odds = 1 credit per market
@@ -58,6 +59,16 @@ async function quiet(label: string, fn: () => Promise<{ live: number; skipped?: 
   }
 }
 
+/** Generated matches: log only the ticks that changed something. */
+async function scripted() {
+  try {
+    const r = await advanceScriptedMatches();
+    if (r.updated || r.settled) console.log("[worker] scripted", r);
+  } catch (e) {
+    console.error("[worker] scripted failed:", e instanceof Error ? e.message : e);
+  }
+}
+
 async function main() {
   const p = oddsProvider();
   console.log(`[worker] starting · provider=${p.name} · sync every ${SYNC_MS / 3_600_000}h · settle every ${SETTLE_MS / 3_600_000}h`);
@@ -71,6 +82,8 @@ async function main() {
   setInterval(() => void safe("artwork", enrich), ENRICH_MS);
   setInterval(() => void quiet("live", updateLiveScores), LIVE_MS);
   setInterval(() => void quiet("golive", goLiveManualFixtures), LIVE_MS);
+  // Generated matches tick every minute so their scripted scores move in near real time.
+  setInterval(() => void scripted(), 60_000);
 }
 
 void main();

@@ -3,7 +3,8 @@
  * providerRef, so the odds sync, live scores and auto-settlement never touch them: the admin
  * sets the prices and settles (or voids) them from the console.
  */
-import type { MarketType } from "@prisma/client";
+import { Prisma, type MarketType } from "@prisma/client";
+import type { MatchScript } from "./scriptedMatches";
 import { prisma } from "./db";
 import { toMilliOdds } from "./money";
 import { applyCachedBadges } from "./assets";
@@ -54,7 +55,7 @@ function marketsFor(f: ManualFixtureInput): MarketSpec[] {
   return out;
 }
 
-export async function createManualFixture(f: ManualFixtureInput): Promise<{ id: string; code: number }> {
+export async function createManualFixture(f: ManualFixtureInput, script?: MatchScript): Promise<{ id: string; code: number }> {
   const sportName = f.sportKey === "football" ? "Football" : "Basketball";
   const fixture = await prisma.$transaction(async (tx) => {
     await tx.sport.upsert({ where: { key: f.sportKey }, create: { key: f.sportKey, name: sportName }, update: {} });
@@ -72,6 +73,7 @@ export async function createManualFixture(f: ManualFixtureInput): Promise<{ id: 
         venue: f.venue,
         startsAt: new Date(f.startsAt),
         status: "SCHEDULED",
+        script: script ? (script as unknown as Prisma.InputJsonValue) : Prisma.DbNull,
       },
     });
     for (const m of marketsFor(f))
@@ -87,7 +89,8 @@ export async function createManualFixture(f: ManualFixtureInput): Promise<{ id: 
       });
     return created;
   });
-  await applyCachedBadges(); // known teams pick up their crest straight away
+  await applyCachedBadges(); // known teams pick up their real badge straight away
+  await giveGeneratedCrests(fixture.id); // anything still without one (fictional sides) gets a drawn crest
   return { id: fixture.id, code: fixture.code };
 }
 
@@ -100,4 +103,18 @@ export async function rescheduleManualFixture(fixtureId: string, startsAtISO: st
     data: startsAt > new Date() ? { startsAt, status: "SCHEDULED" } : { startsAt },
   });
   return r.count > 0;
+}
+
+/** A team the feed has no badge for still needs a crest; ours is drawn from the name. */
+export const crestUrl = (team: string) => `/api/crest/${encodeURIComponent(team)}`;
+
+/** Fill in a drawn crest for either side of a manual game that has no real badge. */
+async function giveGeneratedCrests(fixtureId: string): Promise<void> {
+  const f = await prisma.fixture.findUnique({ where: { id: fixtureId }, select: { homeTeam: true, awayTeam: true, homeTeamLogo: true, awayTeamLogo: true } });
+  if (!f) return;
+  const data = {
+    ...(f.homeTeamLogo ? {} : { homeTeamLogo: crestUrl(f.homeTeam) }),
+    ...(f.awayTeamLogo ? {} : { awayTeamLogo: crestUrl(f.awayTeam) }),
+  };
+  if (Object.keys(data).length) await prisma.fixture.update({ where: { id: fixtureId }, data });
 }

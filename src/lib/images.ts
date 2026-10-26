@@ -4,6 +4,7 @@
  */
 export function sized(url: string | null | undefined, size: "tiny" | "small" | "medium"): string | null {
   if (!url) return null;
+  if (url.startsWith("/")) return url; // our own generated crest: already the right size
   try {
     const host = new URL(url).hostname;
     return host.endsWith("thesportsdb.com") ? `${url}/${size}` : url;

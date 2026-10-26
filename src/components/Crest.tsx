@@ -32,6 +32,7 @@ export function Crest({ name, src, size = "sm" }: { name: string; src: string | 
   const s = SIZES[size];
   const [state, setState] = useState<"loading" | "ok" | "failed">("loading");
   const url = sized(src, "small"); // 250px source; the optimizer scales it down
+  const own = !!url?.startsWith("/"); // our generated SVG crest: served as-is, not through the optimizer
   const showInitials = !url || state !== "ok";
 
   return (
@@ -52,6 +53,7 @@ export function Crest({ name, src, size = "sm" }: { name: string; src: string | 
           width={s.px}
           height={s.px}
           loading="lazy"
+          unoptimized={own}
           onLoad={() => setState("ok")}
           onError={() => setState("failed")}
           className={`relative h-full w-full object-contain drop-shadow-[0_2px_6px_rgba(0,0,0,.5)] transition-opacity duration-300 ${state === "ok" ? "opacity-100" : "opacity-0"}`}

@@ -26,7 +26,7 @@ export function Header() {
   const path = usePathname();
 
   const load = useCallback(() => {
-    fetch("/api/me")
+    fetch("/api/me", { cache: "no-store" })
       .then((r) => r.json())
       .then(setMe)
       .catch(() => setMe({ user: null }));
@@ -48,6 +48,8 @@ export function Header() {
   const isAdmin = me?.user?.role === "ADMIN" || me?.user?.role === "SUPER_ADMIN";
   const balance = me?.balance ? formatPesewas(BigInt(me.balance)) : "";
   const nav = isAdmin ? [...NAV, { href: "/admin", label: "Admin" }] : NAV;
+  // In the console the player chrome (search, balance, deposit) is noise: show a quiet bar instead.
+  const onConsole = path.startsWith("/admin");
 
   return (
     <>
@@ -59,20 +61,34 @@ export function Header() {
             <Logo className="max-[400px]:[&>span:last-child]:text-base max-[390px]:[&>span:last-child]:text-[15px]" />
           </Link>
 
-          <div className="hidden flex-1 justify-center lg:flex">
-            <SearchForm />
-          </div>
+          {!onConsole && (
+            <div className="hidden flex-1 justify-center lg:flex">
+              <SearchForm />
+            </div>
+          )}
 
           <div className="ml-auto flex items-center gap-1 max-[390px]:gap-0.5 sm:gap-2">
-            <button
-              className="grid h-9 w-8 place-items-center rounded-lg text-white/80 hover:bg-white/10 hover:text-white max-[390px]:w-7 sm:w-9 lg:hidden"
-              aria-label="Search matches"
-              aria-expanded={searching}
-              onClick={() => setSearching((s) => !s)}
-            >
-              <SportIcon sport="search" />
-            </button>
-            {me === null ? (
+            {!onConsole && (
+              <button
+                className="grid h-9 w-8 place-items-center rounded-lg text-white/80 hover:bg-white/10 hover:text-white max-[390px]:w-7 sm:w-9 lg:hidden"
+                aria-label="Search matches"
+                aria-expanded={searching}
+                onClick={() => setSearching((s) => !s)}
+              >
+                <SportIcon sport="search" />
+              </button>
+            )}
+            {onConsole ? (
+              <>
+                <Link href="/" className="btn border border-white/25 px-3 py-1.5 text-[13px] text-white hover:border-white/50 hover:bg-white/5 sm:px-4 sm:py-2 sm:text-sm">
+                  View site
+                </Link>
+                <Link href="/account" className="inline-flex h-9 items-center gap-2 rounded-lg px-2.5 text-sm font-semibold text-white/85 hover:bg-white/10 hover:text-white">
+                  <SportIcon sport="account" className="h-5 w-5" />
+                  <span className="hidden sm:inline">Account</span>
+                </Link>
+              </>
+            ) : me === null ? (
               <div className="h-9 w-32 animate-pulse rounded-lg bg-white/10" />
             ) : loggedIn ? (
               <>
@@ -104,6 +120,7 @@ export function Header() {
                 </Link>
               </>
             )}
+            {!onConsole && (
             <button
               className="grid h-9 w-8 place-items-center rounded-lg text-white/80 hover:bg-white/10 hover:text-white max-[390px]:w-7 sm:w-9 md:hidden"
               aria-label="More"
@@ -114,6 +131,7 @@ export function Header() {
                 <path d="M4 7h16M4 12h16M4 17h16" />
               </svg>
             </button>
+            )}
           </div>
         </div>
 

@@ -188,6 +188,8 @@ model Fixture {
   homeScore     Int?
   awayScore     Int?
   providerRef   String?       @unique
+  // Generated games only: the result an admin pre-set, played out live (lib/scriptedMatches.ts).
+  script        Json?
   lastSyncedAt  DateTime?
   updatedAt     DateTime      @default(now()) @updatedAt // any change (score, status): pages poll for it
   createdAt     DateTime      @default(now())
