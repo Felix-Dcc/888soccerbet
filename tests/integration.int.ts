@@ -220,15 +220,16 @@ describe("wallet", () => {
     expect(await ledgerIsBalanced()).toBe(true);
   });
 
-  it("never credits a deposit for a different amount or a payment of the wrong kind", async () => {
+  it("never credits a deposit paid short or a payment of the wrong kind, and credits only what was asked", async () => {
     const user = await fundedUser(0);
     const intent = await initiateDeposit(user.id, 50, "0201234567", randomUUID());
     expect(intent.metadata).toMatchObject({ msisdn: "0201234567", network: "TELECEL" }); // network guessed from the prefix
     const base = { ourRef: intent.ref, status: "SUCCEEDED" as const };
-    expect(await processPaymentEvent("sandbox", { ...base, providerEventId: `evt_${randomUUID()}`, amountPesewas: toPesewas(5000) })).toBe("ignored");
+    expect(await processPaymentEvent("sandbox", { ...base, providerEventId: `evt_${randomUUID()}`, amountPesewas: toPesewas(49.99) })).toBe("ignored"); // paid short
     expect(await processPaymentEvent("sandbox", { ...base, providerEventId: `evt_${randomUUID()}`, amountPesewas: intent.amount, direction: "WITHDRAWAL" })).toBe("ignored");
     expect(await userCashBalance(prisma, user.id)).toBe(0n);
-    expect(await processPaymentEvent("sandbox", { ...base, providerEventId: `evt_${randomUUID()}`, amountPesewas: intent.amount, direction: "DEPOSIT" })).toBe("processed");
+    // Paid with the PSP's 2% fee on top: the player gets exactly the 50 they deposited.
+    expect(await processPaymentEvent("sandbox", { ...base, providerEventId: `evt_${randomUUID()}`, amountPesewas: toPesewas(51), direction: "DEPOSIT" })).toBe("processed");
     expect(await userCashBalance(prisma, user.id)).toBe(toPesewas(50));
   });
 

@@ -251,7 +251,9 @@ export async function processPaymentEvent(provider: string, ev: NormalisedEvent)
   // Money moves only for exactly what we asked: a different amount or kind of payment is flagged, never applied.
   const mismatch =
     ev.direction && ev.direction !== intent.direction ? `direction ${ev.direction} != ${intent.direction}`
-    : ev.amountPesewas !== intent.amount ? `amount ${ev.amountPesewas} != ${intent.amount}`
+    // A PSP may charge its fee on top of a deposit (ShinobiPay: +2%), so a deposit needs at least the
+    // amount asked and is credited exactly that; a payout must match exactly.
+    : (intent.direction === "DEPOSIT" ? ev.amountPesewas < intent.amount : ev.amountPesewas !== intent.amount) ? `amount ${ev.amountPesewas} vs ${intent.amount}`
     : null;
   if (mismatch) {
     console.error(`[wallet] payment event for ${intent.ref} rejected: ${mismatch}`);
