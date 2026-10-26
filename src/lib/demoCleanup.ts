@@ -1,0 +1,142 @@
+/**
+ * Clearing the demo data left over from building and testing, keeping real money.
+ *
+ * Real = a payment taken through a live provider (anything that isn't the "sandbox" one).
+ * Demo = everything else on the player side: sandbox payments, the accounts that only ever used
+ * them, every bet staked with that fake money, and the ledger entries behind them.
+ *
+ * Guarantees, enforced inside one transaction that rolls back if either fails:
+ *  - the ledger still sums to zero (transactions are deleted whole, never one side);
+ *  - no surviving balance goes negative (which would mean money was taken off someone);
+ *  - every real payment keeps its ledger transaction, so real money is never touched.
+ * The plan also prints each kept player's resulting balance beside their real-payment total, so
+ * anything that still looks like demo money is visible before you confirm.
+ * The audit trail is append-only by design and is never touched, so an account that appears in it
+ * is closed rather than deleted.
+ */
+import { Prisma } from "@prisma/client";
+import { prisma } from "./db";
+
+export interface CleanupPlan {
+  realPayments: { provider: string; direction: string; status: string; amount: bigint; email: string }[];
+  keptPlayers: { email: string; balanceAfter: bigint; realPaymentsTotal: bigint }[];
+  keptStaff: string[];
+  demoPayments: { count: number; total: bigint };
+  bets: number;
+  ledger: { remove: number; keep: number };
+  deleteAccounts: string[];
+  closeAccounts: string[];
+  manualFixtures: number;
+  sandboxWebhooks: number;
+}
+
+interface Doomed {
+  plan: CleanupPlan;
+  txIds: string[];
+  demoUserIds: string[];
+  deleteIds: string[];
+  closeIds: string[];
+  realPays: { ref: string; userId: string; direction: string; status: string; amount: bigint }[];
+}
+
+async function assess(): Promise<Doomed> {
+  const users = await prisma.user.findMany({ select: { id: true, email: true, role: true, status: true } });
+  const pays = await prisma.paymentIntent.findMany({ select: { ref: true, userId: true, provider: true, direction: true, status: true, amount: true } });
+  const bets = await prisma.bet.findMany({ select: { id: true } });
+  const email = (id: string) => users.find((u) => u.id === id)?.email ?? id;
+
+  const realPays = pays.filter((p) => p.provider !== "sandbox");
+  const demoPays = pays.filter((p) => p.provider === "sandbox");
+  const staff = users.filter((u) => u.role !== "USER");
+  const realPlayers = new Set(realPays.map((p) => p.userId));
+  const staffIds = new Set(staff.map((u) => u.id));
+  const demoUsers = users.filter((u) => !staffIds.has(u.id) && !realPlayers.has(u.id));
+  const demoUserIds = new Set(demoUsers.map((u) => u.id));
+
+  // Every ledger transaction that touches a demo account, came from a sandbox payment, or paid a bet.
+  const entries = await prisma.ledgerEntry.findMany({ select: { transactionId: true, account: { select: { userId: true } } } });
+  const byDemoAccount = new Set(entries.filter((e) => e.account.userId && demoUserIds.has(e.account.userId)).map((e) => e.transactionId));
+  const demoRefs = new Set(demoPays.flatMap((p) => [`deposit:${p.ref}`, `wdr_hold:${p.ref}`, `wdr_reverse:${p.ref}`, `manual:${p.ref}`, `refused:${p.ref}`]));
+  const betRefs = new Set(bets.map((b) => `bet_settle:${b.id}`));
+  const txs = await prisma.ledgerTransaction.findMany({ select: { id: true, reference: true } });
+  const doomed = txs.filter((t) => byDemoAccount.has(t.id) || demoRefs.has(t.reference) || betRefs.has(t.reference) || t.reference.startsWith("cashout:") || t.reference.startsWith("verify_release:"));
+
+  // The audit trail refuses edits, so an account named in it can only be closed.
+  const balances = new Map(
+    (
+      await prisma.$queryRaw<{ userId: string; bal: bigint }[]>`
+        SELECT a."userId", COALESCE(SUM(e.amount),0)::bigint AS bal FROM "LedgerAccount" a
+        LEFT JOIN "LedgerEntry" e ON e."accountId" = a.id WHERE a.kind = 'USER_CASH' AND a."userId" IS NOT NULL GROUP BY a."userId"`
+    ).map((r) => [r.userId, r.bal] as const),
+  );
+
+  const actors = new Set((await prisma.auditLog.findMany({ where: { actorUserId: { not: null } }, select: { actorUserId: true }, distinct: ["actorUserId"] })).map((a) => a.actorUserId!));
+  const toDelete = demoUsers.filter((u) => !actors.has(u.id));
+  const toClose = demoUsers.filter((u) => actors.has(u.id) && u.status !== "CLOSED");
+
+  return {
+    txIds: doomed.map((t) => t.id),
+    demoUserIds: [...demoUserIds],
+    deleteIds: toDelete.map((u) => u.id),
+    closeIds: toClose.map((u) => u.id),
+    realPays: realPays.map((p) => ({ ref: p.ref, userId: p.userId, direction: p.direction, status: p.status, amount: p.amount })),
+    plan: {
+      realPayments: realPays.map((p) => ({ provider: p.provider, direction: p.direction, status: p.status, amount: p.amount, email: email(p.userId) })),
+      keptPlayers: users
+        .filter((u) => realPlayers.has(u.id))
+        .map((u) => ({
+          email: u.email,
+          balanceAfter: balances.get(u.id) ?? 0n,
+          realPaymentsTotal: realPays.filter((p) => p.userId === u.id && p.status === "SUCCEEDED").reduce((n, p) => n + (p.direction === "DEPOSIT" ? p.amount : -p.amount), 0n),
+        })),
+      keptStaff: staff.map((u) => u.email),
+      demoPayments: { count: demoPays.length, total: demoPays.reduce((n, p) => n + p.amount, 0n) },
+      bets: bets.length,
+      ledger: { remove: doomed.length, keep: txs.length - doomed.length },
+      deleteAccounts: toDelete.map((u) => u.email),
+      closeAccounts: toClose.map((u) => u.email),
+      manualFixtures: await prisma.fixture.count({ where: { providerRef: null } }),
+      sandboxWebhooks: await prisma.webhookEvent.count({ where: { provider: "sandbox" } }),
+    },
+  };
+}
+
+/** What a cleanup would remove. Reads only. */
+export const planDemoCleanup = async (): Promise<CleanupPlan> => (await assess()).plan;
+
+/** Do it. Throws (and changes nothing) if the books would not add up afterwards. */
+export async function runDemoCleanup(): Promise<CleanupPlan> {
+  const d = await assess();
+  await prisma.$transaction(
+    async (tx) => {
+      await tx.ledgerEntry.deleteMany({ where: { transactionId: { in: d.txIds } } });
+      await tx.ledgerTransaction.deleteMany({ where: { id: { in: d.txIds } } });
+      await tx.cashout.deleteMany({});
+      await tx.betSelection.deleteMany({});
+      await tx.bet.deleteMany({});
+      await tx.paymentIntent.deleteMany({ where: { provider: "sandbox" } });
+      await tx.webhookEvent.deleteMany({ where: { provider: "sandbox" } });
+      await tx.fixture.deleteMany({ where: { providerRef: null } });
+      await tx.ledgerAccount.deleteMany({ where: { userId: { in: d.demoUserIds } } });
+      await tx.user.updateMany({ where: { id: { in: d.closeIds } }, data: { status: "CLOSED" } });
+      await tx.user.deleteMany({ where: { id: { in: d.deleteIds } } });
+
+      const totals = await tx.$queryRaw<{ total: bigint }[]>`SELECT COALESCE(SUM(amount),0)::bigint AS total FROM "LedgerEntry"`;
+      const total = totals[0]?.total ?? 0n;
+      if (total !== 0n) throw new Error(`ledger would no longer balance (${total})`);
+
+      const left = await tx.$queryRaw<{ userId: string; bal: bigint }[]>`
+        SELECT a."userId", COALESCE(SUM(e.amount),0)::bigint AS bal FROM "LedgerAccount" a
+        LEFT JOIN "LedgerEntry" e ON e."accountId" = a.id WHERE a.kind = 'USER_CASH' AND a."userId" IS NOT NULL GROUP BY a."userId"`;
+      const negative = left.find((r) => r.bal < 0n);
+      if (negative) throw new Error(`a player would be left owing money (${negative.bal}) — their stake came from demo funds`);
+
+      // Real money is never touched: every real payment keeps the ledger transaction behind it.
+      const keptRefs = new Set((await tx.ledgerTransaction.findMany({ select: { reference: true } })).map((t) => t.reference));
+      const lost = d.realPays.find((p) => p.status === "SUCCEEDED" && !keptRefs.has(p.direction === "DEPOSIT" ? `deposit:${p.ref}` : `wdr_hold:${p.ref}`));
+      if (lost) throw new Error(`a real payment (${lost.ref}) would lose its ledger entries`);
+    },
+    { timeout: 120_000, isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+  );
+  return d.plan;
+}

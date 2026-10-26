@@ -42,6 +42,7 @@ import { audit, verifyAuditChain } from "../src/lib/audit";
 import { listFixtures, listResults, dataVersion } from "../src/lib/queries";
 import { applyMarkets, goLiveManualFixtures, updateLiveScores } from "../src/lib/sync";
 import { createManualFixture, rescheduleManualFixture } from "../src/lib/manualFixtures";
+import { planDemoCleanup, runDemoCleanup } from "../src/lib/demoCleanup";
 import { manualFixtureSchema } from "../src/lib/validation";
 import { generateMatch } from "../src/lib/matchGenerator";
 import { advanceScriptedMatches, buildScript, scriptLengthMin } from "../src/lib/scriptedMatches";
@@ -1322,5 +1323,48 @@ describe("email", () => {
     const intent = await initiateDeposit(p.id, 30, "0241234567", randomUUID());
     await processPaymentEvent("sandbox", { providerEventId: `evt_${randomUUID()}`, ourRef: intent.ref, status: "SUCCEEDED", amountPesewas: intent.amount });
     await vi.waitFor(() => expect(lastTo(p.email)?.subject).toBe("Deposit received: GHS 30.00"));
+  });
+});
+
+describe("clearing demo data", () => {
+  it("keeps real money and real players, and removes the demo side without unbalancing the books", async () => {
+    // A real deposit, exactly as the live provider records one.
+    const real = await prisma.user.create({ data: { email: `real_${randomUUID()}@t.gh`, passwordHash: "x", referralCode: referralCode() } });
+    const ref = `DEP-${randomUUID().slice(0, 8)}`;
+    await prisma.paymentIntent.create({
+      data: { ref, userId: real.id, direction: "DEPOSIT", amount: toPesewas(1), status: "SUCCEEDED", provider: "shinobipay", idempotencyKey: randomUUID() },
+    });
+    const cash = await userAccountId(prisma, real.id, "USER_CASH");
+    const clearing = await houseAccountId(prisma, "PAYMENT_CLEARING");
+    await postTransaction(prisma, "DEPOSIT", `deposit:${ref}`, [{ accountId: clearing, amount: -toPesewas(1) }, { accountId: cash, amount: toPesewas(1) }]);
+
+    // A demo player funded with sandbox money, who places a bet.
+    const demo = await fundedUser(100);
+    const m = await makeMatch({ home: 2.0, draw: 3.0, away: 4.0 });
+    await placeBet(demo.id, { idempotencyKey: randomUUID(), stakeGhs: 10, acceptOddsChange: false, selections: [{ selectionId: m.home.id, expectedMilliOdds: 2000 }] });
+    const staffBefore = await prisma.user.count({ where: { role: { not: "USER" } } });
+
+    const plan = await planDemoCleanup();
+    expect(plan.keptPlayers.map((k) => k.email)).toContain(real.email);
+    expect(plan.deleteAccounts.concat(plan.closeAccounts)).toContain(demo.email);
+    expect(await prisma.user.findUnique({ where: { id: demo.id } })).not.toBeNull(); // planning changes nothing
+
+    await runDemoCleanup();
+
+    // The real player and their money survive untouched.
+    expect(await prisma.user.findUnique({ where: { id: real.id } })).not.toBeNull();
+    expect(await userCashBalance(prisma, real.id)).toBe(toPesewas(1));
+    expect(await prisma.paymentIntent.findUnique({ where: { ref } })).not.toBeNull();
+
+    // The demo side is gone, and staff are never touched.
+    expect(await prisma.paymentIntent.count({ where: { provider: "sandbox" } })).toBe(0);
+    expect(await prisma.bet.count()).toBe(0);
+    const demoLeft = await prisma.user.findUnique({ where: { id: demo.id } });
+    expect(demoLeft === null || demoLeft.status === "CLOSED").toBe(true);
+    expect(await prisma.user.count({ where: { role: { not: "USER" } } })).toBe(staffBefore);
+
+    // The books still add up, which is the check that would have rolled it all back.
+    expect(await ledgerIsBalanced()).toBe(true);
+    expect(await verifyAuditChain()).toMatchObject({ ok: true }); // the audit trail is untouched
   });
 });
