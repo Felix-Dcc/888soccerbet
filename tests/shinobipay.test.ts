@@ -90,3 +90,17 @@ describe("ShinobiPay webhooks", () => {
     expect(f).not.toHaveBeenCalled();
   });
 });
+
+describe("provider selection", () => {
+  it("ignores whitespace pasted into keys (a key split across two lines still works)", async () => {
+    vi.resetModules();
+    vi.stubEnv("PAYMENT_PROVIDER", "shinobipay");
+    vi.stubEnv("SHINOBI_SECRET_KEY", " sk_test_abc\ndef \n");
+    vi.stubEnv("SHINOBI_WEBHOOK_SECRET", "whsec_x");
+    const f = stubFetch(reply({ id: "pi_1", status: "requires_action", next_action: { type: "await_prompt" } }, 201));
+    const { paymentProvider } = await import("../src/lib/providers/payments");
+    await paymentProvider().initiate({ ref: "DEP-9", amountPesewas: 100n, msisdn: "0244123456", network: "MTN", direction: "DEPOSIT", email: "a@b.gh" });
+    expect(call(f).auth).toBe("Bearer sk_test_abcdef");
+    vi.unstubAllEnvs();
+  });
+});
