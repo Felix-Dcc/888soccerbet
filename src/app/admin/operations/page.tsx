@@ -7,7 +7,7 @@ import { manualPayoutQueue, verificationQueue } from "@/lib/wallet";
 import { formatPesewas } from "@/lib/money";
 import { kickoffDay, kickoffTime } from "@/lib/time";
 import { Crest } from "@/components/Crest";
-import { SyncButton, SettleForm, ManualGameForm, VerificationReview } from "@/components/AdminTools";
+import { SyncButton, SettleForm, ManualGameForm, GenerateMatchButton, VerificationReview } from "@/components/AdminTools";
 import { PayoutActions } from "@/components/admin/PayoutActions";
 import { BarList, EmptyState, Figure, Head, Icon, Panel, Pill, Strip, Tabs, ago, ghs, ghsShort } from "@/components/admin/kit";
 
@@ -53,7 +53,10 @@ export default async function OperationsPage({ searchParams }: { searchParams: P
 
   return (
     <>
-      <Head title="Trading desk">{can(u, "odds.sync") && <SyncButton />}</Head>
+      <Head title="Trading desk">
+        {can(u, "fixtures.manage") && <GenerateMatchButton />}
+        {can(u, "odds.sync") && <SyncButton />}
+      </Head>
 
       <Strip cols="grid-cols-2 md:grid-cols-4">
         <Figure label="Awaiting result" value={counts ? counts[0] : "—"} note={counts ? `${counts[1]} kicked off · ${counts[2]} manual` : undefined} />
@@ -121,7 +124,7 @@ export default async function OperationsPage({ searchParams }: { searchParams: P
                         <span className="w-16 text-right text-xs tabular-nums text-fog">{f._count.betSelections} open</span>
                       </div>
                       <div className="mt-2 pl-[3.25rem]">
-                        <SettleForm fixtureId={f.id} home={f.homeTeam} away={f.awayTeam} started={f.startsAt <= now} />
+                        <SettleForm fixtureId={f.id} home={f.homeTeam} away={f.awayTeam} started={f.startsAt <= now} manual={f.providerRef === null} startsAt={f.startsAt.toISOString()} homeScore={f.homeScore} awayScore={f.awayScore} />
                       </div>
                     </li>
                   ))}

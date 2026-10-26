@@ -128,6 +128,22 @@ export async function settleFixture(fixtureId: string, homeScore: number, awaySc
 }
 
 /**
+ * Update the running score of a live match without settling it (manual/generated games the feed
+ * can't score). Sets status LIVE so it behaves like a feed game in play; bets are graded only later
+ * by settleFixture. The fixture's updatedAt bump makes players' pages refresh within seconds.
+ */
+export async function setLiveScore(fixtureId: string, homeScore: number, awayScore: number): Promise<void> {
+  const fixture = await prisma.fixture.findUnique({ where: { id: fixtureId }, select: { status: true, startsAt: true } });
+  if (!fixture) throw new SettlementError("NOT_FOUND", "Match not found", 404);
+  if (fixture.status === "FINISHED" || fixture.status === "CANCELLED")
+    throw new SettlementError("ALREADY_SETTLED", `This match is already ${fixture.status === "FINISHED" ? "settled" : "void"}`);
+  if (fixture.startsAt > new Date()) throw new SettlementError("NOT_STARTED", "This match hasn't kicked off yet", 409);
+  // Guard on status so a result an admin entered a moment ago is never flipped back to LIVE.
+  const r = await prisma.fixture.updateMany({ where: { id: fixtureId, status: { in: ["SCHEDULED", "LIVE"] } }, data: { homeScore, awayScore, status: "LIVE", lastSyncedAt: new Date() } });
+  if (!r.count) throw new SettlementError("ALREADY_SETTLED", "This match is already settled");
+}
+
+/**
  * Match cancelled/abandoned: every selection on it is void (odds 1.00 on multiples, stake
  * back on singles), its markets close and the fixture is marked CANCELLED.
  */

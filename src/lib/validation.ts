@@ -104,8 +104,14 @@ export type ManualFixtureInput = z.infer<typeof manualFixtureSchema>;
 
 export const adminSettleSchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("result"), fixtureId: z.string().min(1), homeScore: z.number().int().min(0).max(500), awayScore: z.number().int().min(0).max(500) }),
+  z.object({ action: z.literal("live"), fixtureId: z.string().min(1), homeScore: z.number().int().min(0).max(500), awayScore: z.number().int().min(0).max(500) }),
   z.object({ action: z.literal("void"), fixtureId: z.string().min(1) }),
 ]);
+
+/** Admin moves a manual/generated game's kick-off. Any time up to 60 days out (past = start now). */
+export const rescheduleFixtureSchema = z
+  .object({ fixtureId: z.string().min(1), startsAt: z.string().datetime({ offset: true, message: "Enter a valid kick-off time" }) })
+  .refine((f) => new Date(f.startsAt).getTime() < Date.now() + MAX_AHEAD_MS, { message: "Kick-off must be within 60 days", path: ["startsAt"] });
 
 /** Money in pesewas as a digit string, so no float rounding on the way in. */
 const pesewas = z.string().regex(/^\d{1,13}$/, "Invalid amount").transform((s) => BigInt(s));

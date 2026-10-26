@@ -90,3 +90,14 @@ export async function createManualFixture(f: ManualFixtureInput): Promise<{ id: 
   await applyCachedBadges(); // known teams pick up their crest straight away
   return { id: fixture.id, code: fixture.code };
 }
+
+/** Admin changes when a manual/generated game kicks off. Only manual games (no feed), not yet settled. Returns false if none matched. */
+export async function rescheduleManualFixture(fixtureId: string, startsAtISO: string): Promise<boolean> {
+  const startsAt = new Date(startsAtISO);
+  const r = await prisma.fixture.updateMany({
+    where: { id: fixtureId, providerRef: null, status: { in: ["SCHEDULED", "LIVE"] } },
+    // Moved back into the future -> SCHEDULED again; moved to now/past -> let it run (LIVE or started-by-time).
+    data: startsAt > new Date() ? { startsAt, status: "SCHEDULED" } : { startsAt },
+  });
+  return r.count > 0;
+}

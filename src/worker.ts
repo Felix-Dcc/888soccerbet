@@ -3,7 +3,7 @@
  * Run alongside the app:  npm run worker
  * (Jobs could also be driven by POSTing /api/cron from an external scheduler.)
  */
-import { syncFixtures, syncEventMarkets, autoSettleFinished, updateLiveScores } from "./lib/sync";
+import { syncFixtures, syncEventMarkets, autoSettleFinished, goLiveManualFixtures, updateLiveScores } from "./lib/sync";
 import { enrichCompetitions, enrichTeams } from "./lib/assets";
 import { oddsProvider } from "./lib/providers/odds";
 
@@ -70,6 +70,7 @@ async function main() {
   setInterval(() => void safe("settle", autoSettleFinished), SETTLE_MS);
   setInterval(() => void safe("artwork", enrich), ENRICH_MS);
   setInterval(() => void quiet("live", updateLiveScores), LIVE_MS);
+  setInterval(() => void quiet("golive", goLiveManualFixtures), LIVE_MS);
 }
 
 void main();

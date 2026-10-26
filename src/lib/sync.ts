@@ -161,6 +161,18 @@ const LIVE_WINDOW_MS = 4 * 60 * 60 * 1000;
  * one that has gone missing after RESULT_AFTER_MS is looked up in the results feed (2 credits per
  * league) instead of sitting on "live" until the next full settle run.
  */
+/**
+ * Flip manual/generated games to LIVE once they kick off, so they behave like feed games in play
+ * (the feed does this for its own matches). Scores stay as the admin sets them. Cheap: one update.
+ */
+export async function goLiveManualFixtures(): Promise<{ live: number }> {
+  const r = await prisma.fixture.updateMany({
+    where: { providerRef: null, status: "SCHEDULED", startsAt: { lte: new Date() } },
+    data: { status: "LIVE" },
+  });
+  return { live: r.count };
+}
+
 export async function updateLiveScores(): Promise<{ live: number; updated: number; settled: number; skipped?: string }> {
   const provider = oddsProvider();
   if (!provider.fetchLiveScores) return { live: 0, updated: 0, settled: 0 };

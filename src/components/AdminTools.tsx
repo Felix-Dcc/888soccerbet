@@ -37,16 +37,29 @@ async function settle(body: object): Promise<{ ok: boolean; msg: string }> {
   }
 }
 
-/** Final score -> settle, or Void when the match was cancelled/abandoned. Both ask to confirm. */
-export function SettleForm({ fixtureId, home, away, started }: { fixtureId: string; home: string; away: string; started: boolean }) {
+/** datetime-local value (admin's local time) from an ISO instant. */
+const toLocalInput = (iso: string) => {
+  const d = new Date(iso);
+  return new Date(d.getTime() - d.getTimezoneOffset() * 60_000).toISOString().slice(0, 16);
+};
+
+/**
+ * Per-match admin controls in the settlement queue:
+ *  - not started: for a manual/generated game, move the kick-off; any game can be voided.
+ *  - started: update the live score (no payout), settle with the final score, or void.
+ */
+export function SettleForm({
+  fixtureId, home, away, started, manual = false, startsAt, homeScore, awayScore,
+}: { fixtureId: string; home: string; away: string; started: boolean; manual?: boolean; startsAt: string; homeScore?: number | null; awayScore?: number | null }) {
   const router = useRouter();
-  const [h, setH] = useState("");
-  const [a, setA] = useState("");
+  const [h, setH] = useState(homeScore != null ? String(homeScore) : "");
+  const [a, setA] = useState(awayScore != null ? String(awayScore) : "");
+  const [when, setWhen] = useState(toLocalInput(startsAt));
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; msg: string } | null>(null);
 
-  async function run(body: object, confirmText: string) {
-    if (!window.confirm(confirmText)) return;
+  async function run(body: object, confirmText?: string) {
+    if (confirmText && !window.confirm(confirmText)) return;
     setBusy(true);
     const r = await settle(body);
     setBusy(false);
@@ -54,23 +67,51 @@ export function SettleForm({ fixtureId, home, away, started }: { fixtureId: stri
     if (r.ok) router.refresh();
   }
 
+  async function reschedule() {
+    setBusy(true);
+    try {
+      const res = await fetch("/api/admin/fixtures", { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ fixtureId, startsAt: new Date(when).toISOString() }) });
+      const d = await res.json().catch(() => ({}));
+      setMsg({ ok: res.ok, msg: res.ok ? "Kick-off time saved" : d.error ?? "Couldn't change the time" });
+      if (res.ok) router.refresh();
+    } finally {
+      setBusy(false);
+    }
+  }
+
   const valid = /^\d{1,3}$/.test(h) && /^\d{1,3}$/.test(a);
   return (
-    <form
-      className="flex flex-wrap items-center gap-2"
-      onSubmit={(e) => {
-        e.preventDefault();
-        if (valid) void run({ action: "result", fixtureId, homeScore: Number(h), awayScore: Number(a) }, `Settle ${home} ${h} – ${a} ${away}? This pays out and cannot be undone.`);
-      }}
-    >
+    <div className="flex flex-wrap items-center gap-2">
+      {!started && manual && (
+        <>
+          <input aria-label="Kick-off time" type="datetime-local" value={when} onChange={(e) => setWhen(e.target.value)} className="input py-1.5 text-sm" />
+          <button type="button" disabled={busy || !when} onClick={reschedule} className="btn border border-line px-3 py-1.5 text-sm text-white hover:border-lime hover:text-lime">
+            Save time
+          </button>
+        </>
+      )}
       {started && (
         <>
-      <input aria-label={`${home} score`} inputMode="numeric" placeholder="0" value={h} onChange={(e) => setH(e.target.value.replace(/\D/g, "").slice(0, 3))} className="input w-14 py-1.5 text-center" />
-      <span className="text-fog-muted">:</span>
-      <input aria-label={`${away} score`} inputMode="numeric" placeholder="0" value={a} onChange={(e) => setA(e.target.value.replace(/\D/g, "").slice(0, 3))} className="input w-14 py-1.5 text-center" />
-      <button className="btn-lime px-3 py-1.5 text-sm" disabled={busy || !valid}>
-        Settle
-      </button>
+          <input aria-label={`${home} score`} inputMode="numeric" placeholder="0" value={h} onChange={(e) => setH(e.target.value.replace(/\D/g, "").slice(0, 3))} className="input w-14 py-1.5 text-center" />
+          <span className="text-fog-muted">:</span>
+          <input aria-label={`${away} score`} inputMode="numeric" placeholder="0" value={a} onChange={(e) => setA(e.target.value.replace(/\D/g, "").slice(0, 3))} className="input w-14 py-1.5 text-center" />
+          <button
+            type="button"
+            disabled={busy || !valid}
+            onClick={() => run({ action: "live", fixtureId, homeScore: Number(h), awayScore: Number(a) })}
+            className="btn border border-line px-3 py-1.5 text-sm text-white hover:border-lime hover:text-lime"
+            title="Show this as the live score without paying out"
+          >
+            Update
+          </button>
+          <button
+            type="button"
+            disabled={busy || !valid}
+            onClick={() => run({ action: "result", fixtureId, homeScore: Number(h), awayScore: Number(a) }, `Settle ${home} ${h} – ${a} ${away}? This pays out and cannot be undone.`)}
+            className="btn-lime px-3 py-1.5 text-sm"
+          >
+            Settle
+          </button>
         </>
       )}
       <button
@@ -82,7 +123,37 @@ export function SettleForm({ fixtureId, home, away, started }: { fixtureId: stri
         Void
       </button>
       {msg && <span role={msg.ok ? "status" : "alert"} className={`text-xs ${msg.ok ? "text-win" : "text-danger"}`}>{msg.msg}</span>}
-    </form>
+    </div>
+  );
+}
+
+/** One click creates a random fictional match (fictional teams, odds, future kick-off) and opens it for betting. */
+export function GenerateMatchButton() {
+  const router = useRouter();
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<string>("");
+  return (
+    <div className="flex items-center gap-3">
+      <button
+        className="btn border border-white/30 px-4 py-2 text-sm text-white hover:bg-white/10"
+        disabled={busy}
+        onClick={async () => {
+          setBusy(true);
+          setMsg("");
+          try {
+            const r = await fetch("/api/admin/fixtures", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ generate: true }) });
+            const d = await r.json().catch(() => ({}));
+            setMsg(r.ok ? `Generated match #${d.fixture?.code} — edit its time below` : d.error ?? "Could not generate");
+            if (r.ok) router.refresh();
+          } finally {
+            setBusy(false);
+          }
+        }}
+      >
+        {busy ? "Generating…" : "Generate match"}
+      </button>
+      {msg && <span className="text-sm text-white/80">{msg}</span>}
+    </div>
   );
 }
 

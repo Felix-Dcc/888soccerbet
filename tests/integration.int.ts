@@ -28,7 +28,7 @@ import { randomUUID } from "node:crypto";
 import { prisma } from "../src/lib/db";
 import { houseAccountId, userAccountId, postTransaction, userCashBalance, ledgerIsBalanced } from "../src/lib/ledger";
 import { placeBet, BetError } from "../src/lib/betEngine";
-import { settleBet, settleFixture, voidFixture, SettlementError } from "../src/lib/settlement";
+import { setLiveScore, settleBet, settleFixture, voidFixture, SettlementError } from "../src/lib/settlement";
 import { initiateDeposit, initiateWithdrawal, initiateVerificationPayment, confirmDeposit, manualPayoutQueue, processPaymentEvent, reconcilePendingDeposits, recordManualPayout, reviewVerification, verificationState } from "../src/lib/wallet";
 import { toPesewas } from "../src/lib/money";
 import { referralCode } from "../src/lib/ids";
@@ -40,9 +40,10 @@ import { parseRange, scopeMetrics } from "../src/lib/adminAnalytics";
 import { adjustBalance, canViewPlayer } from "../src/lib/playerAdmin";
 import { audit, verifyAuditChain } from "../src/lib/audit";
 import { listFixtures, listResults, dataVersion } from "../src/lib/queries";
-import { applyMarkets, updateLiveScores } from "../src/lib/sync";
-import { createManualFixture } from "../src/lib/manualFixtures";
+import { applyMarkets, goLiveManualFixtures, updateLiveScores } from "../src/lib/sync";
+import { createManualFixture, rescheduleManualFixture } from "../src/lib/manualFixtures";
 import { manualFixtureSchema } from "../src/lib/validation";
+import { generateMatch } from "../src/lib/matchGenerator";
 import { markWinsSeen, unseenWins } from "../src/lib/wins";
 import { ensureVerifyCode, ticketByVerifyCode, ticketByRef, ticketTotals } from "../src/lib/tickets";
 import { cashOut, quoteForBet, runAutoCashouts, setAutoCashout } from "../src/lib/cashout";
@@ -610,6 +611,43 @@ describe("admin: manual games, void and final results", () => {
     await placeBet(user.id, { idempotencyKey: randomUUID(), stakeGhs: 10, acceptOddsChange: false, selections: [{ selectionId: home.id, expectedMilliOdds: 2100 }] });
     await settleFixture(id, 2, 1);
     expect(await userCashBalance(prisma, user.id)).toBe(toPesewas(111)); // 90 + 21
+    expect(await ledgerIsBalanced()).toBe(true);
+  });
+
+  it("generates a fictional game, goes live at kick-off, takes live scores without paying, then settles", async () => {
+    const input = manualFixtureSchema.parse(generateMatch("football"));
+    const { id } = await createManualFixture(input);
+
+    // Shows on the site and takes bets while upcoming.
+    expect((await listFixtures({ take: 500 })).find((f) => f.id === id)?.bettable).toBe(true);
+    const user = await fundedUser(100);
+    const home = await prisma.selection.findFirstOrThrow({ where: { market: { fixtureId: id, type: "MATCH_RESULT" }, code: "1" } });
+    await placeBet(user.id, { idempotencyKey: randomUUID(), stakeGhs: 10, acceptOddsChange: true, selections: [{ selectionId: home.id, expectedMilliOdds: home.milliOdds }] });
+
+    // No live score before it kicks off.
+    await expect(setLiveScore(id, 1, 0)).rejects.toMatchObject({ code: "NOT_STARTED" });
+
+    // Admin moves kick-off to now; the worker step flips it LIVE like a feed game (feed games untouched).
+    const feed = await makeMatch({ home: 2, draw: 3, away: 4 }, new Date(Date.now() - 60_000));
+    expect(await rescheduleManualFixture(id, new Date(Date.now() - 60_000).toISOString())).toBe(true);
+    expect(await rescheduleManualFixture(feed.fixture.id, new Date().toISOString())).toBe(false); // not a manual game
+    expect((await goLiveManualFixtures()).live).toBeGreaterThanOrEqual(1);
+    expect((await prisma.fixture.findUniqueOrThrow({ where: { id } })).status).toBe("LIVE");
+    expect((await prisma.fixture.findUniqueOrThrow({ where: { id: feed.fixture.id } })).status).toBe("SCHEDULED"); // feed flip is the feed's job
+
+    // Live score shows but pays nothing yet.
+    await setLiveScore(id, 1, 0);
+    await setLiveScore(id, 2, 0);
+    const mid = await prisma.fixture.findUniqueOrThrow({ where: { id } });
+    expect([mid.homeScore, mid.awayScore, mid.status]).toEqual([2, 0, "LIVE"]);
+    expect(await userCashBalance(prisma, user.id)).toBe(toPesewas(90)); // staked, not paid
+
+    // Final whistle: admin settles, the home win pays out.
+    await settleFixture(id, 2, 0);
+    const bet = await prisma.bet.findFirstOrThrow({ where: { userId: user.id } });
+    expect(bet.status).toBe("WON");
+    expect(await userCashBalance(prisma, user.id)).toBe(toPesewas(90) + bet.potentialPayout);
+    await expect(setLiveScore(id, 3, 0)).rejects.toMatchObject({ code: "ALREADY_SETTLED" }); // no live edits after a result
     expect(await ledgerIsBalanced()).toBe(true);
   });
 

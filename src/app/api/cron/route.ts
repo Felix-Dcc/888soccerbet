@@ -1,4 +1,4 @@
-import { syncFixtures, syncEventMarkets, autoSettleFinished, updateLiveScores } from "@/lib/sync";
+import { syncFixtures, syncEventMarkets, autoSettleFinished, goLiveManualFixtures, updateLiveScores } from "@/lib/sync";
 import { json, errorResponse } from "@/lib/http";
 import { getCurrentUser } from "@/lib/session";
 import { can } from "@/lib/permissions";
@@ -19,9 +19,10 @@ export async function POST(req: Request) {
 
     const sync = await syncFixtures();
     const extras = await syncEventMarkets();
+    const manual = await goLiveManualFixtures();
     const live = await updateLiveScores();
     const settle = await autoSettleFinished();
-    return json({ sync, extras, live, settle });
+    return json({ sync, extras, manual, live, settle });
   } catch (e) {
     return errorResponse(e);
   }
