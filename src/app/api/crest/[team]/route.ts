@@ -3,7 +3,9 @@
  * fictional leagues, and manual games the feed doesn't know. Drawn from the name alone, so the same
  * name always gets the same badge and nothing is stored. Never served for real clubs or leagues:
  * cached feed badges are applied first. `?kind=league` draws a round league emblem instead of a
- * team shield. These are original marks, not imitations of any real club or competition.
+ * team shield. The central device is an emblem (no initials); its motif follows the name's theme,
+ * with a stable fallback otherwise. These are original marks, not imitations of any real club or
+ * competition.
  */
 // Dynamic so `?kind=league` is read (force-static drops query params); the immutable cache header
 // below still serves every repeat of a given URL from the browser/CDN, so the handler runs rarely.
@@ -11,13 +13,8 @@ export const dynamic = "force-dynamic";
 
 const hash = (s: string) => {
   let h = 2166136261;
-  for (let i = 0; i < s.length; i++) h = (Math.imul(h ^ s.charCodeAt(i), 16777619) >>> 0);
+  for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 16777619) >>> 0;
   return h;
-};
-
-const initials = (name: string) => {
-  const words = name.replace(/[^A-Za-zÀ-ÿ0-9 ]/g, "").split(/\s+/).filter(Boolean);
-  return (words.length > 1 ? words[0]![0]! + words[words.length - 1]![0]! : name.slice(0, 2)).toUpperCase();
 };
 
 const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
@@ -38,18 +35,64 @@ function palette(h: number) {
   const hue = h % 360;
   const gold = (h >> 3) % 2 === 0;
   return {
-    deep: `hsl(${hue} 58% 16%)`,
-    mid: `hsl(${hue} 56% 30%)`,
+    deep: `hsl(${hue} 58% 15%)`,
+    mid: `hsl(${hue} 56% 29%)`,
     light: `hsl(${hue} 52% 40%)`,
-    trim: gold ? "#E7C46A" : "#D7DEE8",
+    trim: gold ? "#E7C46A" : "#CFD8E3",
     trimHi: gold ? "#FFF0C0" : "#FFFFFF",
   };
 }
 
+type Palette = ReturnType<typeof palette>;
+
+/** Emblem devices, each drawn centred on (0,0) spanning roughly ±12. No text. */
+const DEVICES: Record<string, (p: Palette) => string> = {
+  ball: (p) =>
+    `<circle r="11.5" fill="${p.trimHi}"/><circle r="11.5" fill="none" stroke="${p.deep}" stroke-width="1"/>
+<polygon points="0,-5 4.8,-1.6 3,4.2 -3,4.2 -4.8,-1.6" fill="${p.deep}"/>
+<path d="M0 -5V-11.5M4.8 -1.6 10.9 -3.6M3 4.2 6.8 9.3M-3 4.2 -6.8 9.3M-4.8 -1.6 -10.9 -3.6" stroke="${p.deep}" stroke-width="1.3" fill="none"/>`,
+  crown: (p) =>
+    `<path d="M-11 6-11-4-5.5 1.5 0-8 5.5 1.5 11-4 11 6Z" fill="${p.trimHi}"/>
+<rect x="-11" y="6" width="22" height="4" rx="1.2" fill="${p.trim}"/>
+<circle cx="-11" cy="-5" r="2" fill="${p.trim}"/><circle cy="-9.5" r="2.3" fill="${p.trim}"/><circle cx="11" cy="-5" r="2" fill="${p.trim}"/>`,
+  flame: (p) =>
+    `<path d="M0-12.5C7-4 10 1 4.6 8.2 2.6 10.8-2.6 10.8-4.6 8.2-9 2-4-3 0-12.5Z" fill="${p.trimHi}"/>
+<path d="M0-4C4.2 0 5.2 3.2 2.1 7.3 1 8.9-1 8.9-2.1 7.3-4.7 3.6-2.1 0 0-4Z" fill="${p.trim}"/>`,
+  bolt: (p) => `<polygon points="-1,-12.5 -9.5,3 -2,3 -4,12.5 9.5,-4 1.5,-4" fill="${p.trimHi}"/>`,
+  wings: (p) =>
+    `<g fill="none" stroke="${p.trimHi}" stroke-width="2.4" stroke-linecap="round">
+<path d="M-1.5-3C-5.5-7.5-9.5-7.5-12.5-4"/><path d="M-1.5 0C-5.5-3.5-9-3.5-12 0"/><path d="M-1.5 3C-5-.2-8-.2-11 3.4"/>
+<path d="M1.5-3C5.5-7.5 9.5-7.5 12.5-4"/><path d="M1.5 0C5.5-3.5 9-3.5 12 0"/><path d="M1.5 3C5-.2 8-.2 11 3.4"/></g>
+<polygon points="0,-8 3,-1 0,9 -3,-1" fill="${p.trim}"/>`,
+  anchor: (p) =>
+    `<g stroke="${p.trimHi}" stroke-width="2.3" fill="none" stroke-linecap="round">
+<circle cy="-9.5" r="2.7"/><path d="M0-6.8V10"/><path d="M-5.2-3H5.2"/><path d="M-8.5 3C-8.5 9.5-3 10.8 0 9.6"/><path d="M8.5 3C8.5 9.5 3 10.8 0 9.6"/></g>`,
+  compass: (p) =>
+    `<circle r="11" fill="none" stroke="${p.trimHi}" stroke-width="1.6"/>
+<polygon points="0,-11 2.6,-2.4 0,0 -2.6,-2.4" fill="${p.trimHi}"/><polygon points="0,11 2.6,2.4 0,0 -2.6,2.4" fill="${p.trim}"/>
+<polygon points="11,0 2.4,2.6 0,0 2.4,-2.6" fill="${p.trim}"/><polygon points="-11,0 -2.4,2.6 0,0 -2.4,-2.6" fill="${p.trim}"/>`,
+  star: (p) => `${star(0, -0.5, 11.5, p.trimHi)}${star(0, -0.5, 5, p.trim)}`,
+};
+
+const KEYWORDS: [RegExp, string][] = [
+  [/phoenix|solar|flame|fire|blaze|crimson|scarlet|ember/i, "flame"],
+  [/thunder|electric|storm|bolt|comet|volt|spark/i, "bolt"],
+  [/hawk|harrier|falcon|eagle|raven|wing|phantom/i, "wings"],
+  [/monarch|royal|king|crown|regal|emperor/i, "crown"],
+  [/mariner|anchor|harbor|harbour|port|sail|tide/i, "anchor"],
+  [/nomad|rover|wanderer|drifter|ranger|pioneer|voyager|scout/i, "compass"],
+  [/united|city|fc|club|athletic|sporting/i, "ball"],
+];
+
+function device(name: string, h: number): (p: Palette) => string {
+  for (const [re, key] of KEYWORDS) if (re.test(name)) return DEVICES[key]!;
+  const keys = Object.keys(DEVICES);
+  return DEVICES[keys[h % keys.length]!]!;
+}
+
 function teamCrest(name: string, h: number) {
   const p = palette(h);
-  const ini = esc(initials(name));
-  const stars = [26, 32, 38].map((x) => star(x, 15, 3, p.trim)).join("");
+  const stars = [26, 32, 38].map((x) => star(x, 14, 2.3, p.trim)).join("");
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="${esc(name)} crest">
 <defs>
 <linearGradient id="b" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${p.mid}"/><stop offset="1" stop-color="${p.deep}"/></linearGradient>
@@ -58,18 +101,14 @@ function teamCrest(name: string, h: number) {
 </defs>
 <path d="M32 3 57 10v21c0 14-10 24-25 28C17 55 7 45 7 31V10Z" fill="url(#t)"/>
 <path d="M32 6 54 12v19c0 13-9 21-22 25-13-4-22-12-22-25V12Z" fill="url(#b)"/>
-<g clip-path="url(#s)">
-<path d="M-6 44 44 -6 58 8 8 58Z" fill="${p.light}" opacity="0.5"/>
-<rect x="10" y="26" width="44" height="12" fill="${p.deep}" opacity="0.55"/>
-</g>
+<g clip-path="url(#s)"><path d="M-6 44 44 -6 58 8 8 58Z" fill="${p.light}" opacity="0.35"/></g>
 ${stars}
-<text x="32" y="43" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="20" font-weight="800" fill="#ffffff" style="paint-order:stroke" stroke="${p.deep}" stroke-width="0.6">${ini}</text>
+<g transform="translate(32 35)">${device(name, h)(p)}</g>
 </svg>`;
 }
 
 function leagueCrest(name: string, h: number) {
   const p = palette(h);
-  const ini = esc(initials(name));
   const dots = Array.from({ length: 12 }, (_, i) => {
     const a = (Math.PI / 6) * i;
     return `<circle cx="${(32 + 25 * Math.cos(a)).toFixed(1)}" cy="${(32 + 25 * Math.sin(a)).toFixed(1)}" r="1.1" fill="${p.trim}" opacity="0.85"/>`;
@@ -83,8 +122,8 @@ function leagueCrest(name: string, h: number) {
 <circle cx="32" cy="32" r="26.5" fill="url(#g)"/>
 <circle cx="32" cy="32" r="20" fill="none" stroke="${p.trim}" stroke-width="1" opacity="0.7"/>
 ${dots}
-${star(32, 17, 4.5, p.trim)}
-<text x="32" y="42" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="17" font-weight="800" letter-spacing="0.5" fill="#ffffff" style="paint-order:stroke" stroke="${p.deep}" stroke-width="0.6">${ini}</text>
+${star(32, 16, 4, p.trim)}
+<g transform="translate(32 35)">${DEVICES.ball!(p)}</g>
 </svg>`;
 }
 
