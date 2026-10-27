@@ -111,6 +111,7 @@ Settings (`.env`):
 | `STALE_ODDS_HOURS` | Alert when odds are older than this (default 50) |
 | `UNSETTLED_AFTER_HOURS` | Alert for matches unsettled this long after kick-off (default 4) |
 | `PENDING_PAYMENT_ALERT_MINUTES` | Alert for payments pending longer than this (default 60) |
+| `DEFAULT_REFERRAL_CODE` | An administrator's code: players who sign up without a code are attributed to them (shown as auto-assigned). A typed or linked code still wins. Blank = unattributed |
 
 First super admin: `npm run db:seed` creates `admin@kingsbet.gh` as `SUPER_ADMIN`; change its
 password immediately in production. Further admins are created at `/admin/admins`.

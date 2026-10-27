@@ -151,7 +151,7 @@ export async function ReferralDashboard({
                   )}
                 </td>
                 <td className={`${td} text-fog`}>{when(p.createdAt)}</td>
-                <td className={`${td} text-fog`}>{p.referralSource === "LINK" ? "Link" : "Code"}</td>
+                <td className={`${td} text-fog`}>{p.referralSource === "LINK" ? "Link" : p.referralSource === "AUTO" ? "Auto" : "Code"}</td>
                 <td className={td}>
                   <Pill tone={statusTone(p.status)}>{p.status.toLowerCase()}</Pill>
                 </td>

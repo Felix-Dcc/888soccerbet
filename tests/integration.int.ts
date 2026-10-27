@@ -530,6 +530,21 @@ describe("accounts", () => {
     expect((await findUserByIdentifier(user.email.toUpperCase()))?.id).toBe(user.id);
   });
 
+  it("credits sign-ups without a code to the default administrator, never overriding a code and never blocking", async () => {
+    const admin = async () => prisma.user.update({ where: { id: (await registerUser({ email: `a_${unique()}@t.gh`, password: "password1", acceptTerms: true, phone: phone(), dateOfBirth: "1990-01-01" })).id }, data: { role: "ADMIN" } });
+    const [element, other] = [await admin(), await admin()];
+    const signUp = (referralCode?: string) => registerUser({ email: `n_${unique()}@t.gh`, password: "password1", acceptTerms: true, phone: phone(), dateOfBirth: "1990-01-01", referralCode });
+    vi.stubEnv("DEFAULT_REFERRAL_CODE", ` ${element.referralCode.slice(0, 4)}-${element.referralCode.slice(4)} `.toLowerCase()); // typed loosely into Railway
+    try {
+      expect(await signUp()).toMatchObject({ referredById: element.id, referralSource: "AUTO" });
+      expect(await signUp(other.referralCode)).toMatchObject({ referredById: other.id, referralSource: "CODE" });
+      await prisma.user.update({ where: { id: element.id }, data: { status: "SUSPENDED" } });
+      expect(await signUp()).toMatchObject({ referredById: null, referralSource: null });
+    } finally {
+      vi.stubEnv("DEFAULT_REFERRAL_CODE", "");
+    }
+  });
+
   it("rejects an unknown referral code, a duplicate phone in another format, a duplicate email, and under-18s", async () => {
     const p = phone();
     const email = `d_${unique()}@t.gh`;

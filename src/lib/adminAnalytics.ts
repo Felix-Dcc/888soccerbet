@@ -300,7 +300,7 @@ export async function recentActivity(scope: Scope, withAudit: boolean, take = 20
   ]);
   const ghs = (p: bigint) => `GHS ${(Number(p) / 100).toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   const items: ActivityItem[] = [
-    ...regs.map((u) => ({ at: u.createdAt, kind: "registration" as const, text: `${u.email} registered${u.referralSource ? ` (${u.referralSource === "LINK" ? "referral link" : "referral code"})` : ""}`, href: `/admin/users/${u.id}` })),
+    ...regs.map((u) => ({ at: u.createdAt, kind: "registration" as const, text: `${u.email} registered${u.referralSource ? ` (${u.referralSource === "LINK" ? "referral link" : u.referralSource === "AUTO" ? "auto-assigned" : "referral code"})` : ""}`, href: `/admin/users/${u.id}` })),
     ...bets.map((b) => ({ at: b.placedAt, kind: "bet" as const, text: `${b.user.email} placed ${b.ref} · ${ghs(b.stake)}`, href: `/admin/users/${b.userId}` })),
     ...pays.map((p) => ({ at: p.createdAt, kind: "payment" as const, text: `${p.user.email} ${p.direction === "DEPOSIT" ? "deposit" : "withdrawal"} ${ghs(p.amount)} · ${p.status.toLowerCase()}`, href: `/admin/users/${p.userId}` })),
     ...logs.map((l) => ({ at: l.createdAt, kind: "admin" as const, text: `${l.actor?.email ?? "system"} ${actionText(l.action)}`, href: "/admin/audit" })),

@@ -60,6 +60,11 @@ export async function registerUser(input: RegisterInput): Promise<User> {
     const referrer = await prisma.user.findUnique({ where: { referralCode: normaliseCode(input.referralCode) } });
     if (!referrer || referrer.role === "USER" || referrer.status !== "ACTIVE") throw new AccountError("BAD_REFERRAL", "Referral code not found");
     referredById = referrer.id;
+  } else if (process.env.DEFAULT_REFERRAL_CODE) {
+    // No code given: the player goes to the default administrator. Never blocks a sign-up: if that
+    // code is wrong or its admin isn't active, the player is simply left unattributed.
+    const fallback = await prisma.user.findUnique({ where: { referralCode: normaliseCode(process.env.DEFAULT_REFERRAL_CODE) } });
+    if (fallback && fallback.role !== "USER" && fallback.status === "ACTIVE") referredById = fallback.id;
   }
 
   const passwordHash = hashPassword(input.password);
@@ -78,7 +83,7 @@ export async function registerUser(input: RegisterInput): Promise<User> {
           referralCode: referralCode(),
           // Attribution is written once, here, and nothing updates it afterwards.
           referredById,
-          ...(referredById ? { referredAt: new Date(), referralSource: input.referralSource ?? "CODE" } : {}),
+          ...(referredById ? { referredAt: new Date(), referralSource: input.referralCode ? (input.referralSource ?? "CODE") : "AUTO" } : {}),
         },
       });
     } catch (e) {

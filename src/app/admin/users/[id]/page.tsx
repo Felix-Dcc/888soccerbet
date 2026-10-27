@@ -204,7 +204,7 @@ export default async function PlayerPage({ params, searchParams }: { params: Pro
                       (p.referredBy.displayName ?? p.referredBy.email)
                     )}
                     <div className="text-xs text-fog">
-                      {p.referralSource === "LINK" ? "via link" : "via code"}
+                      {p.referralSource === "LINK" ? "via link" : p.referralSource === "AUTO" ? "auto-assigned" : "via code"}
                       {p.referredAt && ` · ${when(p.referredAt)}`}
                     </div>
                   </>

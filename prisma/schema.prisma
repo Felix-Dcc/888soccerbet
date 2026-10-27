@@ -48,7 +48,7 @@ model User {
   referredBy        User?      @relation("referrals", fields: [referredById], references: [id])
   referrals         User[]     @relation("referrals")
   referredAt        DateTime? // when the referral was attributed (set once, at sign-up)
-  referralSource    String? // LINK (arrived on a referral link) | CODE (typed it in)
+  referralSource    String? // LINK (arrived on a referral link) | CODE (typed it in) | AUTO (no code: DEFAULT_REFERRAL_CODE's admin)
   // Staff only
   adminUsername     String?    @unique
   adminRoleId       String?
