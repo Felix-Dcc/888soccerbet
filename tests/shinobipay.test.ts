@@ -47,6 +47,15 @@ describe("ShinobiPay deposits", () => {
     await expect(sp().initiate({ ...dep, direction: "WITHDRAWAL" })).rejects.toThrow(PspError);
     expect(sp().payouts).toBe("manual");
   });
+
+  it("tells the player to retry, not the raw upstream error, when the network is rate-limited or down", async () => {
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
+    const busy = "Mobile money is busy right now. Nothing was charged; please try again in a minute.";
+    stubFetch(reply({ error: { message: "BluPay collection rejected: HTTP 429" } }, 400), reply({}, 429), reply({}, 503));
+    for (let i = 0; i < 3; i++) await expect(sp().initiate(dep)).rejects.toThrow(busy);
+    expect(log).toHaveBeenCalledWith(expect.stringContaining("BluPay collection rejected: HTTP 429"));
+    log.mockRestore();
+  });
 });
 
 describe("ShinobiPay webhooks", () => {

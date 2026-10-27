@@ -77,7 +77,13 @@ export class ShinobiPayProvider implements PaymentProvider {
     const err = json.error as { code?: string; message?: string } | undefined;
     // 402 (declined, invalid number...) and other 4xx: refused, nothing charged. 5xx/429: unclear, but
     // no intent exists on our side yet, so failing the request is safe (the player can try again).
-    throw new ShinobiPayError(err?.message || `ShinobiPay refused the payment (${err?.code ?? `HTTP ${http}`})`);
+    const message = err?.message || `ShinobiPay refused the payment (${err?.code ?? `HTTP ${http}`})`;
+    // Its mobile money network can rate-limit too ("BluPay collection rejected: HTTP 429"); only the text says so.
+    if (http === 429 || http >= 500 || /\b429\b/.test(message)) {
+      console.error(`[shinobipay] deposit ${req.ref} not started (HTTP ${http}): ${message}`);
+      throw new ShinobiPayError("Mobile money is busy right now. Nothing was charged; please try again in a minute.");
+    }
+    throw new ShinobiPayError(message);
   }
 
   async checkDeposit(providerRef: string): Promise<{ status: "SUCCEEDED" | "FAILED"; amountPesewas: bigint } | null> {
