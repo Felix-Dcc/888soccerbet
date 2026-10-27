@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { newId } from "@/lib/clientId";
 import { formatPesewas } from "@/lib/money";
@@ -37,6 +38,8 @@ export function WalletPanel({ minDepositGhs, verification }: { minDepositGhs: nu
   const [approving, setApproving] = useState<{ ref: string; amount: string; ussd: string | null } | null>(null);
   const [checking, setChecking] = useState(false);
   const [approveNote, setApproveNote] = useState<string | null>(null);
+  // A withdrawal request that just went through: shows the success modal.
+  const [withdrawn, setWithdrawn] = useState<{ ref: string; amount: string; network: Network; msisdn: string } | null>(null);
 
   // Back from the payment provider's approval page (it adds ?status=&tx_ref= to our wallet URL).
   useEffect(() => {
@@ -118,7 +121,9 @@ export function WalletPanel({ minDepositGhs, verification }: { minDepositGhs: nu
       if (mode === "deposit") {
         afterCharge(d);
       } else {
-        setMsg({ ok: true, text: `Withdrawal ${d.intent.ref} sent. It reaches your mobile money shortly.` });
+        setWithdrawn({ ref: d.intent.ref, amount: formatPesewas(BigInt(d.intent.amount)), network, msisdn });
+        setMsisdn("");
+        setAccountName("");
         window.dispatchEvent(new Event("stakra:refresh"));
         router.refresh();
       }
@@ -324,7 +329,71 @@ export function WalletPanel({ minDepositGhs, verification }: { minDepositGhs: nu
           </div>
         </div>
       )}
+
+      {withdrawn && <WithdrawalSuccess info={withdrawn} onClose={() => setWithdrawn(null)} />}
     </div>
+  );
+}
+
+/**
+ * Withdrawal confirmation: the request went through and the money left the player's balance.
+ * Payouts are sent by hand, so the copy says it is on the way, never that it has already landed.
+ */
+function WithdrawalSuccess({ info, onClose }: { info: { ref: string; amount: string; network: Network; msisdn: string }; onClose: () => void }) {
+  useEffect(() => {
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      e.stopImmediatePropagation();
+      onClose();
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => {
+      window.removeEventListener("keydown", onKey, true);
+      document.body.style.overflow = prev;
+    };
+  }, [onClose]);
+
+  return createPortal(
+    <div role="dialog" aria-modal="true" aria-labelledby="wdr-ok-title" className="fixed inset-0 z-[70] flex items-end justify-center sm:items-center">
+      <div className="fixed inset-0 animate-fade-in bg-[#04060A]/55 backdrop-blur-[4px]" onClick={onClose} />
+      <div className="relative z-10 w-full max-w-md animate-win-pop rounded-t-3xl border border-line bg-ink-700 p-6 pb-8 text-center text-white shadow-lift sm:rounded-3xl sm:p-8 motion-reduce:animate-none">
+        <button
+          onClick={onClose}
+          aria-label="Close"
+          className="absolute right-4 top-4 grid h-9 w-9 place-items-center rounded-full border border-line text-lg text-fog transition hover:bg-ink-600 hover:text-white"
+        >
+          ✕
+        </button>
+
+        <div className="mx-auto grid h-20 w-20 place-items-center rounded-full bg-lime/15">
+          <svg viewBox="0 0 24 24" className="h-10 w-10 text-lime" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+            <circle cx="12" cy="12" r="10" strokeWidth="1.5" />
+            <path d="M7.5 12.5l3 3 6-6.5" />
+          </svg>
+        </div>
+
+        <h2 id="wdr-ok-title" className="mt-5 font-display text-2xl font-bold">
+          Withdrawal successful
+        </h2>
+
+        <div className="mt-5 rounded-2xl border border-lime/30 bg-lime/[0.06] px-4 py-5">
+          <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-fog">Withdrawal amount</p>
+          <p className="mt-1 font-display text-4xl font-extrabold tabular-nums text-lime">GHS {info.amount}</p>
+        </div>
+
+        <p className="mt-4 text-sm leading-relaxed text-fog">
+          On its way to your {NETWORK_LABEL[info.network]} number <span className="font-semibold text-white">{info.msisdn}</span>. It reaches your mobile money shortly.
+        </p>
+        <p className="mt-1 text-xs text-fog-muted">Reference {info.ref}</p>
+
+        <button onClick={onClose} className="btn-lime mt-6 w-full py-3.5 text-base">
+          Done
+        </button>
+      </div>
+    </div>,
+    document.body,
   );
 }
 
