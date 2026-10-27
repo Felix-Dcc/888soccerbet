@@ -40,7 +40,7 @@ import { adminComparison, parseRange, scopeMetrics } from "../src/lib/adminAnaly
 import { adjustBalance, canViewPlayer } from "../src/lib/playerAdmin";
 import { audit, verifyAuditChain } from "../src/lib/audit";
 import { listFixtures, listResults, dataVersion } from "../src/lib/queries";
-import { applyMarkets, goLiveManualFixtures, updateLiveScores } from "../src/lib/sync";
+import { applyMarkets, goLiveManualFixtures, syncFixtures, syncLiveOdds, updateLiveScores } from "../src/lib/sync";
 import { createManualFixture, rescheduleManualFixture } from "../src/lib/manualFixtures";
 import { isTestAccount, planDemoCleanup, runDemoCleanup } from "../src/lib/demoCleanup";
 import { manualFixtureSchema } from "../src/lib/validation";
@@ -920,6 +920,145 @@ describe("live scores", () => {
     expect(await prisma.fixture.findUniqueOrThrow({ where: { id: fixture.id } })).toMatchObject({ status: "FINISHED", homeScore: 2, awayScore: 1 });
     expect(await userCashBalance(prisma, user.id)).toBe(toPesewas(110)); // home win paid
     expect(await ledgerIsBalanced()).toBe(true);
+  });
+});
+
+describe("in-play safety (LIVE_BETTING=true)", () => {
+  beforeAll(() => void (process.env.LIVE_BETTING = "true"));
+  afterAll(() => void delete process.env.LIVE_BETTING);
+
+  /** A feed match in play since 10 minutes ago at 0-0, odds fetched `oddsAgoMs` ago, with a second open market. */
+  async function liveMatch(oddsAgoMs = 5_000) {
+    const m = await makeMatch({ home: 2.0, draw: 3.0, away: 4.0 });
+    const league = `soccer_live_${randomUUID()}`;
+    const comp = await prisma.competition.create({ data: { sportKey: "football", name: `Live ${league}`, providerRef: league } });
+    const fixture = await prisma.fixture.update({
+      where: { id: m.fixture.id },
+      data: { competitionId: comp.id, status: "LIVE", startsAt: new Date(Date.now() - 10 * 60_000), homeScore: 0, awayScore: 0, oddsAt: new Date(Date.now() - oddsAgoMs) },
+    });
+    const ou = await prisma.market.create({ data: { fixtureId: fixture.id, type: "OVER_UNDER", name: "Total Goals", line: 2.5, status: "OPEN" } });
+    return { ...m, fixture, comp, league, ou };
+  }
+  const bet = (userId: string, selectionId: string, milliOdds: number) =>
+    placeBet(userId, { idempotencyKey: randomUUID(), stakeGhs: 5, acceptOddsChange: true, selections: [{ selectionId, expectedMilliOdds: milliOdds }] });
+  /** The feed's bulk odds for a match: 1X2 only. */
+  const feedFixture = (f: { providerRef: string | null; homeTeam: string; awayTeam: string; startsAt: Date }, comp: { name: string }, league: string) => ({
+    providerRef: f.providerRef!, sportKey: "football", competition: comp.name, providerLeague: league,
+    homeTeam: f.homeTeam, awayTeam: f.awayTeam, startsAt: f.startsAt.toISOString(),
+    markets: [{ type: "MATCH_RESULT" as const, name: "Match Result", selections: [
+      { code: "1", name: "Home", milliOdds: 1500 }, { code: "X", name: "Draw", milliOdds: 3600 }, { code: "2", name: "Away", milliOdds: 6500 },
+    ] }],
+  });
+
+  it("a goal suspends every open market; odds fetched before it never reopen them, odds fetched after do", async () => {
+    const user = await fundedUser(50);
+    const { fixture, comp, league, home, market, ou } = await liveMatch();
+    let score = { homeScore: 0, awayScore: 0 };
+    let goalDuringFetch = false;
+    feed.override = {
+      name: "fake", isSandbox: false, bulkMarketTypes: ["MATCH_RESULT"], creditsRemaining: null,
+      fetchLiveScores: async () => [{ providerRef: fixture.providerRef!, ...score, finished: false }],
+      fetchFixtures: async () => {
+        if (goalDuringFetch) {
+          // A second goal lands while this fetch is in flight: its prices are pre-goal.
+          score = { homeScore: 2, awayScore: 0 };
+          await updateLiveScores();
+        }
+        return [feedFixture(fixture, comp, league)];
+      },
+      fetchResults: async () => [],
+    } as unknown as OddsProvider;
+    const status = async () => (await prisma.market.findMany({ where: { fixtureId: fixture.id }, orderBy: { type: "asc" } })).map((m) => m.status);
+    try {
+      await updateLiveScores(); // still 0-0: nothing changes
+      expect(await status()).toEqual(["OPEN", "OPEN"]);
+      expect((await bet(user.id, home.id, 2000)).status).toBe("PENDING");
+
+      score = { homeScore: 1, awayScore: 0 };
+      await updateLiveScores();
+      expect(await status()).toEqual(["SUSPENDED", "SUSPENDED"]);
+      expect(await prisma.fixture.findUniqueOrThrow({ where: { id: fixture.id } })).toMatchObject({ homeScore: 1, oddsAt: null });
+      await expect(bet(user.id, home.id, 2000)).rejects.toMatchObject({ code: "MARKET_SUSPENDED" });
+
+      goalDuringFetch = true;
+      await syncFixtures([league]);
+      expect(await status()).toEqual(["SUSPENDED", "SUSPENDED"]);
+      expect((await prisma.fixture.findUniqueOrThrow({ where: { id: fixture.id } })).oddsAt).toBeNull();
+
+      goalDuringFetch = false;
+      await syncFixtures([league]); // fetched after the goal: the feed's markets reopen at the new price
+      const after = await prisma.market.findUniqueOrThrow({ where: { id: market.id }, include: { selections: true } });
+      expect(after.status).toBe("OPEN");
+      expect(after.selections.find((s) => s.code === "1")!.milliOdds).toBe(1500);
+      expect((await prisma.market.findUniqueOrThrow({ where: { id: ou.id } })).status).toBe("SUSPENDED"); // the feed didn't quote it
+      expect((await bet(user.id, home.id, 1500)).status).toBe("PENDING");
+    } finally {
+      feed.override = null;
+    }
+    expect(await ledgerIsBalanced()).toBe(true);
+  });
+
+  it("refuses a live bet once the match's odds are older than LIVE_ODDS_MAX_AGE_MS (90s)", async () => {
+    const user = await fundedUser(50);
+    const fresh = await liveMatch(10_000);
+    expect((await bet(user.id, fresh.home.id, 2000)).status).toBe("PENDING");
+    const stale = await liveMatch(120_000);
+    await expect(bet(user.id, stale.home.id, 2000)).rejects.toMatchObject({ code: "MATCH_STARTED" });
+    const never = await liveMatch();
+    await prisma.fixture.update({ where: { id: never.fixture.id }, data: { oddsAt: null } });
+    await expect(bet(user.id, never.home.id, 2000)).rejects.toMatchObject({ code: "MATCH_STARTED" });
+  });
+
+  it("refreshes odds only for leagues with a match in play, and pauses at the credit reserve or with live betting off", async () => {
+    const { league } = await liveMatch();
+    const idle = await makeMatch({ home: 2.0, draw: 3.0, away: 4.0 }); // kicks off in an hour
+    const idleLeague = `soccer_idle_${randomUUID()}`;
+    const idleComp = await prisma.competition.create({ data: { sportKey: "football", name: `Idle ${idleLeague}`, providerRef: idleLeague } });
+    await prisma.fixture.update({ where: { id: idle.fixture.id }, data: { competitionId: idleComp.id } });
+
+    const asked: (string[] | undefined)[] = [];
+    const fake = {
+      name: "fake", isSandbox: false, bulkMarketTypes: ["MATCH_RESULT"], creditsRemaining: null as number | null,
+      fetchFixtures: async (_s: string[], leagues?: string[]) => (asked.push(leagues), []),
+      fetchResults: async () => [],
+    };
+    feed.override = fake as unknown as OddsProvider;
+    try {
+      expect(await syncLiveOdds()).toMatchObject({ fixtures: 0 });
+      expect(asked[0]).toContain(league);
+      expect(asked[0]).not.toContain(idleLeague);
+
+      fake.creditsRemaining = 100; // under the 150 default reserve
+      expect((await syncLiveOdds()).skipped).toMatch(/reserve/);
+      delete process.env.LIVE_BETTING;
+      fake.creditsRemaining = null;
+      expect(await syncLiveOdds()).toEqual({ live: 0 });
+      expect(asked).toHaveLength(1);
+    } finally {
+      process.env.LIVE_BETTING = "true";
+      feed.override = null;
+    }
+  });
+
+  it("CONCURRENCY: a suspension committed while a bet is being placed refuses the bet", async () => {
+    const user = await fundedUser(50);
+    const { home, market } = await liveMatch();
+    let release!: () => void;
+    const held = new Promise<void>((r) => (release = r));
+    let locked!: () => void;
+    const suspended = new Promise<void>((r) => (locked = r));
+    const suspending = prisma.$transaction(async (tx) => {
+      await tx.market.update({ where: { id: market.id }, data: { status: "SUSPENDED" } });
+      locked();
+      await held; // not committed yet: the bet must wait for it rather than read the old OPEN
+    });
+    await suspended;
+    const outcome = bet(user.id, home.id, 2000).then(() => "placed", (e: BetError) => e.code);
+    await new Promise((r) => setTimeout(r, 300));
+    release();
+    await suspending;
+    expect(await outcome).toBe("MARKET_SUSPENDED");
+    expect(await userCashBalance(prisma, user.id)).toBe(toPesewas(50));
   });
 });
 

@@ -36,21 +36,24 @@ describe("isBettable", () => {
   afterEach(() => delete process.env.LIVE_BETTING);
 
   it("allows upcoming fixtures", () => {
-    expect(isBettable({ status: "SCHEDULED", startsAt: later }, now)).toBe(true);
+    expect(isBettable({ status: "SCHEDULED", startsAt: later, oddsAt: null }, now)).toBe(true);
   });
   it("closes started fixtures without a live feed, whatever their stored status", () => {
-    expect(isBettable({ status: "SCHEDULED", startsAt: earlier }, now)).toBe(false);
-    expect(isBettable({ status: "LIVE", startsAt: earlier }, now)).toBe(false);
+    expect(isBettable({ status: "SCHEDULED", startsAt: earlier, oddsAt: null }, now)).toBe(false);
+    expect(isBettable({ status: "LIVE", startsAt: earlier, oddsAt: null }, now)).toBe(false);
   });
-  it("allows LIVE fixtures only when LIVE_BETTING=true", () => {
+  it("allows LIVE fixtures only when LIVE_BETTING=true and their odds are fresh", () => {
     process.env.LIVE_BETTING = "true";
-    expect(isBettable({ status: "LIVE", startsAt: earlier }, now)).toBe(true);
-    expect(isBettable({ status: "SCHEDULED", startsAt: earlier }, now)).toBe(false);
+    const ago = (s: number) => new Date(now.getTime() - s * 1000);
+    expect(isBettable({ status: "LIVE", startsAt: earlier, oddsAt: ago(30) }, now)).toBe(true);
+    expect(isBettable({ status: "LIVE", startsAt: earlier, oddsAt: ago(91) }, now)).toBe(false); // older than 90s default
+    expect(isBettable({ status: "LIVE", startsAt: earlier, oddsAt: null }, now)).toBe(false); // cleared by a goal
+    expect(isBettable({ status: "SCHEDULED", startsAt: earlier, oddsAt: null }, now)).toBe(false);
   });
   it("never allows finished or cancelled fixtures", () => {
     process.env.LIVE_BETTING = "true";
-    expect(isBettable({ status: "FINISHED", startsAt: later }, now)).toBe(false);
-    expect(isBettable({ status: "CANCELLED", startsAt: later }, now)).toBe(false);
+    expect(isBettable({ status: "FINISHED", startsAt: later, oddsAt: null }, now)).toBe(false);
+    expect(isBettable({ status: "CANCELLED", startsAt: later, oddsAt: null }, now)).toBe(false);
   });
 });
 

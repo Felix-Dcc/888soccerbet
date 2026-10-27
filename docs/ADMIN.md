@@ -120,6 +120,35 @@ Tests: `npm test` (unit, includes the permission engine) and `npm run test:int` 
 admin creation and links, self-edit and last-super-admin guards, referral attribution, per-admin
 isolation, GGR reconciliation, ledger adjustments, audit chain and append-only trigger).
 
+## Live (in-play) betting
+
+Off unless `LIVE_BETTING=true` on **both** the web and worker services. Only turn it on with a paid
+The Odds API plan: polling costs credits every minute a match is in play. With it on:
+
+- A score change on a live match suspends all its open markets at once; they reopen only when odds
+  fetched *after* the change arrive (odds already in flight when the goal landed are discarded).
+- The worker refreshes odds every `LIVE_ODDS_INTERVAL_MS` for leagues with a match in play only.
+- A live bet is refused when that match's odds are older than `LIVE_ODDS_MAX_AGE_MS`; cash out on it
+  pauses too. Placement re-checks the pick is still open inside the bet transaction.
+- Matches with no feed (hand-entered and generated games) take no live bets: nothing reprices them.
+
+| Variable | Purpose |
+|---|---|
+| `LIVE_BETTING` | `true` to take bets on matches in play (default off) |
+| `LIVE_ODDS_INTERVAL_MS` | In-play odds refresh (default 60000 = 60s) |
+| `LIVE_ODDS_MAX_AGE_MS` | Live bets close when odds are older than this (default 90000 = 90s); keep it above the refresh interval |
+| `LIVE_SCORES_INTERVAL_MS` | Live score poll that drives goal suspensions (default 30000 with live betting on, 10 min off) |
+| `LIVE_ODDS_RESERVE` | Live odds pause at this many credits left so the pre-match sync keeps running (default 150; never below `LIVE_SCORES_RESERVE`). Live bets then close by themselves as odds age |
+
+Credit cost per hour, per league with a match in play (defaults: 3 bulk markets, 1 region):
+odds 3 x 60 runs = 180, scores 1 x 120 polls = 120, so **about 300 credits an hour**. Matches in
+the same league share it. On the 5M-credit plan, all 6 leagues live 4 hours a day for 30 days is
+about 216,000 credits (under 5% of the plan); set `LIVE_ODDS_RESERVE` and `LIVE_SCORES_RESERVE`
+to something like 50000 there.
+
+Limit: both feeds poll, so a goal is seen up to the scores feed's own lag plus one poll after it
+happens. Bets in that window are taken at pre-goal prices.
+
 ## Not built yet (production blockers)
 
 - **Commission programme**: rates, models (fixed / % / tiered), caps, approval and payout rules

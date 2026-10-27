@@ -4,7 +4,9 @@
  *   - the user's cash account row is locked (SELECT ... FOR UPDATE) so concurrent bets
  *     for the same user serialise and cannot overspend,
  *   - odds are re-read from the DB and compared to what the customer accepted,
- *   - suspended markets/selections and finished fixtures are rejected,
+ *   - suspended markets/selections and finished fixtures are rejected (the selection and market
+ *     rows are share-locked first, so a suspension racing the bet either lands before it and
+ *     refuses it, or waits for it),
  *   - the stake is moved USER_CASH -> BET_ESCROW via a balanced ledger transaction,
  *   - Bet.idempotencyKey makes a double submit return the original bet, not a second one.
  */
@@ -72,6 +74,8 @@ export async function placeBet(userId: string, input: PlaceBetInput): Promise<Pl
         const legs: number[] = [];
         const betSelections: Prisma.BetSelectionCreateWithoutBetInput[] = [];
         for (const sel of input.selections) {
+          // Read committed alone would let this read a market a goal is suspending right now as still OPEN.
+          await tx.$queryRaw`SELECT s.id FROM "Selection" s JOIN "Market" m ON m.id = s."marketId" WHERE s.id = ${sel.selectionId} FOR SHARE`;
           const s = await tx.selection.findUnique({
             where: { id: sel.selectionId },
             include: { market: { include: { fixture: true } } },
@@ -84,7 +88,7 @@ export async function placeBet(userId: string, input: PlaceBetInput): Promise<Pl
           if (s.status !== "OPEN" || market.status !== "OPEN")
             throw new BetError("MARKET_CLOSED", "A market on your slip is closed");
           if (!isBettable(fixture, now))
-            throw new BetError("MATCH_STARTED", `${fixture.homeTeam} v ${fixture.awayTeam} has started; betting is closed`, {
+            throw new BetError("MATCH_STARTED", `${fixture.homeTeam} v ${fixture.awayTeam} ${fixture.status === "LIVE" && process.env.LIVE_BETTING === "true" ? "is in play; betting is paused until prices update" : "has started; betting is closed"}`, {
               selectionId: s.id,
             });
           if (fixtureIds.has(fixture.id))

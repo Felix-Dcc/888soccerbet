@@ -55,8 +55,8 @@ export interface OddsProvider {
   readonly bulkMarketTypes: readonly MarketType[];
   /** Market types fetchEventMarkets is responsible for (same suspension rule). */
   readonly eventMarketTypes?: readonly MarketType[];
-  /** Pull current fixtures + markets for the given sports. */
-  fetchFixtures(sports: string[]): Promise<ProviderFixture[]>;
+  /** Pull current fixtures + markets for the given sports, optionally only these provider leagues. */
+  fetchFixtures(sports: string[], leagues?: string[]): Promise<ProviderFixture[]>;
   /** Optional per-match markets (costlier on metered feeds); keyed by providerRef. */
   fetchEventMarkets?(events: EventRef[]): Promise<Map<string, ProviderMarket[]>>;
   /** Optional in-play scores for matches under way in these leagues (finished=false while live). */
