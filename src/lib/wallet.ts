@@ -12,6 +12,7 @@ import { MANUAL_PAYOUT_PROVIDERS, paymentProvider } from "./providers/payments";
 import { audit } from "./audit";
 import { guessNetwork, PspError, type Network, type NormalisedEvent } from "./providers/payments/types";
 import { notifyPayment } from "./emailFlows";
+import { isStaff } from "./permissions";
 
 export class WalletError extends Error {
   constructor(public code: string, message: string) {
@@ -191,7 +192,7 @@ export async function initiateWithdrawal(userId: string, amountGhs: number, msis
   const existing = await prisma.paymentIntent.findUnique({ where: { idempotencyKey } });
   if (existing) return existing;
 
-  const user = await prisma.user.findUniqueOrThrow({ where: { id: userId }, select: { kycStatus: true, email: true, displayName: true } });
+  const user = await prisma.user.findUniqueOrThrow({ where: { id: userId }, select: { kycStatus: true, email: true, displayName: true, role: true } });
   if (user.kycStatus !== "VERIFIED" && (await verificationRequired(prisma, userId)))
     throw new WalletError("VERIFICATION_REQUIRED", "Complete withdrawal verification before withdrawing");
 
@@ -226,7 +227,14 @@ export async function initiateWithdrawal(userId: string, amountGhs: number, msis
   }
 
   // Manual payouts: the money stays held until an admin sends it and marks it paid (or failed: refunded).
-  if (provider.payouts === "manual") return intent;
+  if (provider.payouts === "manual") {
+    // Admin-role accounts settle their own payout at once — no second admin's approval. Players are never auto-completed.
+    if (isStaff(user) && MANUAL_PAYOUT_PROVIDERS.has(intent.provider)) {
+      await recordManualPayout(userId, intent.ref, "PAID");
+      return { ...intent, status: "SUCCEEDED" as const };
+    }
+    return intent;
+  }
 
   // The money is held (committed above) before the payout is asked for, so it can't be spent twice.
   let payout;
