@@ -191,6 +191,10 @@ model Fixture {
   // Generated games only: the result an admin pre-set, played out live (lib/scriptedMatches.ts).
   script        Json?
   lastSyncedAt  DateTime?
+  // In-play safety (lib/markets.ts, lib/sync.ts): when the feed's bulk odds were last fetched, and
+  // when the live score last changed. Live bets need odds fetched after the last score change.
+  oddsAt         DateTime?
+  scoreChangedAt DateTime?
   updatedAt     DateTime      @default(now()) @updatedAt // any change (score, status): pages poll for it
   createdAt     DateTime      @default(now())
 

@@ -6,7 +6,7 @@ const leg = (placed: number, current: number, over: Partial<QuoteLeg> = {}): Quo
   status: "OPEN",
   milliOddsAtPlacement: placed,
   selection: { milliOdds: current, status: "OPEN", market: { status: "OPEN" } },
-  fixture: { status: "SCHEDULED", startsAt: later },
+  fixture: { status: "SCHEDULED", startsAt: later, oddsAt: null },
   ...over,
 });
 const bet = (stakeGhs: number) => ({ status: "PENDING" as const, stake: BigInt(stakeGhs * 100) });
@@ -44,7 +44,7 @@ describe("cash out pricing", () => {
   });
 
   it("is unavailable while a match is in play, when suspended, after a loss, when settled, or under GHS 1", () => {
-    const started = { fixture: { status: "LIVE", startsAt: new Date(Date.now() - 60_000) } };
+    const started = { fixture: { status: "LIVE", startsAt: new Date(Date.now() - 60_000), oddsAt: null } };
     expect(offer(quoteCashout(bet(10), [leg(2000, 2000, started)]))).toMatch(/in play/);
     expect(offer(quoteCashout(bet(10), [leg(2000, 2000, { selection: { milliOdds: 2000, status: "SUSPENDED", market: { status: "OPEN" } } })]))).toMatch(/Suspended/);
     expect(offer(quoteCashout(bet(10), [leg(2000, 2000, { status: "LOST" }), leg(2000, 2000)]))).toMatch(/lost/);

@@ -25,6 +25,7 @@ vi.mock("../src/lib/email", async (load) => {
   return { ...real, sendEmail: async (m: { to: string; subject: string; text: string }) => (mail.sent.push(m), true) };
 });
 import { randomUUID } from "node:crypto";
+import type { MarketType } from "@prisma/client";
 import { prisma } from "../src/lib/db";
 import { houseAccountId, userAccountId, postTransaction, userCashBalance, ledgerIsBalanced } from "../src/lib/ledger";
 import { placeBet, BetError } from "../src/lib/betEngine";
@@ -40,12 +41,12 @@ import { adminComparison, parseRange, scopeMetrics } from "../src/lib/adminAnaly
 import { adjustBalance, canViewPlayer } from "../src/lib/playerAdmin";
 import { audit, verifyAuditChain } from "../src/lib/audit";
 import { listFixtures, listResults, dataVersion } from "../src/lib/queries";
-import { applyMarkets, goLiveManualFixtures, updateLiveScores } from "../src/lib/sync";
+import { applyMarkets, goLiveManualFixtures, syncFixtures, syncLiveOdds, updateLiveScores } from "../src/lib/sync";
 import { createManualFixture, rescheduleManualFixture } from "../src/lib/manualFixtures";
 import { isTestAccount, planDemoCleanup, runDemoCleanup } from "../src/lib/demoCleanup";
 import { manualFixtureSchema } from "../src/lib/validation";
 import { generateMatch } from "../src/lib/matchGenerator";
-import { advanceScriptedMatches, buildScript, scriptLengthMin } from "../src/lib/scriptedMatches";
+import { advanceScriptedMatches, buildScript, scriptLengthMin, type MatchScript } from "../src/lib/scriptedMatches";
 import { markWinsSeen, unseenWins } from "../src/lib/wins";
 import { ensureVerifyCode, ticketByVerifyCode, ticketByRef, ticketTotals } from "../src/lib/tickets";
 import { cashOut, quoteForBet, runAutoCashouts, setAutoCashout } from "../src/lib/cashout";
@@ -920,6 +921,386 @@ describe("live scores", () => {
     expect(await prisma.fixture.findUniqueOrThrow({ where: { id: fixture.id } })).toMatchObject({ status: "FINISHED", homeScore: 2, awayScore: 1 });
     expect(await userCashBalance(prisma, user.id)).toBe(toPesewas(110)); // home win paid
     expect(await ledgerIsBalanced()).toBe(true);
+  });
+});
+
+describe("in-play safety (LIVE_BETTING=true)", () => {
+  beforeAll(() => {
+    process.env.LIVE_BETTING = "true";
+    process.env.LIVE_BET_HOLD_MS = "0"; // the hold has its own test
+  });
+  afterAll(() => {
+    for (const k of ["LIVE_BETTING", "LIVE_BET_HOLD_MS", "LIVE_BETTING_LEAGUES"]) delete process.env[k];
+  });
+
+  /** A feed match in play since 10 minutes ago at 0-0, odds fetched `oddsAgoMs` ago, with an over/under market too. */
+  async function liveMatch(oddsAgoMs = 5_000, league = `soccer_live_${randomUUID()}`) {
+    const m = await makeMatch({ home: 2.0, draw: 3.0, away: 4.0 });
+    const comp = await prisma.competition.upsert({
+      where: { sportKey_name: { sportKey: "football", name: `Live ${league}` } },
+      create: { sportKey: "football", name: `Live ${league}`, providerRef: league },
+      update: {},
+    });
+    const fixture = await prisma.fixture.update({
+      where: { id: m.fixture.id },
+      data: { competitionId: comp.id, status: "LIVE", startsAt: new Date(Date.now() - 10 * 60_000), homeScore: 0, awayScore: 0, oddsAt: new Date(Date.now() - oddsAgoMs) },
+    });
+    const ou = await prisma.market.create({ data: { fixtureId: fixture.id, type: "OVER_UNDER", name: "Total Goals", line: 2.5, status: "OPEN" } });
+    return { ...m, fixture, comp, league, ou };
+  }
+  const bet = (userId: string, selectionId: string, milliOdds: number) =>
+    placeBet(userId, { idempotencyKey: randomUUID(), stakeGhs: 5, acceptOddsChange: true, selections: [{ selectionId, expectedMilliOdds: milliOdds }] });
+  /** The feed's bulk odds for a match: 1X2 and over/under 2.5. */
+  const feedFixture = (f: { providerRef: string | null; homeTeam: string; awayTeam: string; startsAt: Date }, comp: { name: string }, league: string) => ({
+    providerRef: f.providerRef!, sportKey: "football", competition: comp.name, providerLeague: league,
+    homeTeam: f.homeTeam, awayTeam: f.awayTeam, startsAt: f.startsAt.toISOString(),
+    markets: [
+      { type: "MATCH_RESULT" as const, name: "Match Result", selections: [
+        { code: "1", name: "Home", milliOdds: 1500 }, { code: "X", name: "Draw", milliOdds: 3600 }, { code: "2", name: "Away", milliOdds: 6500 },
+      ] },
+      { type: "OVER_UNDER" as const, name: "Total Goals", line: 2.5, selections: [{ code: "OVER", name: "Over 2.5", milliOdds: 1900 }, { code: "UNDER", name: "Under 2.5", milliOdds: 1900 }] },
+    ],
+  });
+  const marketStatus = async (id: string) => (await prisma.market.findUniqueOrThrow({ where: { id } })).status;
+  const oddsAt = async (id: string) => (await prisma.fixture.findUniqueOrThrow({ where: { id } })).oddsAt;
+
+  it("a goal suspends every open market; odds fetched before it never reopen them, odds fetched after do", async () => {
+    const user = await fundedUser(50);
+    const { fixture, comp, league, home, market, ou } = await liveMatch();
+    process.env.LIVE_BETTING_LEAGUES = league;
+    let score = { homeScore: 0, awayScore: 0 };
+    let goalDuringFetch = false;
+    feed.override = {
+      name: "fake", isSandbox: false, bulkMarketTypes: ["MATCH_RESULT", "OVER_UNDER"], creditsRemaining: null,
+      fetchLiveScores: async () => [{ providerRef: fixture.providerRef!, ...score, finished: false }],
+      fetchFixtures: async () => {
+        if (goalDuringFetch) {
+          // A second goal lands while this fetch is in flight: its prices are pre-goal.
+          score = { homeScore: 2, awayScore: 0 };
+          await updateLiveScores();
+        }
+        return [feedFixture(fixture, comp, league)];
+      },
+      fetchResults: async () => [],
+    } as unknown as OddsProvider;
+    try {
+      await updateLiveScores(); // still 0-0: only the match result stays open in play
+      expect([await marketStatus(market.id), await marketStatus(ou.id)]).toEqual(["OPEN", "SUSPENDED"]);
+      expect((await bet(user.id, home.id, 2000)).status).toBe("PENDING");
+
+      score = { homeScore: 1, awayScore: 0 };
+      await updateLiveScores();
+      expect(await marketStatus(market.id)).toBe("SUSPENDED");
+      expect(await prisma.fixture.findUniqueOrThrow({ where: { id: fixture.id } })).toMatchObject({ homeScore: 1, oddsAt: null });
+      await expect(bet(user.id, home.id, 2000)).rejects.toMatchObject({ code: "MARKET_SUSPENDED" });
+
+      goalDuringFetch = true;
+      await syncFixtures({ leagues: [league] });
+      expect(await marketStatus(market.id)).toBe("SUSPENDED");
+      expect(await oddsAt(fixture.id)).toBeNull();
+
+      goalDuringFetch = false;
+      await syncFixtures({ leagues: [league] }); // fetched after the goal: the match result reopens at the new price
+      const after = await prisma.market.findUniqueOrThrow({ where: { id: market.id }, include: { selections: true } });
+      expect(after.status).toBe("OPEN");
+      expect(after.selections.find((s) => s.code === "1")!.milliOdds).toBe(1500);
+      expect(await marketStatus(ou.id)).toBe("SUSPENDED"); // quoted by the feed, but not offered in play
+      expect((await bet(user.id, home.id, 1500)).status).toBe("PENDING");
+    } finally {
+      feed.override = null;
+    }
+    expect(await ledgerIsBalanced()).toBe(true);
+  });
+
+  it("takes live bets only in LIVE_BETTING_LEAGUES, none with an empty list; the in-play refresh leaves upcoming matches' other markets alone", async () => {
+    const user = await fundedUser(50);
+    const listed = await liveMatch(120_000);
+    const other = await liveMatch(120_000);
+    const upcoming = await makeMatch({ home: 2.0, draw: 3.0, away: 4.0 });
+    await prisma.fixture.update({ where: { id: upcoming.fixture.id }, data: { competitionId: listed.comp.id } });
+    const upcomingOu = await prisma.market.create({ data: { fixtureId: upcoming.fixture.id, type: "OVER_UNDER", name: "Total Goals", line: 2.5, status: "OPEN" } });
+    const feedOf = (m: { fixture: { providerRef: string | null; homeTeam: string; awayTeam: string; startsAt: Date } }, league: string, comp: { name: string }) => feedFixture(m.fixture, comp, league);
+    const quoted = [feedOf(listed, listed.league, listed.comp), feedOf(other, other.league, other.comp)];
+    const asked: { leagues?: string[]; mainOnly?: boolean }[] = [];
+    feed.override = {
+      name: "fake", isSandbox: false, bulkMarketTypes: ["MATCH_RESULT", "OVER_UNDER"], creditsRemaining: null,
+      fetchFixtures: async (_s: string[], opts: { leagues?: string[]; mainOnly?: boolean } = {}) => {
+        asked.push(opts);
+        return opts.leagues ? [...quoted, feedOf(upcoming, listed.league, listed.comp)].filter((f) => opts.leagues!.includes(f.providerLeague)) : quoted;
+      },
+      fetchResults: async () => [],
+    } as unknown as OddsProvider;
+    try {
+      process.env.LIVE_BETTING_LEAGUES = listed.league;
+      await syncFixtures(); // the pre-match sync also sees matches in play
+      expect(await oddsAt(listed.fixture.id)).not.toBeNull();
+      expect(await oddsAt(other.fixture.id)).toBeNull();
+      expect(await marketStatus(listed.ou.id)).toBe("SUSPENDED"); // match result only in play
+      expect((await bet(user.id, listed.home.id, 1500)).status).toBe("PENDING");
+      await expect(bet(user.id, other.home.id, 1500)).rejects.toMatchObject({ code: "MATCH_STARTED" });
+
+      expect(await syncLiveOdds()).toMatchObject({ fixtures: 2 }); // the listed league's in-play and upcoming match
+      expect(asked.at(-1)).toEqual({ leagues: [listed.league], mainOnly: true });
+      expect(await marketStatus(upcomingOu.id)).toBe("OPEN"); // the 1X2-only refresh doesn't retire it
+
+      process.env.LIVE_BETTING_LEAGUES = "";
+      await syncFixtures();
+      expect(await oddsAt(listed.fixture.id)).toBeNull();
+      await expect(bet(user.id, listed.home.id, 1500)).rejects.toMatchObject({ code: "MATCH_STARTED" });
+      expect(await syncLiveOdds()).toEqual({ live: 0 });
+    } finally {
+      feed.override = null;
+    }
+  });
+
+  it("refuses a live bet once the match's odds are older than LIVE_ODDS_MAX_AGE_MS (90s)", async () => {
+    const user = await fundedUser(50);
+    const fresh = await liveMatch(10_000);
+    expect((await bet(user.id, fresh.home.id, 2000)).status).toBe("PENDING");
+    const stale = await liveMatch(120_000);
+    await expect(bet(user.id, stale.home.id, 2000)).rejects.toMatchObject({ code: "MATCH_STARTED" });
+    const never = await liveMatch();
+    await prisma.fixture.update({ where: { id: never.fixture.id }, data: { oddsAt: null } });
+    await expect(bet(user.id, never.home.id, 2000)).rejects.toMatchObject({ code: "MATCH_STARTED" });
+  });
+
+  it("polls scores by league set (fast for live-betting leagues, slow for the rest, which still settles and pays)", async () => {
+    const user = await fundedUser(50);
+    const fast = await liveMatch();
+    const slow = await liveMatch();
+    await bet(user.id, slow.home.id, 2000);
+    process.env.LIVE_BETTING_LEAGUES = fast.league;
+    const asked: string[][] = [];
+    feed.override = {
+      name: "fake", isSandbox: false, bulkMarketTypes: ["MATCH_RESULT"], creditsRemaining: null,
+      fetchLiveScores: async (leagues: string[]) => (asked.push(leagues), [{ providerRef: slow.fixture.providerRef!, homeScore: 1, awayScore: 0, finished: true }]),
+      fetchResults: async () => [],
+    } as unknown as OddsProvider;
+    const listed = (l: string) => process.env.LIVE_BETTING_LEAGUES!.split(",").includes(l);
+    try {
+      await updateLiveScores(listed);
+      expect(asked[0]).toEqual([fast.league]);
+      expect(await updateLiveScores((l) => !listed(l))).toMatchObject({ settled: 1 });
+      expect(asked[1]).toContain(slow.league);
+      expect(asked[1]).not.toContain(fast.league);
+    } finally {
+      feed.override = null;
+    }
+    expect(await userCashBalance(prisma, user.id)).toBe(toPesewas(50 - 5 + 10)); // the home win at 2.0 paid
+  });
+
+  it("pauses live odds at their credit reserve before live scores pause, and nothing with live betting off", async () => {
+    const { league } = await liveMatch();
+    process.env.LIVE_BETTING_LEAGUES = league;
+    const fake = {
+      name: "fake", isSandbox: false, bulkMarketTypes: ["MATCH_RESULT"], creditsRemaining: 200 as number | null, // between the 150 and 300 defaults
+      fetchFixtures: async () => [],
+      fetchLiveScores: async () => [],
+      fetchResults: async () => [],
+    };
+    feed.override = fake as unknown as OddsProvider;
+    try {
+      expect((await syncLiveOdds()).skipped).toMatch(/reserve/);
+      expect((await updateLiveScores()).skipped).toBeUndefined();
+      fake.creditsRemaining = 100;
+      expect((await updateLiveScores()).skipped).toMatch(/reserve/);
+      delete process.env.LIVE_BETTING;
+      fake.creditsRemaining = null;
+      expect(await syncLiveOdds()).toEqual({ live: 0 });
+    } finally {
+      process.env.LIVE_BETTING = "true";
+      feed.override = null;
+    }
+  });
+
+  it("holds a live bet LIVE_BET_HOLD_MS and refuses it if the score or price moved meanwhile", async () => {
+    const user = await fundedUser(50);
+    process.env.LIVE_BET_HOLD_MS = "400";
+    try {
+      const goal = await liveMatch();
+      const during = (fn: () => Promise<unknown>) => new Promise((r) => setTimeout(r, 150)).then(fn);
+      const [scored] = await Promise.allSettled([bet(user.id, goal.home.id, 2000), during(() => prisma.fixture.update({ where: { id: goal.fixture.id }, data: { homeScore: 1 } }))]);
+      expect(scored).toMatchObject({ status: "rejected", reason: { code: "LIVE_CHANGED" } });
+
+      const moved = await liveMatch();
+      const [priced] = await Promise.allSettled([bet(user.id, moved.home.id, 2000), during(() => prisma.selection.update({ where: { id: moved.home.id }, data: { milliOdds: 1800 } }))]);
+      expect(priced).toMatchObject({ status: "rejected", reason: { code: "LIVE_CHANGED" } });
+
+      const quiet = await liveMatch();
+      const started = Date.now();
+      expect((await bet(user.id, quiet.home.id, 2000)).status).toBe("PENDING");
+      expect(Date.now() - started).toBeGreaterThanOrEqual(400);
+    } finally {
+      process.env.LIVE_BET_HOLD_MS = "0";
+    }
+    expect(await userCashBalance(prisma, user.id)).toBe(toPesewas(45));
+  });
+
+  it("CONCURRENCY: a suspension committed while a bet is being placed refuses the bet", async () => {
+    const user = await fundedUser(50);
+    const { home, market } = await liveMatch();
+    let release!: () => void;
+    const held = new Promise<void>((r) => (release = r));
+    let locked!: () => void;
+    const suspended = new Promise<void>((r) => (locked = r));
+    const suspending = prisma.$transaction(async (tx) => {
+      await tx.market.update({ where: { id: market.id }, data: { status: "SUSPENDED" } });
+      locked();
+      await held; // not committed yet: the bet must wait for it rather than read the old OPEN
+    });
+    await suspended;
+    const outcome = bet(user.id, home.id, 2000).then(() => "placed", (e: BetError) => e.code);
+    await new Promise((r) => setTimeout(r, 300));
+    release();
+    await suspending;
+    expect(await outcome).toBe("MARKET_SUSPENDED");
+    expect(await userCashBalance(prisma, user.id)).toBe(toPesewas(50));
+  });
+
+  describe("generated matches priced in play", () => {
+    const prices = async (fixtureId: string) =>
+      Object.fromEntries(
+        (await prisma.selection.findMany({ where: { market: { fixtureId } }, include: { market: true } })).map((s) => [`${s.market.type}:${s.code}`, s.milliOdds]),
+      );
+
+    it("prices from the score and minutes left only: two matches with different pre-set results get the same prices", async () => {
+      const input = manualFixtureSchema.parse(generateMatch("football"));
+      const nil = await createManualFixture(input, buildScript("football", [0, 0], [0, 0]));
+      const rout = await createManualFixture(input, buildScript("football", [0, 0], [3, 2])); // goals all after the break
+      const kickOff = Date.now() - 30 * 60_000;
+      for (const f of [nil, rout]) await prisma.fixture.update({ where: { id: f.id }, data: { startsAt: new Date(kickOff) } });
+      const before = await prices(nil.id);
+
+      const now = new Date();
+      await advanceScriptedMatches(now); // kick-off: live at 0-0
+      await advanceScriptedMatches(new Date(now.getTime() + 1_000)); // priced in play
+      const [a, b] = [await prices(nil.id), await prices(rout.id)];
+      expect(a).toEqual(b);
+      expect(a).not.toEqual(before); // moved off the pre-match prices
+      expect(a["MATCH_RESULT:X"]).toBeLessThan(before["MATCH_RESULT:X"]!); // 0-0 after 30 minutes: the draw shortens
+      expect(await oddsAt(rout.id)).not.toBeNull();
+
+      const user = await fundedUser(50);
+      const home = await prisma.selection.findFirstOrThrow({ where: { market: { fixtureId: rout.id, type: "MATCH_RESULT" }, code: "1" } });
+      expect((await bet(user.id, home.id, home.milliOdds)).status).toBe("PENDING");
+    });
+
+    it("suspends every market on a goal and reopens them at new prices a few seconds later", async () => {
+      const input = manualFixtureSchema.parse(generateMatch("football"));
+      const script: MatchScript = { ht: [1, 0], ft: [1, 0], halfMin: 45, breakMin: 15, fullMin: 90, goals: [{ m: 20, side: "H" }] };
+      const { id } = await createManualFixture(input, script);
+      const kickOff = Date.now() - 19 * 60_000;
+      await prisma.fixture.update({ where: { id }, data: { startsAt: new Date(kickOff) } });
+      const at = (min: number) => new Date(kickOff + min * 60_000);
+      const result = () => prisma.market.findFirstOrThrow({ where: { fixtureId: id, type: "MATCH_RESULT" }, include: { selections: true } });
+
+      await advanceScriptedMatches(at(19));
+      await advanceScriptedMatches(at(19.1));
+      const pre = await result();
+      expect(pre.status).toBe("OPEN");
+
+      await advanceScriptedMatches(at(20.05)); // the goal
+      expect((await result()).status).toBe("SUSPENDED");
+      expect(await oddsAt(id)).toBeNull();
+      const user = await fundedUser(50);
+      const home = pre.selections.find((s) => s.code === "1")!;
+      await expect(bet(user.id, home.id, home.milliOdds)).rejects.toBeInstanceOf(BetError);
+
+      await advanceScriptedMatches(new Date(at(20.05).getTime() + 5_000));
+      expect((await result()).status).toBe("SUSPENDED"); // still inside the goal suspension
+      await advanceScriptedMatches(new Date(at(20.05).getTime() + 15_000));
+      const post = await result();
+      expect(post.status).toBe("OPEN");
+      expect(post.selections.find((s) => s.code === "1")!.milliOdds).toBeLessThan(home.milliOdds); // 1-0 up: home shortens
+    });
+  });
+});
+
+describe("generated match markets", () => {
+  /** One single on each listed pick of a generated match: [market type, code]. */
+  async function backPicks(fixtureId: string, picks: [string, string][]) {
+    const user = await fundedUser(100);
+    const bets = [];
+    for (const [type, code] of picks) {
+      const s = await prisma.selection.findFirstOrThrow({ where: { code, market: { fixtureId, type: type as MarketType } } });
+      const placed = await placeBet(user.id, { idempotencyKey: randomUUID(), stakeGhs: 5, acceptOddsChange: false, selections: [{ selectionId: s.id, expectedMilliOdds: s.milliOdds }] });
+      bets.push({ type, code, ...placed });
+    }
+    return { user, bets };
+  }
+  const statusOf = (ref: string) => prisma.bet.findUniqueOrThrow({ where: { ref } }).then((b) => b.status);
+
+  it("offers correct score, double chance, draw no bet and odd/even on football, graded from the final score", async () => {
+    const { id } = await createManualFixture(manualFixtureSchema.parse(generateMatch("football")));
+    const markets = await prisma.market.findMany({ where: { fixtureId: id }, include: { selections: true } });
+    const codes = Object.fromEntries(markets.map((m) => [m.type, m.selections.map((s) => s.code).sort()]));
+    expect(codes.DOUBLE_CHANCE).toEqual(["12", "1X", "X2"]);
+    expect(codes.DRAW_NO_BET).toEqual(["1", "2"]);
+    expect(codes.ODD_EVEN).toEqual(["EVEN", "ODD"]);
+    expect(codes.CORRECT_SCORE).toHaveLength(26);
+    expect(codes.CORRECT_SCORE).toContain("OTHER");
+
+    const { user, bets } = await backPicks(id, [
+      ["CORRECT_SCORE", "2-1"], ["CORRECT_SCORE", "1-1"], ["DOUBLE_CHANCE", "1X"], ["DOUBLE_CHANCE", "X2"],
+      ["DRAW_NO_BET", "1"], ["ODD_EVEN", "ODD"], ["ODD_EVEN", "EVEN"],
+    ]);
+    await settleFixture(id, 2, 1);
+    const won = ["CORRECT_SCORE 2-1", "DOUBLE_CHANCE 1X", "DRAW_NO_BET 1", "ODD_EVEN ODD"];
+    for (const b of bets) expect(await statusOf(b.ref), `${b.type} ${b.code}`).toBe(won.includes(`${b.type} ${b.code}`) ? "WON" : "LOST");
+    const paid = bets.filter((b) => won.includes(`${b.type} ${b.code}`)).reduce((sum, b) => sum + b.potentialPayout, 0n);
+    expect(await userCashBalance(prisma, user.id)).toBe(toPesewas(100 - 35) + paid);
+    expect(await ledgerIsBalanced()).toBe(true);
+  });
+
+  it("refunds draw no bet on a draw and pays correct score 'Other' above 4 goals a side", async () => {
+    const draw = await createManualFixture(manualFixtureSchema.parse(generateMatch("football")));
+    const rout = await createManualFixture(manualFixtureSchema.parse(generateMatch("football")));
+    const a = await backPicks(draw.id, [["DRAW_NO_BET", "2"]]);
+    const b = await backPicks(rout.id, [["CORRECT_SCORE", "OTHER"]]);
+    await settleFixture(draw.id, 1, 1);
+    await settleFixture(rout.id, 5, 0);
+    expect(await statusOf(a.bets[0]!.ref)).toBe("VOID");
+    expect(await userCashBalance(prisma, a.user.id)).toBe(toPesewas(100));
+    expect(await statusOf(b.bets[0]!.ref)).toBe("WON");
+    expect(await ledgerIsBalanced()).toBe(true);
+  });
+
+  it("gives basketball odd/even only, graded on total points", async () => {
+    const { id } = await createManualFixture(manualFixtureSchema.parse(generateMatch("basketball")));
+    const types = (await prisma.market.findMany({ where: { fixtureId: id } })).map((m) => m.type).sort();
+    expect(types).toEqual(["MONEYLINE", "ODD_EVEN", "OVER_UNDER"]);
+    const { bets } = await backPicks(id, [["ODD_EVEN", "ODD"]]);
+    await settleFixture(id, 101, 100);
+    expect(await statusOf(bets[0]!.ref)).toBe("WON");
+  });
+
+  it("in play, closes picks the score has ruled out and settled markets, and keeps the rest open", async () => {
+    process.env.LIVE_BETTING = "true";
+    process.env.LIVE_BET_HOLD_MS = "0";
+    try {
+      const script: MatchScript = { ht: [1, 1], ft: [1, 1], halfMin: 45, breakMin: 15, fullMin: 90, goals: [{ m: 20, side: "H" }, { m: 25, side: "A" }] };
+      const { id } = await createManualFixture(manualFixtureSchema.parse(generateMatch("football")), script);
+      const kickOff = Date.now() - 26 * 60_000;
+      await prisma.fixture.update({ where: { id }, data: { startsAt: new Date(kickOff) } });
+      await advanceScriptedMatches(new Date()); // live at 1-1: goals suspend everything
+      await advanceScriptedMatches(new Date(Date.now() + 15_000)); // repriced after the goal suspension
+      const pick = (type: MarketType, code: string) => prisma.selection.findFirstOrThrow({ where: { code, market: { fixtureId: id, type } }, include: { market: true } });
+
+      for (const dead of ["0-0", "1-0", "0-1"]) expect((await pick("CORRECT_SCORE", dead)).status).toBe("SUSPENDED");
+      const live = await pick("CORRECT_SCORE", "2-1");
+      expect([live.status, live.market.status]).toEqual(["OPEN", "OPEN"]);
+      expect((await pick("BTTS", "BTTS_YES")).market.status).toBe("SUSPENDED"); // both have scored
+      expect((await pick("DOUBLE_CHANCE", "1X")).market.status).toBe("OPEN");
+
+      const user = await fundedUser(20);
+      const dead = await pick("CORRECT_SCORE", "0-0");
+      await expect(placeBet(user.id, { idempotencyKey: randomUUID(), stakeGhs: 5, acceptOddsChange: true, selections: [{ selectionId: dead.id, expectedMilliOdds: dead.milliOdds }] })).rejects.toMatchObject({ code: "MARKET_SUSPENDED" });
+      const ok = await placeBet(user.id, { idempotencyKey: randomUUID(), stakeGhs: 5, acceptOddsChange: true, selections: [{ selectionId: live.id, expectedMilliOdds: live.milliOdds }] });
+      expect(ok.status).toBe("PENDING");
+    } finally {
+      delete process.env.LIVE_BETTING;
+      delete process.env.LIVE_BET_HOLD_MS;
+    }
   });
 });
 

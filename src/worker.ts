@@ -3,10 +3,11 @@
  * Run alongside the app:  npm run worker
  * (Jobs could also be driven by POSTing /api/cron from an external scheduler.)
  */
-import { syncFixtures, syncEventMarkets, autoSettleFinished, goLiveManualFixtures, updateLiveScores } from "./lib/sync";
+import { syncFixtures, syncEventMarkets, autoSettleFinished, goLiveManualFixtures, updateLiveScores, syncLiveOdds } from "./lib/sync";
 import { enrichCompetitions, enrichTeams } from "./lib/assets";
 import { advanceScriptedMatches } from "./lib/scriptedMatches";
 import { oddsProvider } from "./lib/providers/odds";
+import { liveBettingLeagues } from "./lib/markets";
 
 // Budget on The Odds API free tier (500 credits/month), measured: bulk odds = 1 credit per market
 // per league (6 leagues × h2h/spreads/totals = 18 per sync); per-match markets = 1 per market the
@@ -18,8 +19,14 @@ const H = 60 * 60 * 1000;
 const SYNC_MS = Number(process.env.SYNC_INTERVAL_MS ?? 48 * H);
 const SETTLE_MS = Number(process.env.SETTLE_INTERVAL_MS ?? 96 * H);
 // Live scores: free (DB-only) when nothing is in play; otherwise 1 credit per live league per run.
-// Pauses at LIVE_SCORES_RESERVE credits left so the odds sync keeps running all month.
-const LIVE_MS = Number(process.env.LIVE_SCORES_INTERVAL_MS ?? 10 * 60 * 1000);
+// Pauses at LIVE_SCORES_RESERVE credits left so the odds sync keeps running all month. Leagues that
+// take live bets are polled every minute (their scores drive goal suspensions); the rest every 5
+// minutes, which is enough to settle and pay out soon after the final whistle.
+const LIVE_MS = Number(process.env.LIVE_SCORES_INTERVAL_MS ?? 5 * 60 * 1000);
+const LIVE_BETTING_SCORES_MS = Number(process.env.LIVE_BETTING_SCORES_INTERVAL_MS ?? 60_000);
+// In-play odds for LIVE_BETTING_LEAGUES with a match in play: match result only, 1 credit per league.
+const LIVE_ODDS_MS = Number(process.env.LIVE_ODDS_INTERVAL_MS ?? 60_000);
+const isLiveBettingLeague = (league: string) => liveBettingLeagues().includes(league);
 // Badges/league artwork come from TheSportsDB (not The Odds API), so this costs no odds credits.
 // Each run only spends requests on still-unresolved teams; once all are cached it is a DB no-op.
 const ENRICH_MS = Number(process.env.ENRICH_INTERVAL_MS ?? 10 * 60 * 1000);
@@ -80,10 +87,14 @@ async function main() {
   setInterval(() => void safe("sync", sync), SYNC_MS);
   setInterval(() => void safe("settle", autoSettleFinished), SETTLE_MS);
   setInterval(() => void safe("artwork", enrich), ENRICH_MS);
-  setInterval(() => void quiet("live", updateLiveScores), LIVE_MS);
+  setInterval(() => void quiet("live", () => updateLiveScores((l) => !isLiveBettingLeague(l))), LIVE_MS);
   setInterval(() => void quiet("golive", goLiveManualFixtures), LIVE_MS);
-  // Generated matches tick every minute so their scripted scores move in near real time.
-  setInterval(() => void scripted(), 60_000);
+  if (liveBettingLeagues().length) {
+    setInterval(() => void quiet("live betting scores", () => updateLiveScores(isLiveBettingLeague)), LIVE_BETTING_SCORES_MS);
+    setInterval(() => void quiet("live odds", syncLiveOdds), LIVE_ODDS_MS);
+  }
+  // Generated matches tick every 10s so scores move in real time and their markets reopen soon after a goal.
+  setInterval(() => void scripted(), 10_000);
 }
 
 void main();

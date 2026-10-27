@@ -39,7 +39,7 @@ export interface QuoteLeg {
   status: SelectionStatus; // this leg on the bet
   milliOddsAtPlacement: number;
   selection: { milliOdds: number; status: SelectionStatus; market: { status: string } };
-  fixture: { status: string; startsAt: Date };
+  fixture: { status: string; startsAt: Date; oddsAt: Date | null };
 }
 export type Quote = { available: true; offer: bigint; payoutIfWin: bigint } | { available: false; reason: string };
 
@@ -75,7 +75,7 @@ const legsInclude = {
       status: true,
       milliOddsAtPlacement: true,
       selection: { select: { milliOdds: true, status: true, market: { select: { status: true } } } },
-      fixture: { select: { status: true, startsAt: true } },
+      fixture: { select: { status: true, startsAt: true, oddsAt: true } },
     },
   },
 } satisfies Prisma.BetInclude;

@@ -120,6 +120,68 @@ Tests: `npm test` (unit, includes the permission engine) and `npm run test:int` 
 admin creation and links, self-edit and last-super-admin guards, referral attribution, per-admin
 isolation, GGR reconciliation, ledger adjustments, audit chain and append-only trigger).
 
+## Live (in-play) betting
+
+Off unless `LIVE_BETTING=true` on **both** the web and worker services. Live betting runs on the
+match result (1X2) only, in the leagues listed in `LIVE_BETTING_LEAGUES` (default the EPL), plus
+generated football matches. Every other league closes at kick-off. With it on:
+
+- At kick-off every market except the match result closes (handicap, over/under, per-match extras).
+- A score change suspends all the match's open markets at once. They reopen only when odds fetched
+  *after* the change arrive. Odds already in flight when the goal landed are thrown away.
+- The worker refreshes the match result every `LIVE_ODDS_INTERVAL_MS`, only for listed leagues
+  with a match in play.
+- A live bet is refused when the match's odds are older than `LIVE_ODDS_MAX_AGE_MS`. Cash out on it
+  pauses too.
+- A live bet is held `LIVE_BET_HOLD_MS`, then refused if the score or price moved meanwhile. The
+  pick is re-checked as still open inside the bet transaction.
+- Generated football matches ("Generate match") are priced locally on the worker every 10 seconds
+  from the score and minutes left only, never their pre-set result. Every market stays live in play.
+  A goal suspends their markets for 10 seconds. They cost no credits. Picks the score has ruled out
+  (e.g. correct score 0-0 once it's 1-0) close, and so does any market whose likeliest pick is above
+  90% (both teams to score once both have scored; draw no bet and double chance near the end).
+- Generated basketball and hand-entered games take no live bets. Basketball scores ramp toward the
+  pre-set final, and nothing reprices hand-entered games.
+
+Generated matches' markets: football has match result, over/under, both teams to score, double
+chance, draw no bet, odd/even and correct score (0-0 to 4-4 plus "Other"). Basketball has match
+winner, total points and odd/even. All football prices, before and during the match, come from one
+model of the final score with the house margin applied to each pick. The markets can't contradict
+each other: no set of picks across them wins in every outcome. The hand-entered "Add a manual
+game" form is unchanged.
+
+| Variable | Purpose |
+|---|---|
+| `LIVE_BETTING` | `true` to take bets on matches in play (default off) |
+| `LIVE_BETTING_LEAGUES` | Feed leagues that take live bets, comma-separated (default `soccer_epl`; empty = none) |
+| `LIVE_ODDS_INTERVAL_MS` | In-play match-result refresh for those leagues (default 60000 = 60s) |
+| `LIVE_ODDS_MAX_AGE_MS` | Live bets close when odds are older than this (default 90000 = 90s); keep it above the refresh interval |
+| `LIVE_BET_HOLD_MS` | How long a live bet is held before it's re-checked and accepted (default 5000 = 5s) |
+| `LIVE_BETTING_SCORES_INTERVAL_MS` | Score poll for live-betting leagues, which drives goal suspensions (default 60000 = 60s) |
+| `LIVE_SCORES_INTERVAL_MS` | Score poll for every other league: settles and pays out after the final whistle (default 300000 = 5 min) |
+| `LIVE_ODDS_RESERVE` | Live odds pause at this many credits left (default 300; never below `LIVE_SCORES_RESERVE`). Live bets then close by themselves as odds age |
+| `LIVE_SCORES_RESERVE` | Live scores pause at this many credits left (default 150) |
+
+Order as credits run out: live odds stop first (300), then live scores and per-match extras (150).
+The pre-match sync never pauses.
+
+Credit cost on the $30 plan (20,000 credits a month), per hour a league has a match in play:
+
+| | Odds | Scores | Per hour |
+|---|---|---|---|
+| A live-betting league (EPL) | 1 (h2h) x 60 | 1 x 60 | **120** |
+| Any other league | none | 1 x 12 | **12** |
+
+Matches in the same league share the cost. Pre-match, with `SYNC_INTERVAL_MS` at 4 hours: bulk odds
+cost 18 credits a run (6 leagues x 3 markets), about 3,240 a month. Per-match extras cost up to ~8
+credits per match per run, about 1,440 a month for each match in `ODDS_EXTRA_FIXTURES`. With
+`ODDS_EXTRA_FIXTURES=2` that's about 6,100 a month for pre-match; with 4 it's about 9,000. The
+latter, with ~65 hours of EPL play (~7,800) and the other leagues' scores (~4,600), goes over 20,000.
+
+Limit: both feeds poll, so a goal is seen up to the scores feed's own lag plus one 60s poll after it
+happens. The 5-second hold refuses bets placed in the last moments before a goal is seen. Bets taken
+earlier in that window are still at pre-goal prices.
+
 ## Not built yet (production blockers)
 
 - **Commission programme**: rates, models (fixed / % / tiered), caps, approval and payout rules
