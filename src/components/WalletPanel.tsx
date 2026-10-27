@@ -257,15 +257,6 @@ export function WalletPanel({ minDepositGhs, isAdmin = false, verification }: { 
             value={amount || ""} // 0 shows the placeholder instead, so a withdrawal starts empty
             onChange={(e) => setAmount(Number(e.target.value))}
           />
-          {mode === "deposit" && !isAdmin && (
-            <div className="mt-2 flex gap-2">
-              {[50, 100, 200, 500].map((v) => (
-                <button type="button" key={v} onClick={() => setAmount(v)} className="flex-1 rounded-lg border border-line py-1.5 text-xs font-semibold text-fog hover:border-lime hover:text-lime">
-                  {v}
-                </button>
-              ))}
-            </div>
-          )}
         </div>
         {/* Withdrawals are paid by hand, so they ask the way the admin needs it: network, number, then the name on the account. */}
         {mode === "withdraw" && networkField}

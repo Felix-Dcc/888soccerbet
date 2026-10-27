@@ -243,8 +243,7 @@ export function Betslip() {
 
             {tooLow && (
               <p id={`${stakeId}-min`} role="status" className="mt-2 text-xs font-semibold text-warn">
-                Minimum stake is GHS {minStake}
-                {singles ? " per bet" : ""}
+                Minimum stake is GHS {minStake}{singles ? " per bet" : ""}. Top up GHS {Math.max(0, Math.round((minStake - (Number(stake) || 0)) * 100) / 100)} to place the bet.
               </p>
             )}
 
