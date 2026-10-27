@@ -225,7 +225,7 @@ export function Betslip() {
               min={minStake}
               inputMode="decimal"
               aria-describedby={tooLow ? `${stakeId}-min` : undefined}
-              value={stake}
+              value={stake || ""} // cleared to 0 shows an empty box, not a stray "0" to delete around
               onChange={(e) => setStake(Number(e.target.value))}
               className="input text-right font-bold"
             />
