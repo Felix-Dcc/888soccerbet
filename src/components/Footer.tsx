@@ -4,7 +4,7 @@ import { Logo } from "./Logo";
 const COLUMNS: { title: string; links: { href: string; label: string }[] }[] = [
   { title: "Sports", links: [{ href: "/?sport=football", label: "Football" }, { href: "/?sport=basketball", label: "Basketball" }, { href: "/live", label: "Live" }] },
   { title: "Account", links: [{ href: "/bets", label: "My bets" }, { href: "/wallet", label: "Wallet" }, { href: "/account", label: "Account" }] },
-  { title: "Help", links: [{ href: "mailto:support@kingsbet.gh", label: "Support" }, { href: "/account", label: "Betting limits" }, { href: "/promotions", label: "Promotions" }] },
+  { title: "Help", links: [{ href: "mailto:support@kingzbet.gh", label: "Support" }, { href: "/account", label: "Betting limits" }, { href: "/promotions", label: "Promotions" }] },
   {
     title: "Legal",
     links: [
