@@ -11,7 +11,7 @@ key="daily/kingzbet-$stamp.sql.gz"
 
 # pg_dump writes to a file first, so a failed dump stops the job (set -e) instead of uploading junk.
 pg_dump --no-owner --no-acl -f /tmp/dump.sql "$DATABASE_URL"
-gzip -9 /tmp/dump.sql
+gzip -9 -f /tmp/dump.sql # -f: the last run's dump.sql.gz can still be in /tmp, and gzip won't overwrite it
 aws s3 cp /tmp/dump.sql.gz "s3://$BUCKET/$key" --endpoint-url "$ENDPOINT" --only-show-errors
 echo "backup ok: $key ($(du -h /tmp/dump.sql.gz | cut -f1))"
 
