@@ -3,6 +3,7 @@ import { normalizePhone, isAdult, extendSelfExclusion } from "../src/lib/account
 import { isBettable } from "../src/lib/markets";
 import { normaliseCode } from "../src/lib/ids";
 import { registerSchema } from "../src/lib/validation";
+import { isTestAccount } from "../src/lib/demoCleanup";
 
 describe("normalizePhone", () => {
   it("accepts local, 233 and +233 forms with separators", () => {
@@ -83,5 +84,13 @@ describe("self-exclusion", () => {
     const thirty = new Date(now.getTime() + 30 * day);
     expect(extendSelfExclusion(thirty, 1, now)).toBe(thirty); // asking for 24h can't end a 30-day exclusion early
     expect(extendSelfExclusion(new Date(now.getTime() - day), 1, now).getTime()).toBe(now.getTime() + day); // an expired one restarts
+  });
+});
+
+describe("demo cleanup: test accounts", () => {
+  it("matches the live test sign-ups exactly, never a real look-alike", () => {
+    for (const e of ["gggg@gmail.com", "RON@gmail.com", "walk692@t.gh", "demo@kingsbet.gh", "partner.e2e@example.test"]) expect(isTestAccount(e)).toBe(true);
+    for (const e of ["ronappling56@gmail.com", "williamsmery81@gmail.com", "yjdehie@gmail.com", "j98700367@gmail.com", "n33849079@gmail.com", "admin@kingsbet.gh", "ron@gmail.com.gh", "aron@gmail.com"])
+      expect(isTestAccount(e)).toBe(false);
   });
 });

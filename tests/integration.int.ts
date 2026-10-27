@@ -1332,18 +1332,33 @@ describe("clearing demo data", () => {
     const real = await prisma.user.create({ data: { email: `real_${randomUUID()}@t.gh`, passwordHash: "x", referralCode: referralCode() } });
     const ref = `DEP-${randomUUID().slice(0, 8)}`;
     await prisma.paymentIntent.create({
-      data: { ref, userId: real.id, direction: "DEPOSIT", amount: toPesewas(1), status: "SUCCEEDED", provider: "shinobipay", idempotencyKey: randomUUID() },
+      data: { ref, userId: real.id, direction: "DEPOSIT", amount: toPesewas(20), status: "SUCCEEDED", provider: "shinobipay", idempotencyKey: randomUUID() },
     });
     const cash = await userAccountId(prisma, real.id, "USER_CASH");
     const clearing = await houseAccountId(prisma, "PAYMENT_CLEARING");
-    await postTransaction(prisma, "DEPOSIT", `deposit:${ref}`, [{ accountId: clearing, amount: -toPesewas(1) }, { accountId: cash, amount: toPesewas(1) }]);
+    await postTransaction(prisma, "DEPOSIT", `deposit:${ref}`, [{ accountId: clearing, amount: -toPesewas(20) }, { accountId: cash, amount: toPesewas(20) }]);
 
-    // A demo player funded with sandbox money, who places a bet.
-    const demo = await fundedUser(100);
+    // A generated game with a real bet and a demo bet on it, and one with only a demo bet.
     const m = await makeMatch({ home: 2.0, draw: 3.0, away: 4.0 });
-    await placeBet(demo.id, { idempotencyKey: randomUUID(), stakeGhs: 10, acceptOddsChange: false, selections: [{ selectionId: m.home.id, expectedMilliOdds: 2000 }] });
+    const demoOnly = await makeMatch({ home: 2.0, draw: 3.0, away: 4.0 });
+    await prisma.fixture.updateMany({ where: { id: { in: [m.fixture.id, demoOnly.fixture.id] } }, data: { providerRef: null } });
+    const pick = (s: { id: string }) => ({ idempotencyKey: randomUUID(), stakeGhs: 10, acceptOddsChange: false, selections: [{ selectionId: s.id, expectedMilliOdds: 2000 }] });
+    const realBet = await placeBet(real.id, pick(m.home));
+
+    // A demo player funded with sandbox money, who places bets.
+    const demo = await fundedUser(100);
+    await placeBet(demo.id, pick(m.home));
+    await placeBet(demo.id, pick(demoOnly.home));
     // Somebody who signed up for real and never deposited must survive the cleanup.
     const keeper = await prisma.user.create({ data: { email: `keeper_${randomUUID()}@gmail.com`, passwordHash: "x", referralCode: referralCode() } });
+    // A real sign-up who only ever had sandbox money, and bet with it: the account stays, the fake money and bet go.
+    const tryer = await prisma.user.create({ data: { email: `tryer_${randomUUID()}@gmail.com`, passwordHash: "x", referralCode: referralCode() } });
+    const sbRef = `DEP-${randomUUID().slice(0, 8)}`;
+    await prisma.paymentIntent.create({ data: { ref: sbRef, userId: tryer.id, direction: "DEPOSIT", amount: toPesewas(50), status: "SUCCEEDED", provider: "sandbox", idempotencyKey: randomUUID() } });
+    const tryerCash = await userAccountId(prisma, tryer.id, "USER_CASH");
+    await postTransaction(prisma, "DEPOSIT", `deposit:${sbRef}`, [{ accountId: clearing, amount: -toPesewas(50) }, { accountId: tryerCash, amount: toPesewas(50) }]);
+    await placeBet(tryer.id, pick(m.home));
+    await settleFixture(m.fixture.id, 2, 0); // everyone on it wins GHS 20
     const realStaff = (await prisma.user.findMany({ where: { role: { not: "USER" } }, select: { email: true } })).filter((u) => !isTestAccount(u.email)).length;
 
     const plan = await planDemoCleanup();
@@ -1353,14 +1368,21 @@ describe("clearing demo data", () => {
 
     await runDemoCleanup();
 
-    // The real player and their money survive untouched.
+    // The real player, their money, their winning bet and the game it stands on survive untouched.
     expect(await prisma.user.findUnique({ where: { id: real.id } })).not.toBeNull();
-    expect(await userCashBalance(prisma, real.id)).toBe(toPesewas(1));
+    expect(await userCashBalance(prisma, real.id)).toBe(toPesewas(30)); // 20 in, 10 staked, 20 won
+    expect(plan.keptPlayers.find((k) => k.email === real.email)?.balanceAfter).toBe(toPesewas(30));
     expect(await prisma.paymentIntent.findUnique({ where: { ref } })).not.toBeNull();
+    expect(await prisma.bet.findMany({ where: { userId: { in: [real.id, demo.id, tryer.id] } }, select: { ref: true, status: true } })).toEqual([{ ref: realBet.ref, status: "WON" }]);
+    expect(await prisma.fixture.findUnique({ where: { id: m.fixture.id } })).not.toBeNull();
+    expect(await prisma.fixture.findUnique({ where: { id: demoOnly.fixture.id } })).toBeNull();
+
+    // The real sign-up who only had fake money keeps the account at zero.
+    expect((await prisma.user.findUnique({ where: { id: tryer.id } }))?.status).toBe("ACTIVE");
+    expect(await userCashBalance(prisma, tryer.id)).toBe(0n);
 
     // The demo side is gone, and staff are never touched.
     expect(await prisma.paymentIntent.count({ where: { provider: "sandbox" } })).toBe(0);
-    expect(await prisma.bet.count()).toBe(0);
     const demoLeft = await prisma.user.findUnique({ where: { id: demo.id } });
     expect(demoLeft === null || demoLeft.status === "CLOSED").toBe(true);
 

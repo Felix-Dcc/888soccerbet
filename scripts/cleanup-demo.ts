@@ -17,12 +17,14 @@ function show(p: CleanupPlan) {
   for (const r of p.realPayments) console.log(`  ${r.provider} ${r.direction} ${r.status} ${ghs(r.amount)}  ${r.email}`);
   if (!p.realPayments.length) console.log("  none found — there is no real money to keep");
   for (const k of p.keptPlayers)
-    console.log(`  keeps ${k.email}: balance ${ghs(k.balanceAfter)} (real payments total ${ghs(k.realPaymentsTotal)})${k.balanceAfter === k.realPaymentsTotal ? "" : "  <-- check this"}`);
+    console.log(`  keeps ${k.email}: balance ${ghs(k.balanceAfter)} (real payments total ${ghs(k.realPaymentsTotal)})${k.balanceAfter === k.realPaymentsTotal ? "" : "  <-- check this: real bets, an admin adjustment, or demo money they bet with"}`);
   console.log(`  staff kept:   ${list(p.keptStaff)}`);
   console.log(`  sign-ups kept with no deposit (${p.keptPlayersWithoutDeposits.length}): ${list(p.keptPlayersWithoutDeposits)}`);
+  console.log(`  bets by real players:   ${p.bets.keep}`);
+  for (const a of p.keptAdjustments) console.log(`  admin adjustment kept: ${ghs(a.amount)}  ${a.email}`);
   console.log("\nTO REMOVE");
   console.log(`  demo payments:          ${p.demoPayments.count}  (${ghs(p.demoPayments.total)} of fake money)`);
-  console.log(`  bets:                   ${p.bets}`);
+  console.log(`  demo bets:              ${p.bets.remove}`);
   console.log(`  ledger transactions:    ${p.ledger.remove} of ${p.ledger.remove + p.ledger.keep}  (keeping ${p.ledger.keep})`);
   console.log(`  demo accounts deleted:  ${p.deleteAccounts.length}  ${list(p.deleteAccounts)}`);
   console.log(`  demo accounts closed:   ${p.closeAccounts.length}  ${list(p.closeAccounts)}  (named in the audit trail, which can't be edited)`);
@@ -37,7 +39,7 @@ async function main() {
     return;
   }
   show(await runDemoCleanup());
-  console.log("\nDone: the ledger still balances and every balance matches real payments only.");
+  console.log("\nDone: the ledger still balances, nobody owes money, and every real payment kept its ledger entries.");
 }
 
 main()

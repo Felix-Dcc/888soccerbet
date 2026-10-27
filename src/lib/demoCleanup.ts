@@ -1,8 +1,9 @@
 /**
  * Clearing the demo data left over from building and testing, keeping real money.
  *
- * Demo money = payments through the "sandbox" provider, plus every bet staked with it. That fake
- * money is removed from whoever holds it, real sign-up or not.
+ * Demo money = payments through the "sandbox" provider, plus everything done by players who never put
+ * real money in (their bets, cash outs, verification releases). That fake money is removed from whoever
+ * holds it, real sign-up or not. A player with a real payment keeps every bet; only their sandbox payments go.
  * Demo accounts = only the ones built for testing, recognised by their address. Somebody who signed
  * up for real and never deposited keeps their account; they just lose the fake money.
  * A real payment (any live provider) and the ledger behind it is never touched.
@@ -20,7 +21,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "./db";
 
 /** Addresses only ever used for testing. A real sign-up never matches, so it is never removed. */
-const TEST_ACCOUNT = /@(example\.test|t\.gh|test\.gh)$|^(verifytest|refplayer|partner\.e2e|local\.tester|demo@)/i;
+const TEST_ACCOUNT = /@(example\.test|t\.gh|test\.gh)$|^(verifytest|refplayer|partner\.e2e|local\.tester|demo@)|^(gggg|ron)@gmail\.com$/i; // last two: the owner's own test sign-ups on live
 export const isTestAccount = (email: string) => TEST_ACCOUNT.test(email);
 
 export interface CleanupPlan {
@@ -28,8 +29,9 @@ export interface CleanupPlan {
   keptPlayers: { email: string; balanceAfter: bigint; realPaymentsTotal: bigint }[];
   keptStaff: string[];
   keptPlayersWithoutDeposits: string[];
+  keptAdjustments: { email: string; amount: bigint }[];
   demoPayments: { count: number; total: bigint };
-  bets: number;
+  bets: { remove: number; keep: number };
   ledger: { remove: number; keep: number };
   deleteAccounts: string[];
   closeAccounts: string[];
@@ -37,9 +39,13 @@ export interface CleanupPlan {
   sandboxWebhooks: number;
 }
 
+/** Generated/manual games with no bet left on them except demo ones. A game a real bet stands on stays. */
+const demoFixtures = (demoBetIds: string[]): Prisma.FixtureWhereInput => ({ providerRef: null, betSelections: { none: { betId: { notIn: demoBetIds } } } });
+
 interface Doomed {
   plan: CleanupPlan;
   txIds: string[];
+  demoBetIds: string[];
   demoUserIds: string[];
   deleteIds: string[];
   closeIds: string[];
@@ -49,7 +55,7 @@ interface Doomed {
 async function assess(): Promise<Doomed> {
   const users = await prisma.user.findMany({ select: { id: true, email: true, role: true, status: true } });
   const pays = await prisma.paymentIntent.findMany({ select: { ref: true, userId: true, provider: true, direction: true, status: true, amount: true } });
-  const bets = await prisma.bet.findMany({ select: { id: true } });
+  const bets = await prisma.bet.findMany({ select: { id: true, userId: true } });
   const email = (id: string) => users.find((u) => u.id === id)?.email ?? id;
 
   const realPays = pays.filter((p) => p.provider !== "sandbox");
@@ -60,13 +66,26 @@ async function assess(): Promise<Doomed> {
   const demoUserIds = new Set(demoUsers.map((u) => u.id));
   const staff = users.filter((u) => u.role !== "USER" && !demoUserIds.has(u.id));
 
-  // Every ledger transaction that touches a demo account, came from a sandbox payment, or paid a bet.
-  const entries = await prisma.ledgerEntry.findMany({ select: { transactionId: true, account: { select: { userId: true } } } });
-  const byDemoAccount = new Set(entries.filter((e) => e.account.userId && demoUserIds.has(e.account.userId)).map((e) => e.transactionId));
+  // Somebody who never put real money in only ever played with demo money: all their bets, cash outs and
+  // verification releases go. A real player keeps every bet; only their sandbox payments go.
+  const noRealMoney = new Set(users.filter((u) => !realPlayers.has(u.id)).map((u) => u.id));
+  const demoBets = bets.filter((b) => noRealMoney.has(b.userId));
+
+  // Every ledger transaction that touches a demo account or a player with no real money, or came from a
+  // sandbox payment. An admin's balance adjustment to a kept account is a deliberate decision: it stays, and is listed.
+  const entries = await prisma.ledgerEntry.findMany({ select: { transactionId: true, amount: true, account: { select: { userId: true, kind: true } } } });
+  const touching = (ids: Set<string>) => new Set(entries.filter((e) => e.account.userId && ids.has(e.account.userId)).map((e) => e.transactionId));
+  const byDemoAccount = touching(demoUserIds);
+  const byNoRealMoney = touching(noRealMoney);
   const demoRefs = new Set(demoPays.flatMap((p) => [`deposit:${p.ref}`, `wdr_hold:${p.ref}`, `wdr_reverse:${p.ref}`, `manual:${p.ref}`, `refused:${p.ref}`]));
-  const betRefs = new Set(bets.map((b) => `bet_settle:${b.id}`));
-  const txs = await prisma.ledgerTransaction.findMany({ select: { id: true, reference: true } });
-  const doomed = txs.filter((t) => byDemoAccount.has(t.id) || demoRefs.has(t.reference) || betRefs.has(t.reference) || t.reference.startsWith("cashout:") || t.reference.startsWith("verify_release:"));
+  const txs = await prisma.ledgerTransaction.findMany({ select: { id: true, reference: true, kind: true } });
+  const doomed = txs.filter((t) => byDemoAccount.has(t.id) || demoRefs.has(t.reference) || (byNoRealMoney.has(t.id) && t.kind !== "ADMIN_ADJUSTMENT"));
+  const keptAdjustments = txs
+    .filter((t) => t.kind === "ADMIN_ADJUSTMENT" && !byDemoAccount.has(t.id))
+    .flatMap((t) => entries.filter((e) => e.transactionId === t.id && e.account.userId).map((e) => ({ email: email(e.account.userId!), amount: e.amount })));
+  const doomedIds = new Set(doomed.map((t) => t.id));
+  const removedCash = (userId: string) =>
+    entries.filter((e) => e.account.userId === userId && e.account.kind === "USER_CASH" && doomedIds.has(e.transactionId)).reduce((n, e) => n + e.amount, 0n);
 
   // The audit trail refuses edits, so an account named in it can only be closed.
   const balances = new Map(
@@ -83,6 +102,7 @@ async function assess(): Promise<Doomed> {
 
   return {
     txIds: doomed.map((t) => t.id),
+    demoBetIds: demoBets.map((b) => b.id),
     demoUserIds: [...demoUserIds],
     deleteIds: toDelete.map((u) => u.id),
     closeIds: toClose.map((u) => u.id),
@@ -93,17 +113,18 @@ async function assess(): Promise<Doomed> {
         .filter((u) => realPlayers.has(u.id))
         .map((u) => ({
           email: u.email,
-          balanceAfter: balances.get(u.id) ?? 0n,
+          balanceAfter: (balances.get(u.id) ?? 0n) - removedCash(u.id),
           realPaymentsTotal: realPays.filter((p) => p.userId === u.id && p.status === "SUCCEEDED").reduce((n, p) => n + (p.direction === "DEPOSIT" ? p.amount : -p.amount), 0n),
         })),
       keptStaff: staff.map((u) => u.email),
       keptPlayersWithoutDeposits: users.filter((u) => u.role === "USER" && !realPlayers.has(u.id) && !demoUserIds.has(u.id)).map((u) => u.email),
+      keptAdjustments,
       demoPayments: { count: demoPays.length, total: demoPays.reduce((n, p) => n + p.amount, 0n) },
-      bets: bets.length,
+      bets: { remove: demoBets.length, keep: bets.length - demoBets.length },
       ledger: { remove: doomed.length, keep: txs.length - doomed.length },
       deleteAccounts: toDelete.map((u) => u.email),
       closeAccounts: toClose.map((u) => u.email),
-      manualFixtures: await prisma.fixture.count({ where: { providerRef: null } }),
+      manualFixtures: await prisma.fixture.count({ where: demoFixtures(demoBets.map((b) => b.id)) }),
       sandboxWebhooks: await prisma.webhookEvent.count({ where: { provider: "sandbox" } }),
     },
   };
@@ -119,12 +140,10 @@ export async function runDemoCleanup(): Promise<CleanupPlan> {
     async (tx) => {
       await tx.ledgerEntry.deleteMany({ where: { transactionId: { in: d.txIds } } });
       await tx.ledgerTransaction.deleteMany({ where: { id: { in: d.txIds } } });
-      await tx.cashout.deleteMany({});
-      await tx.betSelection.deleteMany({});
-      await tx.bet.deleteMany({});
+      await tx.bet.deleteMany({ where: { id: { in: d.demoBetIds } } }); // their selections and cash outs cascade
       await tx.paymentIntent.deleteMany({ where: { provider: "sandbox" } });
       await tx.webhookEvent.deleteMany({ where: { provider: "sandbox" } });
-      await tx.fixture.deleteMany({ where: { providerRef: null } });
+      await tx.fixture.deleteMany({ where: demoFixtures(d.demoBetIds) });
       await tx.ledgerAccount.deleteMany({ where: { userId: { in: d.demoUserIds } } });
       await tx.user.updateMany({ where: { id: { in: d.closeIds } }, data: { status: "CLOSED" } });
       await tx.user.deleteMany({ where: { id: { in: d.deleteIds } } });
