@@ -229,18 +229,6 @@ export function Betslip() {
               onChange={(e) => setStake(Number(e.target.value))}
               className="input text-right font-bold"
             />
-            <div className="mt-2 flex gap-2">
-              {[50, 100, 250, 500].map((v) => (
-                <button
-                  key={v}
-                  onClick={() => setStake((stake || 0) + v)}
-                  className="flex-1 rounded-lg border border-line py-1.5 text-xs font-semibold text-fog hover:border-lime hover:text-lime"
-                >
-                  +{v}
-                </button>
-              ))}
-            </div>
-
             {tooLow && (
               <p id={`${stakeId}-min`} role="status" className="mt-2 text-xs font-semibold text-warn">
                 Minimum stake is GHS {minStake}{singles ? " per bet" : ""}. Top up GHS {Math.max(0, Math.round((minStake - (Number(stake) || 0)) * 100) / 100)} to place the bet.
