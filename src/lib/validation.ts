@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { NETWORKS } from "./providers/payments/types";
+import { CORRECT_SCORE_MAX } from "./markets";
 
 // Messages here are shown to players verbatim (see errorResponse), so forms carry no helper text.
 const email = z.string().email("Enter a valid email").max(200).transform((s) => s.toLowerCase().trim());
@@ -91,6 +92,11 @@ export const manualFixtureSchema = z
       })
       .optional(),
     btts: z.object({ yes: odds, no: odds }).optional(),
+    // Generated games supply these; the hand-entered form doesn't (all optional).
+    doubleChance: z.object({ homeDraw: odds, homeAway: odds, drawAway: odds }).optional(),
+    drawNoBet: z.object({ home: odds, away: odds }).optional(),
+    oddEven: z.object({ odd: odds, even: odds }).optional(),
+    correctScore: z.record(z.string().regex(new RegExp(`^([0-${CORRECT_SCORE_MAX}]-[0-${CORRECT_SCORE_MAX}]|OTHER)$`), "Unknown correct score"), odds).optional(),
   })
   .refine((f) => f.homeTeam.toLowerCase() !== f.awayTeam.toLowerCase(), { message: "Home and away teams must differ", path: ["awayTeam"] })
   .refine((f) => (f.sportKey === "football" ? f.result.draw !== undefined : f.result.draw === undefined), {
@@ -98,6 +104,10 @@ export const manualFixtureSchema = z
     path: ["result", "draw"],
   })
   .refine((f) => f.sportKey === "football" || !f.btts, { message: "Both teams to score is a football market", path: ["btts"] })
+  .refine((f) => f.sportKey === "football" || (!f.doubleChance && !f.drawNoBet && !f.correctScore), {
+    message: "Double chance, draw no bet and correct score are football markets",
+    path: ["sportKey"],
+  })
   .refine((f) => new Date(f.startsAt).getTime() > Date.now() + 60_000, { message: "Kick-off must be in the future", path: ["startsAt"] })
   .refine((f) => new Date(f.startsAt).getTime() < Date.now() + MAX_AHEAD_MS, { message: "Kick-off must be within 60 days", path: ["startsAt"] });
 export type ManualFixtureInput = z.infer<typeof manualFixtureSchema>;

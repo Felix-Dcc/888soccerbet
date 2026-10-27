@@ -91,7 +91,7 @@ const STAMP_EVERY_MS = 30_000;
 type Running = Prisma.FixtureGetPayload<{ select: typeof runningSelect }>;
 const runningSelect = {
   id: true, sportKey: true, script: true, startsAt: true, status: true, homeScore: true, awayScore: true, oddsAt: true, scoreChangedAt: true,
-  markets: { select: { id: true, type: true, line: true, status: true, selections: { select: { id: true, code: true, milliOdds: true } } } },
+  markets: { select: { id: true, type: true, line: true, status: true, selections: { select: { id: true, code: true, milliOdds: true, status: true } } } },
 } satisfies Prisma.FixtureSelect;
 
 /**
@@ -102,18 +102,19 @@ async function priceInPlay(f: Running, home: number, away: number, elapsed: numb
   const t = TIMING.football;
   const left = Math.round(t.fullMin - playedMin(t, elapsed)); // whole minutes: prices move once a minute
   const ou = f.markets.find((m) => m.type === "OVER_UNDER");
-  const odds = inPlayFootballOdds(home, away, left, ou?.line != null ? Number(ou.line) : null);
-  const byType: Partial<Record<string, Record<string, number> | null>> = { MATCH_RESULT: odds.result, OVER_UNDER: odds.total, BTTS: odds.btts };
+  const book = inPlayFootballOdds(home, away, left, ou?.line != null ? Number(ou.line) : null);
   for (const m of f.markets) {
     if (m.status === "SETTLED") continue;
-    const prices = byType[m.type];
+    const prices = book[m.type];
     if (!prices) {
       if (m.status === "OPEN") await prisma.market.update({ where: { id: m.id }, data: { status: "SUSPENDED" } });
       continue;
     }
     for (const s of m.selections) {
-      const o = prices[s.code];
-      if (o !== undefined && toMilliOdds(o) !== s.milliOdds) await prisma.selection.update({ where: { id: s.id }, data: { milliOdds: toMilliOdds(o) } });
+      // A pick the score has ruled out (e.g. 0-0 once it's 1-0) closes instead of staying at long odds.
+      const o = prices[s.code] ?? null;
+      const data = o === null ? { status: "SUSPENDED" as const } : { status: "OPEN" as const, milliOdds: toMilliOdds(o) };
+      if (data.status !== s.status || ("milliOdds" in data && data.milliOdds !== s.milliOdds)) await prisma.selection.update({ where: { id: s.id }, data });
     }
     if (m.status !== "OPEN") await prisma.market.update({ where: { id: m.id }, data: { status: "OPEN" } });
   }

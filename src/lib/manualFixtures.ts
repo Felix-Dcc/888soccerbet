@@ -52,6 +52,43 @@ function marketsFor(f: ManualFixtureInput): MarketSpec[] {
         { code: "BTTS_NO", name: "No", odds: f.btts.no },
       ],
     });
+  if (f.doubleChance)
+    out.push({
+      type: "DOUBLE_CHANCE",
+      name: "Double Chance",
+      selections: [
+        { code: "1X", name: `${f.homeTeam} or Draw`, odds: f.doubleChance.homeDraw },
+        { code: "12", name: `${f.homeTeam} or ${f.awayTeam}`, odds: f.doubleChance.homeAway },
+        { code: "X2", name: `${f.awayTeam} or Draw`, odds: f.doubleChance.drawAway },
+      ],
+    });
+  if (f.drawNoBet)
+    out.push({
+      type: "DRAW_NO_BET",
+      name: "Draw No Bet",
+      selections: [
+        { code: "1", name: f.homeTeam, odds: f.drawNoBet.home },
+        { code: "2", name: f.awayTeam, odds: f.drawNoBet.away },
+      ],
+    });
+  if (f.oddEven)
+    out.push({
+      type: "ODD_EVEN",
+      name: "Odd/Even",
+      selections: [
+        { code: "ODD", name: "Odd", odds: f.oddEven.odd },
+        { code: "EVEN", name: "Even", odds: f.oddEven.even },
+      ],
+    });
+  if (f.correctScore)
+    out.push({
+      type: "CORRECT_SCORE",
+      name: "Correct Score",
+      // Grid order (0-0, 0-1, ...), "Other" last.
+      selections: Object.entries(f.correctScore)
+        .sort(([a], [b]) => (a === "OTHER" ? 1 : b === "OTHER" ? -1 : a.localeCompare(b)))
+        .map(([code, odds]) => ({ code, name: code === "OTHER" ? "Other" : code, odds })),
+    });
   return out;
 }
 

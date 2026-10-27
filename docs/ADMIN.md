@@ -136,9 +136,19 @@ generated football matches. Every other league closes at kick-off. With it on:
 - A live bet is held `LIVE_BET_HOLD_MS`, then refused if the score or price moved meanwhile. The
   pick is re-checked as still open inside the bet transaction.
 - Generated football matches ("Generate match") are priced locally on the worker every 10 seconds
-  from the score and minutes left only, never their pre-set result. A goal suspends their markets
-  for 10 seconds. They cost no credits. Generated basketball and hand-entered games take no live
-  bets: basketball scores ramp toward the pre-set final, and nothing reprices hand-entered games.
+  from the score and minutes left only, never their pre-set result. Every market stays live in play.
+  A goal suspends their markets for 10 seconds. They cost no credits. Picks the score has ruled out
+  (e.g. correct score 0-0 once it's 1-0) close, and so does any market whose likeliest pick is above
+  90% (both teams to score once both have scored; draw no bet and double chance near the end).
+- Generated basketball and hand-entered games take no live bets. Basketball scores ramp toward the
+  pre-set final, and nothing reprices hand-entered games.
+
+Generated matches' markets: football has match result, over/under, both teams to score, double
+chance, draw no bet, odd/even and correct score (0-0 to 4-4 plus "Other"). Basketball has match
+winner, total points and odd/even. All football prices, before and during the match, come from one
+model of the final score with the house margin applied to each pick. The markets can't contradict
+each other: no set of picks across them wins in every outcome. The hand-entered "Add a manual
+game" form is unchanged.
 
 | Variable | Purpose |
 |---|---|
