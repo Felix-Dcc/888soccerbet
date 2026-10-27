@@ -33,6 +33,7 @@ export default async function WalletPage() {
       <div className="grid gap-6 lg:grid-cols-2">
         <WalletPanel
           minDepositGhs={Number(minDeposit()) / 100}
+          isAdmin={user.role !== "USER"}
           verification={{
             required: verification.required,
             paid: verification.paid,

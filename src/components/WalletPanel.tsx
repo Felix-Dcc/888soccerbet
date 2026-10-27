@@ -19,10 +19,11 @@ interface Verification {
   status: string; // User.kycStatus: UNVERIFIED | PENDING (awaiting review) | VERIFIED | REJECTED
 }
 
-export function WalletPanel({ minDepositGhs, verification }: { minDepositGhs: number; verification: Verification }) {
+export function WalletPanel({ minDepositGhs, isAdmin = false, verification }: { minDepositGhs: number; isAdmin?: boolean; verification: Verification }) {
   const router = useRouter();
   const [mode, setMode] = useState<Mode>("deposit");
-  const [amount, setAmount] = useState(minDepositGhs);
+  const depositStart = isAdmin ? 0 : minDepositGhs; // admins start the deposit box empty; players keep the default
+  const [amount, setAmount] = useState(depositStart);
   const verified = verification.status === "VERIFIED";
   const locked = mode === "withdraw" && verification.required && !verified;
   // Hidden until a big win makes it apply (or money is already held for review).
@@ -194,7 +195,7 @@ export function WalletPanel({ minDepositGhs, verification }: { minDepositGhs: nu
         {(["deposit", "withdraw"] as Mode[]).map((m) => (
           <button
             key={m}
-            onClick={() => { setMode(m); setMsg(null); setPending(null); setAmount(m === "deposit" ? minDepositGhs : 0); }}
+            onClick={() => { setMode(m); setMsg(null); setPending(null); setAmount(m === "deposit" ? depositStart : 0); }}
             className={`rounded-md py-2 text-sm font-semibold capitalize transition ${mode === m ? "bg-lime text-lime-ink" : "text-fog"}`}
           >
             {m}
@@ -251,12 +252,12 @@ export function WalletPanel({ minDepositGhs, verification }: { minDepositGhs: nu
             type="number"
             min={mode === "deposit" ? minDepositGhs : 1}
             required
-            placeholder="e.g. 100"
+            placeholder={isAdmin ? "" : "e.g. 100"}
             className={`input ${mode === "deposit" ? "text-right font-bold" : ""}`}
             value={amount || ""} // 0 shows the placeholder instead, so a withdrawal starts empty
             onChange={(e) => setAmount(Number(e.target.value))}
           />
-          {mode === "deposit" && (
+          {mode === "deposit" && !isAdmin && (
             <div className="mt-2 flex gap-2">
               {[50, 100, 200, 500].map((v) => (
                 <button type="button" key={v} onClick={() => setAmount(v)} className="flex-1 rounded-lg border border-line py-1.5 text-xs font-semibold text-fog hover:border-lime hover:text-lime">
