@@ -38,7 +38,7 @@ import { registerUser, findUserByIdentifier } from "../src/lib/accounts";
 import { TERMS_VERSION } from "../src/lib/legal";
 import { createAdmin, consumeAccessToken, formatReferralCode, issueResetLink, setAdminStatus, updateAdminAccess } from "../src/lib/admins";
 import { adminComparison, parseRange, scopeMetrics } from "../src/lib/adminAnalytics";
-import { adjustBalance, canViewPlayer } from "../src/lib/playerAdmin";
+import { adjustAdminBalance, adjustBalance, canViewPlayer } from "../src/lib/playerAdmin";
 import { audit, verifyAuditChain } from "../src/lib/audit";
 import { listFixtures, listResults, dataVersion } from "../src/lib/queries";
 import { applyMarkets, goLiveManualFixtures, syncFixtures, syncLiveOdds, updateLiveScores } from "../src/lib/sync";
@@ -1775,6 +1775,20 @@ describe("admin system", () => {
     await expect(adjustBalance(sa, p.id, toPesewas(-100), "Reverse duplicate", randomUUID())).rejects.toMatchObject({ code: "INSUFFICIENT_FUNDS" });
     await expect(adjustBalance(sa, sa.id, toPesewas(5), "Not a player", randomUUID())).rejects.toMatchObject({ code: "NOT_FOUND" });
     expect(await prisma.auditLog.findFirst({ where: { action: "BALANCE_ADJUSTMENT", targetId: p.id } })).toMatchObject({ before: { balance: "5000" }, after: { balance: "5500" } });
+    expect(await ledgerIsBalanced()).toBe(true);
+  });
+
+  it("credits and debits an administrator's own balance, idempotent, refusing a player id or a negative balance", async () => {
+    const sa = await makeSuper();
+    expect(await userCashBalance(prisma, sa.id)).toBe(0n);
+    const key = randomUUID();
+    expect(await adjustAdminBalance(sa, sa.id, toPesewas(500), "Top up the betting account", key)).toMatchObject({ repeated: false });
+    expect(await adjustAdminBalance(sa, sa.id, toPesewas(500), "Top up the betting account", key)).toMatchObject({ repeated: true }); // double submit
+    expect(await userCashBalance(prisma, sa.id)).toBe(toPesewas(500));
+    await expect(adjustAdminBalance(sa, sa.id, toPesewas(-600), "Over-debit", randomUUID())).rejects.toMatchObject({ code: "INSUFFICIENT_FUNDS" });
+    const player = await fundedUser(10);
+    await expect(adjustAdminBalance(sa, player.id, toPesewas(5), "Not an admin", randomUUID())).rejects.toMatchObject({ code: "NOT_FOUND" });
+    expect(await prisma.auditLog.findFirst({ where: { action: "BALANCE_ADJUSTMENT", targetId: sa.id } })).toMatchObject({ after: { balance: "50000" } });
     expect(await ledgerIsBalanced()).toBe(true);
   });
 

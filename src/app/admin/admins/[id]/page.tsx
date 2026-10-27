@@ -5,7 +5,9 @@ import { adminPage } from "@/lib/adminPage";
 import { can, effectivePermissions, PERMISSIONS, permissionGroups, type Permission } from "@/lib/permissions";
 import { parseRange } from "@/lib/adminAnalytics";
 import { formatReferralCode } from "@/lib/admins";
-import { AdminAccessEditor, AdminActions } from "@/components/admin/AdminForms";
+import { AdminAccessEditor, AdminActions, AdminBalanceCredit } from "@/components/admin/AdminForms";
+import { userCashBalance } from "@/lib/ledger";
+import { formatPesewas } from "@/lib/money";
 import { ReferralDashboard } from "@/components/admin/ReferralDashboard";
 import { Avatar, EmptyState, Icon, Panel, Pill, Range, ago, statusTone, when } from "@/components/admin/kit";
 
@@ -21,9 +23,10 @@ export default async function AdminProfilePage({ params, searchParams }: { param
   const range = parseRange(sp);
   const admin = await prisma.user.findFirst({ where: { id, role: { in: ["ADMIN", "SUPER_ADMIN"] } }, include: { adminRole: true } });
   if (!admin) notFound();
-  const [roles, actions] = await Promise.all([
+  const [roles, actions, balance] = await Promise.all([
     prisma.adminRole.findMany({ orderBy: { name: "asc" } }),
     can(u, "audit_logs.view") ? prisma.auditLog.findMany({ where: { actorUserId: admin.id }, orderBy: { seq: "desc" }, take: 12 }) : Promise.resolve(null),
+    userCashBalance(prisma, admin.id),
   ]);
   const manage = can(u, "admins.manage") && u.id !== admin.id;
   const has = effectivePermissions(admin);
@@ -97,6 +100,13 @@ export default async function AdminProfilePage({ params, searchParams }: { param
         </Panel>
 
         <div className="min-w-0 space-y-5">
+          <Panel title="Balance" icon="coins" actions={<span className="font-display text-lg font-bold tabular-nums text-lime">GHS {formatPesewas(balance)}</span>}>
+            {can(u, "wallets.adjust") ? (
+              <AdminBalanceCredit adminId={admin.id} email={admin.email} />
+            ) : (
+              <p className="text-sm text-fog">The account's cash balance for betting.</p>
+            )}
+          </Panel>
           {manage && (
             <Panel title="Account" icon="team">
               <AdminActions adminId={admin.id} email={admin.email} status={admin.status} />

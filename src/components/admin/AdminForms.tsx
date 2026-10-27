@@ -498,3 +498,66 @@ export function PlayerActions({
     </div>
   );
 }
+
+/** Credit (or debit, with a minus) an administrator's own cash balance. Password-confirmed, audited. */
+export function AdminBalanceCredit({ adminId, email }: { adminId: string; email: string }) {
+  const router = useRouter();
+  const [open, setOpen] = useState(false);
+  const [amount, setAmount] = useState("");
+  const [reason, setReason] = useState("");
+  const [key, setKey] = useState(newId);
+  const [done, setDone] = useState<string | null>(null);
+  const amountNum = Number(amount);
+  return (
+    <div className="space-y-2">
+      <form
+        className="space-y-2"
+        onSubmit={(e) => {
+          e.preventDefault();
+          setOpen(true);
+        }}
+      >
+        <div className="grid gap-2 sm:grid-cols-[10rem_1fr]">
+          <div>
+            <label className="label" htmlFor="ac-amount">Amount (GHS, minus to debit)</label>
+            <input id="ac-amount" required inputMode="decimal" pattern="-?\d+(\.\d{1,2})?" className="input" value={amount} onChange={(e) => setAmount(e.target.value)} />
+          </div>
+          <div>
+            <label className="label" htmlFor="ac-reason">Reason</label>
+            <input id="ac-reason" required minLength={5} maxLength={300} className="input" value={reason} onChange={(e) => setReason(e.target.value)} />
+          </div>
+        </div>
+        <button disabled={!amountNum} className="btn-lime px-4 py-2 text-sm">
+          {amountNum < 0 ? "Debit balance" : "Credit balance"}
+        </button>
+      </form>
+      {done && (
+        <p role="status" className="text-sm text-lime">
+          {done}
+        </p>
+      )}
+      <ConfirmDialog
+        open={open}
+        title={amountNum < 0 ? "Debit balance" : "Credit balance"}
+        message={
+          <>
+            {amountNum > 0 ? "Credit" : "Debit"} <b className="text-white">GHS {Math.abs(amountNum).toFixed(2)}</b> {amountNum > 0 ? "to" : "from"} {email}. Recorded in the ledger and audit log and can&apos;t be edited; a mistake needs an opposite correction.
+          </>
+        }
+        confirmLabel={amountNum < 0 ? "Debit" : "Credit"}
+        onClose={() => setOpen(false)}
+        onConfirm={async (password) => {
+          const { error } = await send(`/api/admin/admins/${adminId}/balance`, "POST", { amountGhs: amountNum, reason, idempotencyKey: key, password });
+          if (error) return error;
+          setOpen(false);
+          setKey(newId());
+          setAmount("");
+          setReason("");
+          setDone("Balance updated");
+          router.refresh();
+          return null;
+        }}
+      />
+    </div>
+  );
+}
