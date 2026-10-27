@@ -11,11 +11,34 @@ import { CORRECT_SCORE_MAX, FOOTBALL_TOTAL_LINES } from "./markets";
 type Sport = "football" | "basketball";
 
 // Clearly invented names: an adjective + a creature/figure, so no combination is a real club.
-const ADJECTIVES = ["Crimson", "Azure", "Golden", "Shadow", "Iron", "Silver", "Emerald", "Thunder", "Phantom", "Royal", "Mystic", "Savage", "Northern", "Wild", "Electric", "Granite", "Scarlet", "Cobalt", "Solar", "Frost"];
-const NOUNS = ["Harriers", "Wanderers", "Sentinels", "Titans", "Falcons", "Mariners", "Rovers", "Phoenix", "Gladiators", "Nomads", "Vipers", "Comets", "Wolves", "Rangers", "Spartans", "Drifters", "Hawks", "Monarchs", "Raiders", "Pioneers"];
-const FOOTBALL_COMPS = ["Kingz Exhibition Cup", "Nebula Invitational", "Phantom Trophy", "Galaxy Friendly Series", "Aurora Challenge Cup"];
-const BASKETBALL_COMPS = ["Kingz Hoops Showcase", "Orbit Basketball Invitational", "Skyline Exhibition League"];
-const VENUES = ["Horizon Arena", "Starfall Park", "Summit Grounds", "Lumen Stadium", "Crater Dome", "Meridian Field"];
+// Wide pools (50 x 50 = 2,500 team names) so the same sides rarely come up two days running.
+const ADJECTIVES = [
+  "Crimson", "Azure", "Golden", "Shadow", "Iron", "Silver", "Emerald", "Thunder", "Phantom", "Royal",
+  "Mystic", "Savage", "Northern", "Wild", "Electric", "Granite", "Scarlet", "Cobalt", "Solar", "Frost",
+  "Crystal", "Obsidian", "Blazing", "Midnight", "Imperial", "Rapid", "Ivory", "Onyx", "Amber", "Storm",
+  "Lunar", "Radiant", "Velvet", "Sapphire", "Rogue", "Arctic", "Verdant", "Steel", "Ruby", "Jade",
+  "Cosmic", "Volcanic", "Majestic", "Rebel", "Twilight", "Ember", "Tidal", "Highland", "Thunderous", "Vivid",
+];
+const NOUNS = [
+  "Harriers", "Wanderers", "Sentinels", "Titans", "Falcons", "Mariners", "Rovers", "Phoenix", "Gladiators", "Nomads",
+  "Vipers", "Comets", "Wolves", "Rangers", "Spartans", "Drifters", "Hawks", "Monarchs", "Raiders", "Pioneers",
+  "Panthers", "Griffins", "Centurions", "Vanguards", "Corsairs", "Dragons", "Stallions", "Jaguars", "Cyclones", "Guardians",
+  "Lancers", "Mavericks", "Outlaws", "Buffaloes", "Cobras", "Eagles", "Knights", "Warriors", "Rhinos", "Tridents",
+  "Pumas", "Crusaders", "Valkyries", "Reapers", "Hurricanes", "Admirals", "Legionnaires", "Bulls", "Serpents", "Kestrels",
+];
+const FOOTBALL_COMPS = [
+  "Kingz Exhibition Cup", "Nebula Invitational", "Phantom Trophy", "Galaxy Friendly Series", "Aurora Challenge Cup",
+  "Zenith Masters Cup", "Orion Premier Shield", "Vortex Champions Trophy", "Eclipse Super Cup", "Summit Classic",
+  "Meridian League Cup", "Equinox Invitational", "Titan Challenge Cup", "Horizon Premier Series", "Comet Clash", "Pinnacle Trophy",
+];
+const BASKETBALL_COMPS = [
+  "Kingz Hoops Showcase", "Orbit Basketball Invitational", "Skyline Exhibition League", "Apex Hoops Classic",
+  "Nova Slam Series", "Zenith Court Cup", "Vertex Ball League", "Summit Dunk Classic",
+];
+const VENUES = [
+  "Horizon Arena", "Starfall Park", "Summit Grounds", "Lumen Stadium", "Crater Dome", "Meridian Field",
+  "Aurora Park", "Zenith Arena", "Nova Stadium", "Eclipse Grounds", "Vortex Dome", "Orion Field",
+];
 
 const pick = <T>(xs: readonly T[]): T => xs[Math.floor(Math.random() * xs.length)]!;
 const range = (lo: number, hi: number) => lo + Math.random() * (hi - lo);

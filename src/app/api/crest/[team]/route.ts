@@ -30,16 +30,19 @@ function star(cx: number, cy: number, r: number, fill: string) {
   return `<polygon points="${pts.join(" ")}" fill="${fill}"/>`;
 }
 
-/** Palette from the name: a two-tone body plus a gold or silver metallic trim (deterministic). */
+/** Palette from the name: a two-tone body plus a gold, silver or bronze metallic trim (deterministic). */
 function palette(h: number) {
   const hue = h % 360;
-  const gold = (h >> 3) % 2 === 0;
+  const metal = [
+    { trim: "#E7C46A", trimHi: "#FFF0C0" }, // gold
+    { trim: "#CFD8E3", trimHi: "#FFFFFF" }, // silver
+    { trim: "#C8894B", trimHi: "#F0C89A" }, // bronze
+  ][(h >> 3) % 3]!;
   return {
     deep: `hsl(${hue} 58% 15%)`,
     mid: `hsl(${hue} 56% 29%)`,
     light: `hsl(${hue} 52% 40%)`,
-    trim: gold ? "#E7C46A" : "#CFD8E3",
-    trimHi: gold ? "#FFF0C0" : "#FFFFFF",
+    ...metal,
   };
 }
 
@@ -72,15 +75,48 @@ const DEVICES: Record<string, (p: Palette) => string> = {
 <polygon points="0,-11 2.6,-2.4 0,0 -2.6,-2.4" fill="${p.trimHi}"/><polygon points="0,11 2.6,2.4 0,0 -2.6,2.4" fill="${p.trim}"/>
 <polygon points="11,0 2.4,2.6 0,0 2.4,-2.6" fill="${p.trim}"/><polygon points="-11,0 -2.4,2.6 0,0 -2.4,-2.6" fill="${p.trim}"/>`,
   star: (p) => `${star(0, -0.5, 11.5, p.trimHi)}${star(0, -0.5, 5, p.trim)}`,
+  sword: (p) =>
+    `<polygon points="0,-13 2.1,-5 2.1,6 -2.1,6 -2.1,-5" fill="${p.trimHi}"/>
+<rect x="-5.6" y="5" width="11.2" height="2.7" rx="1.2" fill="${p.trim}"/>
+<rect x="-1.7" y="7.6" width="3.4" height="4.6" rx="1" fill="${p.trim}"/><circle cy="13.4" r="1.9" fill="${p.trim}"/>`,
+  trident: (p) =>
+    `<g fill="none" stroke="${p.trimHi}" stroke-width="2.3" stroke-linecap="round">
+<path d="M0-11V12"/><path d="M-7-11V-4"/><path d="M7-11V-4"/><path d="M-7-4C-7 1 7 1 7-4"/></g>
+<polygon points="0,-13.5 2,-10.5 -2,-10.5" fill="${p.trimHi}"/><polygon points="-7,-13.5 -5,-10.5 -9,-10.5" fill="${p.trimHi}"/><polygon points="7,-13.5 9,-10.5 5,-10.5" fill="${p.trimHi}"/>
+<polygon points="-4.5,12 4.5,12 2.8,14.5 -2.8,14.5" fill="${p.trim}"/>`,
+  sun: (p) => {
+    let rays = "";
+    for (let i = 0; i < 12; i++) {
+      const a = (Math.PI / 6) * i;
+      rays += `<line x1="${(7 * Math.cos(a)).toFixed(1)}" y1="${(7 * Math.sin(a)).toFixed(1)}" x2="${(12 * Math.cos(a)).toFixed(1)}" y2="${(12 * Math.sin(a)).toFixed(1)}" stroke="${p.trimHi}" stroke-width="2" stroke-linecap="round"/>`;
+    }
+    return `${rays}<circle r="5.6" fill="${p.trimHi}"/>`;
+  },
+  gem: (p) =>
+    `<polygon points="0,-11 7.5,-3 0,12.5 -7.5,-3" fill="${p.trimHi}"/>
+<polygon points="0,-11 7.5,-3 0,-3 -7.5,-3" fill="${p.trim}"/>
+<path d="M-7.5-3H7.5M0-11V12.5M-3.8-3 0 12.5 3.8-3" stroke="${p.deep}" stroke-width="0.7" fill="none" opacity="0.7"/>`,
+  mountain: (p) =>
+    `<polygon points="-12,11 -3.5,-6 1.5,2 7,-10 12,11" fill="${p.trimHi}"/>
+<polygon points="7,-10 10,-4 4,-4" fill="${p.deep}" opacity="0.55"/><polygon points="-3.5,-6 -0.8,-0.6 -6.2,-0.6" fill="${p.deep}" opacity="0.55"/>`,
+  paw: (p) =>
+    `<ellipse cy="4.5" rx="6.6" ry="5.6" fill="${p.trimHi}"/>
+<circle cx="-6.2" cy="-2.5" r="2.4" fill="${p.trimHi}"/><circle cx="-2.1" cy="-6.6" r="2.7" fill="${p.trimHi}"/><circle cx="2.3" cy="-6.6" r="2.7" fill="${p.trimHi}"/><circle cx="6.2" cy="-2.5" r="2.4" fill="${p.trimHi}"/>`,
 };
 
 const KEYWORDS: [RegExp, string][] = [
-  [/phoenix|solar|flame|fire|blaze|crimson|scarlet|ember/i, "flame"],
-  [/thunder|electric|storm|bolt|comet|volt|spark/i, "bolt"],
-  [/hawk|harrier|falcon|eagle|raven|wing|phantom/i, "wings"],
-  [/monarch|royal|king|crown|regal|emperor/i, "crown"],
-  [/mariner|anchor|harbor|harbour|port|sail|tide/i, "anchor"],
+  [/phoenix|flame|fire|blaze|ember|volcanic|inferno/i, "flame"],
+  [/thunder|electric|storm|bolt|volt|spark|hurricane|cyclone/i, "bolt"],
+  [/hawk|harrier|falcon|eagle|raven|kestrel|griffin|wing/i, "wings"],
+  [/monarch|royal|king|crown|regal|emperor|imperial|majestic/i, "crown"],
+  [/mariner|anchor|harbor|harbour|port|sail|tidal|admiral|corsair/i, "anchor"],
   [/nomad|rover|wanderer|drifter|ranger|pioneer|voyager|scout/i, "compass"],
+  [/gladiator|spartan|centurion|warrior|knight|lancer|crusader|legion|reaper|valkyrie|vanguard|raider|outlaw/i, "sword"],
+  [/trident|viper|cobra|serpent|hydra|dragon/i, "trident"],
+  [/panther|jaguar|puma|wolf|wolves|lion|tiger|cat|cougar/i, "paw"],
+  [/titan|granite|iron|steel|highland|summit|peak|mountain|stone/i, "mountain"],
+  [/solar|sun|radiant|dawn|nova|comet|vivid/i, "sun"],
+  [/ruby|crystal|sapphire|jade|emerald|gem|diamond|obsidian|onyx|amber/i, "gem"],
   [/united|city|fc|club|athletic|sporting/i, "ball"],
 ];
 
@@ -92,7 +128,10 @@ function device(name: string, h: number): (p: Palette) => string {
 
 function teamCrest(name: string, h: number) {
   const p = palette(h);
-  const stars = [26, 32, 38].map((x) => star(x, 14, 2.3, p.trim)).join("");
+  // Vary the stars above the device and the direction of the sheen, so same-device badges still differ.
+  const starRow = [[26, 32, 38], [28, 36], []][(h >> 7) % 3]!;
+  const stars = starRow.map((x) => star(x, 14, 2.3, p.trim)).join("");
+  const sash = (h >> 9) % 2 === 0 ? "M-6 44 44 -6 58 8 8 58Z" : "M70 44 20 -6 6 8 56 58Z";
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="${esc(name)} crest">
 <defs>
 <linearGradient id="b" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${p.mid}"/><stop offset="1" stop-color="${p.deep}"/></linearGradient>
@@ -101,9 +140,9 @@ function teamCrest(name: string, h: number) {
 </defs>
 <path d="M32 3 57 10v21c0 14-10 24-25 28C17 55 7 45 7 31V10Z" fill="url(#t)"/>
 <path d="M32 6 54 12v19c0 13-9 21-22 25-13-4-22-12-22-25V12Z" fill="url(#b)"/>
-<g clip-path="url(#s)"><path d="M-6 44 44 -6 58 8 8 58Z" fill="${p.light}" opacity="0.35"/></g>
+<g clip-path="url(#s)"><path d="${sash}" fill="${p.light}" opacity="0.35"/></g>
 ${stars}
-<g transform="translate(32 35)">${device(name, h)(p)}</g>
+<g transform="translate(32 ${starRow.length ? 35 : 33})">${device(name, h)(p)}</g>
 </svg>`;
 }
 
