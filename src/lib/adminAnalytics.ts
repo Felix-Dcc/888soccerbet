@@ -228,10 +228,10 @@ export async function scopeSeries(scope: Scope, range: Range): Promise<SeriesPoi
   }));
 }
 
-/** Every administrator with their referral network's figures for the range. */
+/** Every administrator with their referral network's figures for the range. Closed accounts (only the demo cleanup closes one) are left out. */
 export async function adminComparison(range: Range) {
   const admins = await prisma.user.findMany({
-    where: { role: { in: ["ADMIN", "SUPER_ADMIN"] } },
+    where: { role: { in: ["ADMIN", "SUPER_ADMIN"] }, status: { not: "CLOSED" } },
     orderBy: { createdAt: "asc" },
     select: { id: true, email: true, displayName: true, adminUsername: true, role: true, status: true, referralCode: true, lastLoginAt: true, adminRole: { select: { name: true } } },
   });

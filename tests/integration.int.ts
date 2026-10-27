@@ -36,7 +36,7 @@ import { createBooking, loadBooking, resolvePicks } from "../src/lib/bookings";
 import { registerUser, findUserByIdentifier } from "../src/lib/accounts";
 import { TERMS_VERSION } from "../src/lib/legal";
 import { createAdmin, consumeAccessToken, formatReferralCode, issueResetLink, setAdminStatus, updateAdminAccess } from "../src/lib/admins";
-import { parseRange, scopeMetrics } from "../src/lib/adminAnalytics";
+import { adminComparison, parseRange, scopeMetrics } from "../src/lib/adminAnalytics";
 import { adjustBalance, canViewPlayer } from "../src/lib/playerAdmin";
 import { audit, verifyAuditChain } from "../src/lib/audit";
 import { listFixtures, listResults, dataVersion } from "../src/lib/queries";
@@ -1327,6 +1327,14 @@ describe("email", () => {
 });
 
 describe("clearing demo data", () => {
+  it("leaves a closed administrator off the team roster and leaderboard", async () => {
+    const mk = (status: "ACTIVE" | "CLOSED") => prisma.user.create({ data: { email: `adm_${randomUUID()}@t.gh`, passwordHash: "x", role: "ADMIN", status, referralCode: referralCode() } });
+    const [open, closed] = [await mk("ACTIVE"), await mk("CLOSED")];
+    const ids = (await adminComparison(parseRange({ range: "all" }))).map((a) => a.id);
+    expect(ids).toContain(open.id);
+    expect(ids).not.toContain(closed.id);
+  });
+
   it("keeps real money and real players, and removes the demo side without unbalancing the books", async () => {
     // A real deposit, exactly as the live provider records one.
     const real = await prisma.user.create({ data: { email: `real_${randomUUID()}@t.gh`, passwordHash: "x", referralCode: referralCode() } });
