@@ -189,7 +189,7 @@ export function WalletPanel({ minDepositGhs, verification }: { minDepositGhs: nu
         {(["deposit", "withdraw"] as Mode[]).map((m) => (
           <button
             key={m}
-            onClick={() => { setMode(m); setMsg(null); setPending(null); }}
+            onClick={() => { setMode(m); setMsg(null); setPending(null); setAmount(m === "deposit" ? minDepositGhs : 0); }}
             className={`rounded-md py-2 text-sm font-semibold capitalize transition ${mode === m ? "bg-lime text-lime-ink" : "text-fog"}`}
           >
             {m}
@@ -245,8 +245,10 @@ export function WalletPanel({ minDepositGhs, verification }: { minDepositGhs: nu
             id="amt"
             type="number"
             min={mode === "deposit" ? minDepositGhs : 1}
-            className="input text-right font-bold"
-            value={amount}
+            required
+            placeholder="e.g. 100"
+            className={`input ${mode === "deposit" ? "text-right font-bold" : ""}`}
+            value={amount || ""} // 0 shows the placeholder instead, so a withdrawal starts empty
             onChange={(e) => setAmount(Number(e.target.value))}
           />
           {mode === "deposit" && (
