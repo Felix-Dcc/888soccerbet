@@ -73,7 +73,7 @@ function SettledTicket({ bet, verifyCode, owner }: { bet: Ticket; verifyCode: st
           <Row label="Total Stake" value={formatPesewas(placedStake)} />
           <Row label="Total Odds" value={formatMilliOdds(bet.combinedMilliOdds)} />
           {cashed > 0n && <Row label="Cashed out" value={formatPesewas(cashed)} />}
-          {bet.settledAt && <Row label="Settled" value={formatStamp(bet.settledAt)} />}
+          {bet.bonusAmount > 0n && <Row label="Total Bonus" value={formatPesewas(bet.bonusAmount)} />}
         </dl>
 
         {bet.cashouts.length > 0 && (

@@ -16,6 +16,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "./db";
 import { postTransaction, userAccountId, userCashBalance } from "./ledger";
 import { combineMilliOdds, potentialPayout, toPesewas } from "./money";
+import { multipleBonus } from "./bonus";
 import { betRef, verifyCode } from "./ids";
 import { isBettable } from "./markets";
 import type { PlaceBetInput } from "./validation";
@@ -130,7 +131,8 @@ export async function placeBet(userId: string, input: PlaceBetInput): Promise<Pl
 
         const combined = combineMilliOdds(legs);
         const payout = potentialPayout(stake, combined);
-        if (payout > maxPayout)
+        // The cap covers what the house could actually pay out, so the bonus counts towards it.
+        if (payout + multipleBonus(payout, legs) > maxPayout)
           throw new BetError("PAYOUT_LIMIT", `Potential payout exceeds the ${maxPayout / 100n} GHS limit`);
 
         // 3) Funds check under the lock.

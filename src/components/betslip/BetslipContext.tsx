@@ -1,6 +1,7 @@
 "use client";
 import { createContext, useContext, useEffect, useMemo, useState, useCallback } from "react";
 import { DATA_CHANGED_EVENT } from "../LiveRefresh";
+import type { BonusRules } from "@/lib/bonus";
 
 export interface Pick {
   selectionId: string;
@@ -18,6 +19,7 @@ interface BetslipState {
   picks: Pick[];
   stake: number;
   minStake: number; // GHS, from the server setting the bet engine enforces
+  bonus: BonusRules; // multiple-bonus rates, so the slip can show the bonus before the bet is placed
   open: boolean;
   add: (p: Pick) => void;
   remove: (selectionId: string) => void;
@@ -33,7 +35,7 @@ interface BetslipState {
 const Ctx = createContext<BetslipState | null>(null);
 const KEY = "stakra.betslip.v1";
 
-export function BetslipProvider({ minStake, children }: { minStake: number; children: React.ReactNode }) {
+export function BetslipProvider({ minStake, bonus, children }: { minStake: number; bonus: BonusRules; children: React.ReactNode }) {
   const [picks, setPicks] = useState<Pick[]>([]);
   const [stake, setStake] = useState(minStake);
   const [open, setOpen] = useState(false);
@@ -130,8 +132,8 @@ export function BetslipProvider({ minStake, children }: { minStake: number; chil
   const replace = useCallback((next: Pick[]) => setPicks(next), []);
 
   const value = useMemo<BetslipState>(
-    () => ({ picks, stake, minStake, open, add, remove, has, clear, replace, setStake, setOpen, notice, setNotice }),
-    [picks, stake, minStake, open, add, remove, has, clear, replace, notice],
+    () => ({ picks, stake, minStake, bonus, open, add, remove, has, clear, replace, setStake, setOpen, notice, setNotice }),
+    [picks, stake, minStake, bonus, open, add, remove, has, clear, replace, notice],
   );
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

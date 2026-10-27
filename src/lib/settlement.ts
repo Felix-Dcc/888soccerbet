@@ -7,6 +7,7 @@ import { Prisma, type MarketType, type SelectionStatus } from "@prisma/client";
 import { prisma } from "./db";
 import { postTransaction, userAccountId, houseAccountId } from "./ledger";
 import { combineMilliOdds, potentialPayout } from "./money";
+import { multipleBonus } from "./bonus";
 import { CORRECT_SCORE_MAX } from "./markets";
 import { runAutoCashouts } from "./cashout";
 import { notifyWin } from "./emailFlows";
@@ -184,7 +185,7 @@ export async function settleBet(betId: string): Promise<boolean> {
     const settled = await prisma.$transaction(async (tx) => {
       // Lock the bet: a cash out running at the same moment must not also pay it.
       await tx.$queryRaw`SELECT id FROM "Bet" WHERE id = ${betId} FOR UPDATE`;
-      const bet = await tx.bet.findUniqueOrThrow({ where: { id: betId }, include: { selections: true } });
+      const bet = await tx.bet.findUniqueOrThrow({ where: { id: betId }, include: { selections: true, cashouts: { select: { id: true } } } });
       if (bet.status !== "PENDING") return false; // settled, or cashed out in full
       // One lost leg decides a multiple: settle as lost at once, without waiting for the other games.
       const lost = bet.selections.some((s) => s.status === "LOST");
@@ -207,19 +208,23 @@ export async function settleBet(betId: string): Promise<boolean> {
       const combined = combineMilliOdds(effective);
       const payout = potentialPayout(bet.stake, combined);
       const allVoid = legs.length === 0;
+      // Bonus on the legs that actually won: a multiple cut down by voids earns the smaller rate.
+      // A cashed-out bet has already been paid for the part it sold, so it earns none.
+      const bonus = allVoid || bet.cashouts.length > 0 ? 0n : multipleBonus(payout, legs);
+      const credited = payout + bonus;
 
       const cashId = await userAccountId(tx, bet.userId, "USER_CASH");
       await postTransaction(tx, allVoid ? "VOID_REFUND" : "BET_PAYOUT", `bet_settle:${bet.id}`, [
         { accountId: escrowId, amount: -bet.stake }, // release escrow
-        { accountId: cashId, amount: payout }, // pay the customer
-        { accountId: housePnl, amount: bet.stake - payout }, // house P/L (negative = house pays)
-      ], { betRef: bet.ref, payout: payout.toString() });
+        { accountId: cashId, amount: credited }, // pay the customer, bonus included
+        { accountId: housePnl, amount: bet.stake - credited }, // house P/L (negative = house pays)
+      ], { betRef: bet.ref, payout: payout.toString(), ...(bonus > 0n ? { bonus: bonus.toString() } : {}) });
 
       await tx.bet.update({
         where: { id: bet.id },
-        data: { status: allVoid ? "VOID" : "WON", potentialPayout: payout, settledAt: new Date() },
+        data: { status: allVoid ? "VOID" : "WON", potentialPayout: credited, bonusAmount: bonus, settledAt: new Date() },
       });
-      if (!allVoid) won = { userId: bet.userId, payout, ref: bet.ref };
+      if (!allVoid) won = { userId: bet.userId, payout: credited, ref: bet.ref };
       return true;
     }, { isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted, timeout: 15000 });
     const w = won as Win | null;

@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import { useBetslip, type Pick } from "./BetslipContext";
 import { drawSlipImage } from "./slipImage";
 import { combineMilliOdds, formatMilliOdds, formatPesewas, potentialPayout, toPesewas } from "@/lib/money";
+import { multipleBonus } from "@/lib/bonus";
 import { formatStamp } from "@/lib/time";
 import { newId } from "@/lib/clientId";
 
@@ -12,7 +13,7 @@ type Status =
   { k: "idle" } | { k: "placing" } | { k: "ok"; refs: string[] } | { k: "oddschanged"; placed?: string[] } | { k: "needlogin" } | { k: "error"; msg: string };
 
 export function Betslip() {
-  const { picks, stake, minStake, setStake, remove, clear, replace } = useBetslip();
+  const { picks, stake, minStake, bonus, setStake, remove, clear, replace } = useBetslip();
   const [status, setStatus] = useState<Status>({ k: "idle" });
   const stakeId = useId(); // the slip renders twice (desktop rail + mobile drawer): ids must be unique
   const idemRef = useRef<string>(newId());
@@ -32,6 +33,8 @@ export function Betslip() {
   const tooLow = stakeP < toPesewas(minStake); // the engine rejects it too; this just says so up front
   const payout = singles ? picks.reduce((sum, p) => sum + potentialPayout(stakeP, p.milliOdds), 0n) : picks.length ? potentialPayout(stakeP, combined) : 0n;
   const totalStake = singles ? stakeP * BigInt(picks.length) : stakeP;
+  // Only a multiple that lands in full earns the bonus, so singles never show one.
+  const maxBonus = singles ? 0n : multipleBonus(payout, picks.map((p) => p.milliOdds), bonus);
 
   async function place(acceptOddsChange: boolean) {
     setStatus({ k: "placing" });
@@ -257,9 +260,15 @@ export function Betslip() {
                   <dd className="font-semibold tabular-nums text-white">{formatMilliOdds(combined)}</dd>
                 </div>
               )}
+              {maxBonus > 0n && (
+                <div className="flex justify-between text-fog">
+                  <dt>Max bonus</dt>
+                  <dd className="font-semibold tabular-nums text-lime">GHS {formatPesewas(maxBonus)}</dd>
+                </div>
+              )}
               <div className="flex justify-between border-t border-line pt-2 text-base font-bold text-white">
                 <dt>{singles ? "Max return" : "Return"}</dt>
-                <dd className="tabular-nums text-lime">GHS {formatPesewas(payout)}</dd>
+                <dd className="tabular-nums text-lime">GHS {formatPesewas(payout + maxBonus)}</dd>
               </div>
             </dl>
 

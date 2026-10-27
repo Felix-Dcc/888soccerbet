@@ -7,6 +7,7 @@ import { SideNav, type NavData } from "@/components/SideNav";
 import { Footer } from "@/components/Footer";
 import { Splash, SPLASH_SCRIPT } from "@/components/Splash";
 import { minStakeGhs } from "@/lib/betEngine";
+import { bonusRules } from "@/lib/bonus";
 import { listCompetitions, listFixtures, listSports } from "@/lib/queries";
 
 const display = Sora({ subsets: ["latin"], weight: ["600", "700", "800"], variable: "--font-display" });
@@ -57,6 +58,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <Splash />
         <AppShell
           minStakeGhs={minStakeGhs()}
+          bonus={bonusRules()}
           sidebar={
             <Suspense>
               <SideNavWithData />

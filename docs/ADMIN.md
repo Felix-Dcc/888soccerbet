@@ -111,6 +111,8 @@ Settings (`.env`):
 | `STALE_ODDS_HOURS` | Alert when odds are older than this (default 50) |
 | `UNSETTLED_AFTER_HOURS` | Alert for matches unsettled this long after kick-off (default 4) |
 | `PENDING_PAYMENT_ALERT_MINUTES` | Alert for payments pending longer than this (default 60) |
+| `BONUS_TABLE` | Multiple-bonus rates as `legs:percent` pairs (default `3:3,4:5,5:6,6:8,7:11,8:15,9:20,10:25,12:35,15:50,20:70`). The highest entry at or below the qualifying leg count applies; empty turns the bonus off |
+| `BONUS_MIN_ODDS` | A leg must be priced at least this high to count towards the bonus (default 1.20). Shorter legs still pay their odds |
 | `DEFAULT_REFERRAL_CODE` | An administrator's code: players who sign up without a code are attributed to them (shown as auto-assigned). A typed or linked code still wins. Blank = unattributed |
 
 First super admin: `npm run db:seed` creates `admin@kingsbet.gh` as `SUPER_ADMIN`; change its

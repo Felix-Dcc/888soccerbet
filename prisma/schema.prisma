@@ -340,7 +340,8 @@ model Bet {
   type              BetType
   stake             BigInt // pesewas
   combinedMilliOdds Int
-  potentialPayout   BigInt // pesewas
+  potentialPayout   BigInt // pesewas; once settled, the total credited (odds payout plus bonusAmount)
+  bonusAmount       BigInt         @default(0) // multiple bonus paid on top of the odds payout (lib/bonus.ts)
   status            BetStatus      @default(PENDING)
   idempotencyKey    String         @unique
   placedAt          DateTime       @default(now())

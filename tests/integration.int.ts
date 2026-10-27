@@ -805,6 +805,47 @@ describe("winning pop-up", () => {
 });
 
 describe("multiples settle on the first lost leg", () => {
+  it("adds the multiple bonus to a winning acca, from the legs that won, and keeps the books balanced", async () => {
+    const user = await fundedUser(100);
+    const m = await Promise.all([2.0, 2.0, 2.0].map(() => makeMatch({ home: 2.0, draw: 3.0, away: 4.0 })));
+    const acca = await placeBet(user.id, {
+      idempotencyKey: randomUUID(),
+      stakeGhs: 10,
+      acceptOddsChange: false,
+      selections: m.map((x) => ({ selectionId: x.home.id, expectedMilliOdds: 2000 })),
+    });
+    expect(acca.potentialPayout).toBe(toPesewas(80)); // 10 at 8.00, before any bonus
+    for (const x of m) await settleFixture(x.fixture.id, 2, 0);
+
+    // Three qualifying legs pay 3%: GHS 80.00 returns a GHS 2.40 bonus on top.
+    const bet = await prisma.bet.findFirstOrThrow({ where: { ref: acca.ref } });
+    expect(bet.status).toBe("WON");
+    expect(bet.bonusAmount).toBe(toPesewas(2.4));
+    expect(bet.potentialPayout).toBe(toPesewas(82.4)); // what was actually credited
+    expect(await userCashBalance(prisma, user.id)).toBe(toPesewas(172.4)); // 90 left + 82.40
+    expect(await ledgerIsBalanced()).toBe(true);
+  });
+
+  it("drops the bonus when voids cut a multiple below the smallest qualifying size", async () => {
+    const user = await fundedUser(100);
+    const m = await Promise.all([1, 2, 3].map(() => makeMatch({ home: 2.0, draw: 3.0, away: 4.0 })));
+    const acca = await placeBet(user.id, {
+      idempotencyKey: randomUUID(),
+      stakeGhs: 10,
+      acceptOddsChange: false,
+      selections: m.map((x) => ({ selectionId: x.home.id, expectedMilliOdds: 2000 })),
+    });
+    await settleFixture(m[0]!.fixture.id, 2, 0); // won
+    await settleFixture(m[1]!.fixture.id, 2, 0); // won
+    await voidFixture(m[2]!.fixture.id); // two legs left: too few to earn a bonus
+
+    const bet = await prisma.bet.findFirstOrThrow({ where: { ref: acca.ref } });
+    expect(bet.status).toBe("WON");
+    expect(bet.bonusAmount).toBe(0n);
+    expect(bet.potentialPayout).toBe(toPesewas(40)); // 10 at 4.00, nothing added
+    expect(await ledgerIsBalanced()).toBe(true);
+  });
+
   it("settles a multiple as LOST as soon as one leg loses, even with other games still to play", async () => {
     const user = await fundedUser(100);
     const early = await makeMatch({ home: 2.0, draw: 3.0, away: 4.0 });

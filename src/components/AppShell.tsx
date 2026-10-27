@@ -3,6 +3,7 @@ import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { BetslipProvider, OPEN_SLIP_EVENT, useBetslip } from "./betslip/BetslipContext";
+import type { BonusRules } from "@/lib/bonus";
 import { Betslip } from "./betslip/Betslip";
 import { Header } from "./Header";
 import { WinningPopup } from "./WinningPopup";
@@ -75,7 +76,7 @@ function MobileSlip({ open, onClose }: { open: boolean; onClose: () => void }) {
 
 export { OPEN_SLIP_EVENT };
 
-export function AppShell({ sidebar, minStakeGhs, children }: { sidebar: React.ReactNode; minStakeGhs: number; children: React.ReactNode }) {
+export function AppShell({ sidebar, minStakeGhs, bonus, children }: { sidebar: React.ReactNode; minStakeGhs: number; bonus: BonusRules; children: React.ReactNode }) {
   const [slipOpen, setSlipOpen] = useState(false);
   const close = () => setSlipOpen(false);
   // Focused pages (admin console, sign-in, sign-up) get the full width: no sports menu or betslip rails.
@@ -100,7 +101,7 @@ export function AppShell({ sidebar, minStakeGhs, children }: { sidebar: React.Re
     return () => window.removeEventListener(OPEN_SLIP_EVENT, onOpen);
   }, []);
   return (
-    <BetslipProvider minStake={minStakeGhs}>
+    <BetslipProvider minStake={minStakeGhs} bonus={bonus}>
       {/* Keyboard users jump past the header, sports row and menu straight to the page. */}
       <a
         href="#main"
