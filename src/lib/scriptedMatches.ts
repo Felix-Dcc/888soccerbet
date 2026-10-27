@@ -6,10 +6,10 @@
  * Scoring is a pure function of the script and the minutes since kick-off, so every reader agrees
  * and a missed tick never loses a goal — the next tick lands on the right score.
  */
-import { Prisma } from "@prisma/client";
+import { Prisma, type MarketType } from "@prisma/client";
 import { prisma } from "./db";
 import { settleFixture } from "./settlement";
-import { inPlayFootballOdds } from "./matchGenerator";
+import { bookMarket, inPlayFootballOdds } from "./matchGenerator";
 import { toMilliOdds } from "./money";
 
 export type Side = "H" | "A";
@@ -91,7 +91,6 @@ const STAMP_EVERY_MS = 30_000;
 type Running = Prisma.FixtureGetPayload<{ select: typeof runningSelect }>;
 const runningSelect = {
   id: true, sportKey: true, script: true, startsAt: true, status: true, homeScore: true, awayScore: true, oddsAt: true, scoreChangedAt: true,
-  markets: { select: { id: true, type: true, line: true, status: true, selections: { select: { id: true, code: true, milliOdds: true, status: true } } } },
 } satisfies Prisma.FixtureSelect;
 
 /**
@@ -101,18 +100,27 @@ const runningSelect = {
 async function priceInPlay(f: Running, home: number, away: number, elapsed: number, now: Date) {
   const t = TIMING.football;
   const left = Math.round(t.fullMin - playedMin(t, elapsed)); // whole minutes: prices move once a minute
-  const ou = f.markets.find((m) => m.type === "OVER_UNDER");
-  const book = inPlayFootballOdds(home, away, left, ou?.line != null ? Number(ou.line) : null);
-  for (const m of f.markets) {
+  const markets = await prisma.market.findMany({
+    where: { fixtureId: f.id },
+    select: { id: true, type: true, line: true, status: true, selections: { select: { id: true, code: true, milliOdds: true, status: true } } },
+  });
+  const lineOf = (type: MarketType) => {
+    const line = markets.find((m) => m.type === type)?.line;
+    return line == null ? null : Number(line);
+  };
+  // The match's own main lines keep their market types; the rest are the alternates it was built with.
+  const book = inPlayFootballOdds(home, away, left, { total: lineOf("OVER_UNDER"), handicap: lineOf("HANDICAP") });
+  for (const m of markets) {
     if (m.status === "SETTLED") continue;
-    const prices = book[m.type];
-    if (!prices) {
+    const picks = bookMarket(book, m.type, m.line == null ? null : Number(m.line))?.picks;
+    // Nothing left to offer (both teams have scored, the line is already beaten): close the market.
+    if (!picks || Object.values(picks).every((o) => o === null)) {
       if (m.status === "OPEN") await prisma.market.update({ where: { id: m.id }, data: { status: "SUSPENDED" } });
       continue;
     }
     for (const s of m.selections) {
       // A pick the score has ruled out (e.g. 0-0 once it's 1-0) closes instead of staying at long odds.
-      const o = prices[s.code] ?? null;
+      const o = picks[s.code] ?? null;
       const data = o === null ? { status: "SUSPENDED" as const } : { status: "OPEN" as const, milliOdds: toMilliOdds(o) };
       if (data.status !== s.status || ("milliOdds" in data && data.milliOdds !== s.milliOdds)) await prisma.selection.update({ where: { id: s.id }, data });
     }

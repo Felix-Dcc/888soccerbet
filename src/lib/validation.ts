@@ -76,6 +76,17 @@ export const withdrawSchema = z.object({
 // --- Admin: manually created games ---
 const odds = z.number({ invalid_type_error: "Enter the odds" }).min(1.01, "Odds must be at least 1.01").max(1000, "Odds must be at most 1000");
 const MAX_AHEAD_MS = 60 * 86_400_000;
+const totalLine = z.object({
+  line: z.number().positive().max(400).refine((l) => Number.isInteger(l * 2), "Totals line must be a whole or half number (e.g. 2.5)"),
+  over: odds,
+  under: odds,
+});
+// Handicaps are half lines only: a whole line can leave the adjusted score level, which pushes.
+const handicapLine = z.object({
+  line: z.number().min(-400).max(400).refine((l) => Number.isInteger(l * 2) && !Number.isInteger(l), "Handicap must be a half line (e.g. -1.5)"),
+  home: odds,
+  away: odds,
+});
 
 export const manualFixtureSchema = z
   .object({
@@ -86,15 +97,14 @@ export const manualFixtureSchema = z
     startsAt: z.string().datetime({ offset: true, message: "Enter a valid kick-off time" }),
     venue: optionalText(80),
     result: z.object({ home: odds, draw: odds.optional(), away: odds }),
-    total: z
-      .object({
-        line: z.number().positive().max(400).refine((l) => Number.isInteger(l * 2), "Totals line must be a whole or half number (e.g. 2.5)"),
-        over: odds,
-        under: odds,
-      })
-      .optional(),
+    total: totalLine.optional(),
     btts: z.object({ yes: odds, no: odds }).optional(),
     // Generated games supply these; the hand-entered form doesn't (all optional).
+    altTotals: z.array(totalLine).max(8).optional(),
+    homeTotals: z.array(totalLine).max(4).optional(),
+    awayTotals: z.array(totalLine).max(4).optional(),
+    handicap: handicapLine.optional(),
+    altHandicaps: z.array(handicapLine).max(8).optional(),
     doubleChance: z.object({ homeDraw: odds, homeAway: odds, drawAway: odds }).optional(),
     drawNoBet: z.object({ home: odds, away: odds }).optional(),
     oddEven: z.object({ odd: odds, even: odds }).optional(),

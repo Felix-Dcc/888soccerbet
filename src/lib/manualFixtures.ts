@@ -12,6 +12,8 @@ import type { ManualFixtureInput } from "./validation";
 
 type MarketSpec = { type: MarketType; name: string; line?: number; selections: { code: string; name: string; odds: number }[] };
 
+const signed = (line: number) => (line > 0 ? `+${line}` : `${line}`);
+
 function marketsFor(f: ManualFixtureInput): MarketSpec[] {
   const out: MarketSpec[] = [];
   if (f.sportKey === "football")
@@ -80,6 +82,41 @@ function marketsFor(f: ManualFixtureInput): MarketSpec[] {
         { code: "EVEN", name: "Even", odds: f.oddEven.even },
       ],
     });
+  for (const t of f.altTotals ?? [])
+    out.push({
+      type: "ALT_TOTAL",
+      name: "Over/Under",
+      line: t.line,
+      selections: [
+        { code: "OVER", name: `Over ${t.line}`, odds: t.over },
+        { code: "UNDER", name: `Under ${t.line}`, odds: t.under },
+      ],
+    });
+  for (const [team, lines, type] of [
+    [f.homeTeam, f.homeTotals, "HOME_TOTAL"],
+    [f.awayTeam, f.awayTotals, "AWAY_TOTAL"],
+  ] as const)
+    for (const t of lines ?? [])
+      out.push({
+        type,
+        name: `${team} Over/Under`,
+        line: t.line,
+        selections: [
+          { code: "OVER", name: `${team} Over ${t.line}`, odds: t.over },
+          { code: "UNDER", name: `${team} Under ${t.line}`, odds: t.under },
+        ],
+      });
+  for (const [h, type] of [[f.handicap, "HANDICAP"], ...(f.altHandicaps ?? []).map((a) => [a, "ALT_HANDICAP"] as const)] as const)
+    if (h)
+      out.push({
+        type,
+        name: f.sportKey === "basketball" && type === "HANDICAP" ? "Point Spread" : "Handicap",
+        line: h.line,
+        selections: [
+          { code: "1", name: `${f.homeTeam} ${signed(h.line)}`, odds: h.home },
+          { code: "2", name: `${f.awayTeam} ${signed(-h.line)}`, odds: h.away },
+        ],
+      });
   if (f.correctScore)
     out.push({
       type: "CORRECT_SCORE",
