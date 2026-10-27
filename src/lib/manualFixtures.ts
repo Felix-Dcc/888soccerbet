@@ -135,9 +135,11 @@ export async function createManualFixture(f: ManualFixtureInput, script?: MatchS
     await tx.sport.upsert({ where: { key: f.sportKey }, create: { key: f.sportKey, name: sportName }, update: {} });
     const competition = await tx.competition.upsert({
       where: { sportKey_name: { sportKey: f.sportKey, name: f.competition } },
-      create: { sportKey: f.sportKey, name: f.competition },
+      create: { sportKey: f.sportKey, name: f.competition, badgeUrl: leagueCrestUrl(f.competition) },
       update: {},
     });
+    // A fictional league the feed will never badge: give it a drawn emblem so it isn't a bare initial.
+    if (!competition.badgeUrl) await tx.competition.update({ where: { id: competition.id }, data: { badgeUrl: leagueCrestUrl(f.competition) } });
     const created = await tx.fixture.create({
       data: {
         sportKey: f.sportKey,
@@ -181,6 +183,9 @@ export async function rescheduleManualFixture(fixtureId: string, startsAtISO: st
 
 /** A team the feed has no badge for still needs a crest; ours is drawn from the name. */
 export const crestUrl = (team: string) => `/api/crest/${encodeURIComponent(team)}`;
+
+/** A fictional competition's emblem, drawn from its name (round league style). */
+export const leagueCrestUrl = (name: string) => `/api/crest/${encodeURIComponent(name)}?kind=league`;
 
 /** Fill in a drawn crest for either side of a manual game that has no real badge. */
 async function giveGeneratedCrests(fixtureId: string): Promise<void> {
