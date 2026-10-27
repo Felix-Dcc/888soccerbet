@@ -25,7 +25,7 @@ vi.mock("../src/lib/email", async (load) => {
   return { ...real, sendEmail: async (m: { to: string; subject: string; text: string }) => (mail.sent.push(m), true) };
 });
 import { randomUUID } from "node:crypto";
-import type { MarketType } from "@prisma/client";
+import type { MarketType, Prisma } from "@prisma/client";
 import { prisma } from "../src/lib/db";
 import { houseAccountId, userAccountId, postTransaction, userCashBalance, ledgerIsBalanced } from "../src/lib/ledger";
 import { placeBet, BetError } from "../src/lib/betEngine";
@@ -1160,7 +1160,10 @@ describe("in-play safety (LIVE_BETTING=true)", () => {
   describe("generated matches priced in play", () => {
     const prices = async (fixtureId: string) =>
       Object.fromEntries(
-        (await prisma.selection.findMany({ where: { market: { fixtureId } }, include: { market: true } })).map((s) => [`${s.market.type}:${s.code}`, s.milliOdds]),
+        (await prisma.selection.findMany({ where: { market: { fixtureId } }, include: { market: true } })).map((s) => [
+          `${s.market.type}:${s.market.line ?? ""}:${s.code}`,
+          `${s.milliOdds}:${s.status}:${s.market.status}`,
+        ]),
       );
 
     it("prices from the score and minutes left only: two matches with different pre-set results get the same prices", async () => {
@@ -1177,7 +1180,9 @@ describe("in-play safety (LIVE_BETTING=true)", () => {
       const [a, b] = [await prices(nil.id), await prices(rout.id)];
       expect(a).toEqual(b);
       expect(a).not.toEqual(before); // moved off the pre-match prices
-      expect(a["MATCH_RESULT:X"]).toBeLessThan(before["MATCH_RESULT:X"]!); // 0-0 after 30 minutes: the draw shortens
+      expect(Object.keys(a).filter((k) => k.startsWith("ALT_TOTAL:")).length).toBeGreaterThan(0); // every line repriced, not just the main one
+      const drawNow = await prisma.selection.findFirstOrThrow({ where: { code: "X", market: { fixtureId: nil.id, type: "MATCH_RESULT" } } });
+      expect(drawNow.milliOdds).toBeLessThan(Number(before["MATCH_RESULT::X"]!.split(":")[0])); // 0-0 after 30 minutes: the draw shortens
       expect(await oddsAt(rout.id)).not.toBeNull();
 
       const user = await fundedUser(50);
@@ -1217,18 +1222,29 @@ describe("in-play safety (LIVE_BETTING=true)", () => {
 });
 
 describe("generated match markets", () => {
-  /** One single on each listed pick of a generated match: [market type, code]. */
-  async function backPicks(fixtureId: string, picks: [string, string][]) {
-    const user = await fundedUser(100);
+  /** A pick to back: which market to find it on (a type, a line, or both) and its code. */
+  const at = (market: Prisma.MarketWhereInput, code: string, label = `${market.type ?? ""} ${code}`.trim()) => ({ market, code, label });
+  // A goal line and a handicap line can be the same number (over 1.5 / home +1.5), so both say which.
+  const goals = (line: number) => ({ line, type: { in: ["OVER_UNDER", "ALT_TOTAL"] as MarketType[] } });
+  const handicap = (line: number) => ({ line, type: { in: ["HANDICAP", "ALT_HANDICAP"] as MarketType[] } });
+
+  /** One GHS 5 single on each listed pick of a generated match. */
+  async function backPicks(fixtureId: string, picks: ReturnType<typeof at>[], ghs = 100) {
+    const user = await fundedUser(ghs);
     const bets = [];
-    for (const [type, code] of picks) {
-      const s = await prisma.selection.findFirstOrThrow({ where: { code, market: { fixtureId, type: type as MarketType } } });
+    for (const { market, code, label } of picks) {
+      const s = await prisma.selection.findFirstOrThrow({ where: { code, market: { fixtureId, ...market } } });
       const placed = await placeBet(user.id, { idempotencyKey: randomUUID(), stakeGhs: 5, acceptOddsChange: false, selections: [{ selectionId: s.id, expectedMilliOdds: s.milliOdds }] });
-      bets.push({ type, code, ...placed });
+      bets.push({ label, ...placed });
     }
     return { user, bets };
   }
   const statusOf = (ref: string) => prisma.bet.findUniqueOrThrow({ where: { ref } }).then((b) => b.status);
+  /** Checks each bet settled the way the final score says it should, and that the ledger still balances. */
+  async function expectSettled(bets: { label: string; ref: string }[], won: string[]) {
+    for (const b of bets) expect(await statusOf(b.ref), b.label).toBe(won.includes(b.label) ? "WON" : "LOST");
+    expect(await ledgerIsBalanced()).toBe(true);
+  }
 
   it("offers correct score, double chance, draw no bet and odd/even on football, graded from the final score", async () => {
     const { id } = await createManualFixture(manualFixtureSchema.parse(generateMatch("football")));
@@ -1240,23 +1256,22 @@ describe("generated match markets", () => {
     expect(codes.CORRECT_SCORE).toHaveLength(26);
     expect(codes.CORRECT_SCORE).toContain("OTHER");
 
+    const won = ["CORRECT_SCORE 2-1", "DOUBLE_CHANCE 1X", "DRAW_NO_BET 1", "ODD_EVEN ODD"];
     const { user, bets } = await backPicks(id, [
-      ["CORRECT_SCORE", "2-1"], ["CORRECT_SCORE", "1-1"], ["DOUBLE_CHANCE", "1X"], ["DOUBLE_CHANCE", "X2"],
-      ["DRAW_NO_BET", "1"], ["ODD_EVEN", "ODD"], ["ODD_EVEN", "EVEN"],
+      at({ type: "CORRECT_SCORE" }, "2-1"), at({ type: "CORRECT_SCORE" }, "1-1"), at({ type: "DOUBLE_CHANCE" }, "1X"),
+      at({ type: "DOUBLE_CHANCE" }, "X2"), at({ type: "DRAW_NO_BET" }, "1"), at({ type: "ODD_EVEN" }, "ODD"), at({ type: "ODD_EVEN" }, "EVEN"),
     ]);
     await settleFixture(id, 2, 1);
-    const won = ["CORRECT_SCORE 2-1", "DOUBLE_CHANCE 1X", "DRAW_NO_BET 1", "ODD_EVEN ODD"];
-    for (const b of bets) expect(await statusOf(b.ref), `${b.type} ${b.code}`).toBe(won.includes(`${b.type} ${b.code}`) ? "WON" : "LOST");
-    const paid = bets.filter((b) => won.includes(`${b.type} ${b.code}`)).reduce((sum, b) => sum + b.potentialPayout, 0n);
+    await expectSettled(bets, won);
+    const paid = bets.filter((b) => won.includes(b.label)).reduce((sum, b) => sum + b.potentialPayout, 0n);
     expect(await userCashBalance(prisma, user.id)).toBe(toPesewas(100 - 35) + paid);
-    expect(await ledgerIsBalanced()).toBe(true);
   });
 
   it("refunds draw no bet on a draw and pays correct score 'Other' above 4 goals a side", async () => {
     const draw = await createManualFixture(manualFixtureSchema.parse(generateMatch("football")));
     const rout = await createManualFixture(manualFixtureSchema.parse(generateMatch("football")));
-    const a = await backPicks(draw.id, [["DRAW_NO_BET", "2"]]);
-    const b = await backPicks(rout.id, [["CORRECT_SCORE", "OTHER"]]);
+    const a = await backPicks(draw.id, [at({ type: "DRAW_NO_BET" }, "2")]);
+    const b = await backPicks(rout.id, [at({ type: "CORRECT_SCORE" }, "OTHER")]);
     await settleFixture(draw.id, 1, 1);
     await settleFixture(rout.id, 5, 0);
     expect(await statusOf(a.bets[0]!.ref)).toBe("VOID");
@@ -1268,10 +1283,51 @@ describe("generated match markets", () => {
   it("gives basketball odd/even only, graded on total points", async () => {
     const { id } = await createManualFixture(manualFixtureSchema.parse(generateMatch("basketball")));
     const types = (await prisma.market.findMany({ where: { fixtureId: id } })).map((m) => m.type).sort();
-    expect(types).toEqual(["MONEYLINE", "ODD_EVEN", "OVER_UNDER"]);
-    const { bets } = await backPicks(id, [["ODD_EVEN", "ODD"]]);
+    expect([...new Set(types)]).toEqual(["ALT_HANDICAP", "ALT_TOTAL", "HANDICAP", "MONEYLINE", "ODD_EVEN", "OVER_UNDER"]);
+    const { bets } = await backPicks(id, [at({ type: "ODD_EVEN" }, "ODD"), at({ type: "HANDICAP" }, "1")]);
     await settleFixture(id, 101, 100);
-    expect(await statusOf(bets[0]!.ref)).toBe("WON");
+    expect(await statusOf(bets[0]!.ref)).toBe("WON"); // 201 points: odd
+    expect(await statusOf(bets[1]!.ref)).toBe(Number((await prisma.market.findFirstOrThrow({ where: { fixtureId: id, type: "HANDICAP" } })).line) > -1 ? "WON" : "LOST");
+  });
+
+  it("offers all five goal lines, both team totals and four handicaps, graded from the final score", async () => {
+    const { id } = await createManualFixture(manualFixtureSchema.parse(generateMatch("football")));
+    const markets = await prisma.market.findMany({ where: { fixtureId: id } });
+    const linesOf = (types: MarketType[]) => markets.filter((m) => types.includes(m.type)).map((m) => Number(m.line)).sort((a, b) => a - b);
+    expect(linesOf(["OVER_UNDER", "ALT_TOTAL"])).toEqual([1.5, 2.5, 3.5, 4.5, 5.5]);
+    expect(linesOf(["HOME_TOTAL"])).toEqual([0.5, 1.5]);
+    expect(linesOf(["AWAY_TOTAL"])).toEqual([0.5, 1.5]);
+    expect(linesOf(["HANDICAP", "ALT_HANDICAP"])).toEqual([-1.5, -0.5, 0.5, 1.5]);
+    // One main line of each kind; the rest are its alternates.
+    expect(markets.filter((m) => m.type === "OVER_UNDER")).toHaveLength(1);
+    expect(markets.filter((m) => m.type === "HANDICAP")).toHaveLength(1);
+
+    // 2-1: three goals, home two, away one, so the home side covers -0.5 but not -1.5.
+    const won = ["over 1.5", "over 2.5", "under 3.5", "under 5.5", "home over 1.5", "away over 0.5", "away +1.5", "home -0.5"];
+    const { bets } = await backPicks(
+      id,
+      [
+        at(goals(1.5), "OVER", "over 1.5"), at(goals(2.5), "OVER", "over 2.5"), at(goals(3.5), "OVER", "over 3.5"),
+        at(goals(3.5), "UNDER", "under 3.5"), at(goals(5.5), "UNDER", "under 5.5"),
+        at({ type: "HOME_TOTAL", line: 1.5 }, "OVER", "home over 1.5"), at({ type: "AWAY_TOTAL", line: 1.5 }, "OVER", "away over 1.5"),
+        at({ type: "AWAY_TOTAL", line: 0.5 }, "OVER", "away over 0.5"),
+        at(handicap(-1.5), "1", "home -1.5"), at(handicap(-1.5), "2", "away +1.5"), at(handicap(-0.5), "1", "home -0.5"),
+      ],
+      200,
+    );
+    await settleFixture(id, 2, 1);
+    await expectSettled(bets, won);
+  });
+
+  it("refunds a whole-line total that lands on the line, on an alternate line too", async () => {
+    // The generator offers half lines only; an admin may set a whole one, which pushes on the number.
+    const input = manualFixtureSchema.parse(generateMatch("football"));
+    const { id } = await createManualFixture({ ...input, altTotals: [{ line: 3, over: 1.9, under: 1.9 }] });
+    const { user, bets } = await backPicks(id, [at({ type: "ALT_TOTAL", line: 3 }, "OVER", "over 3")]);
+    await settleFixture(id, 2, 1);
+    expect(await statusOf(bets[0]!.ref)).toBe("VOID");
+    expect(await userCashBalance(prisma, user.id)).toBe(toPesewas(100)); // stake back
+    expect(await ledgerIsBalanced()).toBe(true);
   });
 
   it("in play, closes picks the score has ruled out and settled markets, and keeps the rest open", async () => {
@@ -1291,6 +1347,14 @@ describe("generated match markets", () => {
       expect([live.status, live.market.status]).toEqual(["OPEN", "OPEN"]);
       expect((await pick("BTTS", "BTTS_YES")).market.status).toBe("SUSPENDED"); // both have scored
       expect((await pick("DOUBLE_CHANCE", "1X")).market.status).toBe("OPEN");
+
+      // Two goals are in: the 1.5 line is settled either way, while 3.5 is still live.
+      const marketAt = (market: Prisma.MarketWhereInput) => prisma.market.findFirstOrThrow({ where: { fixtureId: id, ...market } });
+      expect((await marketAt(goals(1.5))).status).toBe("SUSPENDED");
+      expect((await marketAt(goals(3.5))).status).toBe("OPEN");
+      expect((await marketAt({ type: "HOME_TOTAL", line: 0.5 })).status).toBe("SUSPENDED"); // home has scored
+      expect((await marketAt({ type: "HOME_TOTAL", line: 1.5 })).status).toBe("OPEN");
+      expect((await marketAt(handicap(-0.5))).status).toBe("OPEN");
 
       const user = await fundedUser(20);
       const dead = await pick("CORRECT_SCORE", "0-0");

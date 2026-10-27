@@ -143,12 +143,24 @@ generated football matches. Every other league closes at kick-off. With it on:
 - Generated basketball and hand-entered games take no live bets. Basketball scores ramp toward the
   pre-set final, and nothing reprices hand-entered games.
 
-Generated matches' markets: football has match result, over/under, both teams to score, double
-chance, draw no bet, odd/even and correct score (0-0 to 4-4 plus "Other"). Basketball has match
-winner, total points and odd/even. All football prices, before and during the match, come from one
-model of the final score with the house margin applied to each pick. The markets can't contradict
-each other: no set of picks across them wins in every outcome. The hand-entered "Add a manual
-game" form is unchanged.
+Generated matches' markets. Football: match result, all five goal lines (over/under 1.5 to 5.5, the
+one nearest even money as the main line and the rest as alternates), each team's goals over/under
+0.5 and 1.5, four handicaps (-1.5 to +1.5), both teams to score, double chance, draw no bet,
+odd/even and correct score (0-0 to 4-4 plus "Other"). Basketball: match winner, five point lines,
+five spreads and odd/even. The hand-entered "Add a manual game" form is unchanged.
+
+Every price, before and during the match, comes from one model of the final score — Poisson goals
+for football, a normal approximation for basketball points — with the house margin applied to each
+pick, so the markets can't contradict each other: no set of picks across them wins in every
+outcome. A pick the score has ruled out closes, and so does one so likely that an honest price
+would be under 1.01 (under 5.5 goals sits just inside that and prices near the floor, as a real
+book prices it).
+
+**Exposure.** The more markets a generated match carries, the more a leaked scoreline is worth:
+correct score at long odds is the sharpest case, since the script names the exact result the market
+pays on. Keep generated scorelines plausible, and keep the pre-set score visible only to staff who
+need it. The prices themselves never reveal it — they are computed from the running score and the
+clock only, never from the script — so the risk is the script itself, not the board.
 
 | Variable | Purpose |
 |---|---|
