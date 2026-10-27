@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { basketballMarketProbs, bookMarket, footballMarketProbs, generateMatch, inPlayFootballOdds, priceBook, type BookProbs } from "../src/lib/matchGenerator";
+import { basketballMarketProbs, bookMarket, footballMarketProbs, generateMatch, inPlayFootballOdds, MAX_ODDS, priceBook, type BookProbs } from "../src/lib/matchGenerator";
 import { FOOTBALL_TOTAL_LINES } from "../src/lib/markets";
 import { manualFixtureSchema } from "../src/lib/validation";
 
@@ -18,7 +18,7 @@ describe("generateMatch", () => {
       expect(m.total).toBeDefined();
       expect(m.btts).toBeDefined();
       const odds = [m.result.home, m.result.draw!, m.result.away, m.total!.over, m.total!.under, m.btts!.yes, m.btts!.no];
-      for (const o of odds) expect(o).toBeGreaterThanOrEqual(1.01), expect(o).toBeLessThanOrEqual(26);
+      for (const o of odds) expect(o).toBeGreaterThanOrEqual(1.01), expect(o).toBeLessThanOrEqual(MAX_ODDS);
       expect(new Date(m.startsAt).getTime()).toBeGreaterThan(Date.now() + 60_000);
     }
   });
@@ -149,7 +149,7 @@ describe("inPlayFootballOdds", () => {
     // not the outcome: four up with five minutes left, the home side can't be sold at 1.01 or better.
     const fourNil = at(4, 0, 5);
     expect(bookMarket(fourNil, "ALT_HANDICAP", -1.5)!.picks["1"]).toBeNull();
-    expect(bookMarket(fourNil, "ALT_HANDICAP", -1.5)!.picks["2"]).toBe(26); // a 3-goal reply: the long-shot ceiling
+    expect(bookMarket(fourNil, "ALT_HANDICAP", -1.5)!.picks["2"]).toBe(MAX_ODDS); // a 3-goal reply: the long-shot ceiling
     expect(bookMarket(fourNil, "BTTS")!.picks.BTTS_NO).not.toBeNull(); // away still has 5 minutes
     expect(bookMarket(at(1, 1, 30), "BTTS")!.picks.BTTS_YES).toBeNull(); // both have scored
   });

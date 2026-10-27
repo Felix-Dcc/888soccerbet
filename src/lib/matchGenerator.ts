@@ -21,7 +21,10 @@ const pick = <T>(xs: readonly T[]): T => xs[Math.floor(Math.random() * xs.length
 const range = (lo: number, hi: number) => lo + Math.random() * (hi - lo);
 /** The shortest and longest price offered: 1.01 is the lowest the manual-game schema accepts. */
 const MIN_ODDS = 1.01;
-const MAX_ODDS = 26;
+// Long-shot ceiling. Most correct scores are longer than 26, so a lower cap flattened half the
+// board onto one price; 500 is about where real books stop, and it keeps the liability on the
+// rarest scorelines (the ones a leaked script would point at) bounded.
+export const MAX_ODDS = 500;
 /**
  * The likeliest a pick can be and still carry a house edge at MIN_ODDS: above this the honest price
  * is under 1.01, so the pick is suspended (priceBook) rather than sold at a loss. Lines like under
