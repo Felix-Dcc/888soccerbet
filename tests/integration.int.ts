@@ -30,7 +30,7 @@ import { prisma } from "../src/lib/db";
 import { houseAccountId, userAccountId, postTransaction, userCashBalance, ledgerIsBalanced } from "../src/lib/ledger";
 import { placeBet, BetError } from "../src/lib/betEngine";
 import { setLiveScore, settleBet, settleFixture, voidFixture, SettlementError } from "../src/lib/settlement";
-import { initiateDeposit, initiateWithdrawal, initiateVerificationPayment, confirmDeposit, manualPayoutQueue, processPaymentEvent, reconcilePendingDeposits, recordManualPayout, reviewVerification, verificationState } from "../src/lib/wallet";
+import { initiateDeposit, initiateWithdrawal, initiateVerificationPayment, confirmDeposit, manualPayoutQueue, processPaymentEvent, reconcilePendingDeposits, recordManualPayout, reviewVerification, verifyPlayer, verificationState } from "../src/lib/wallet";
 import { toPesewas } from "../src/lib/money";
 import { referralCode } from "../src/lib/ids";
 import { createBooking, loadBooking, resolvePicks } from "../src/lib/bookings";
@@ -426,6 +426,27 @@ describe("minimums and withdrawal verification", () => {
     await expect(initiateVerificationPayment(user.id, "0241234567", randomUUID())).rejects.toMatchObject({ code: "ALREADY_VERIFIED" });
     await initiateWithdrawal(user.id, 100, "0241234567", randomUUID());
     expect(await userCashBalance(prisma, user.id)).toBe(toPesewas(2402));
+    expect(await ledgerIsBalanced()).toBe(true);
+  });
+
+  it("lets an admin verify a player directly, releasing any held payment and skipping the standard step", async () => {
+    const user = await fundedUser(0);
+    await win(user.id, 1002); // a big win makes verification required
+    await expect(initiateWithdrawal(user.id, 100, "0241234567", randomUUID())).rejects.toMatchObject({ code: "VERIFICATION_REQUIRED" });
+    await pay(user.id); // only one of the two payments in; GHS 500 held
+    expect(await verificationState(user.id)).toMatchObject({ paid: 1, held: toPesewas(500), status: "UNVERIFIED" });
+
+    // Admin verifies directly, without the second payment: held money is released and the account is VERIFIED.
+    expect(await verifyPlayer(user.id)).toEqual({ released: toPesewas(500) });
+    expect(await verificationState(user.id)).toMatchObject({ held: 0n, status: "VERIFIED" });
+    expect(await userCashBalance(prisma, user.id)).toBe(toPesewas(1502)); // 1002 win + 500 released
+
+    // The withdrawal now goes through without the standard verification step.
+    await initiateWithdrawal(user.id, 100, "0241234567", randomUUID());
+    expect(await userCashBalance(prisma, user.id)).toBe(toPesewas(1402));
+
+    // Verifying an already-verified player is a safe no-op.
+    expect(await verifyPlayer(user.id)).toEqual({ released: 0n });
     expect(await ledgerIsBalanced()).toBe(true);
   });
 

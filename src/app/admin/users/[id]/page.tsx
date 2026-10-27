@@ -215,9 +215,17 @@ export default async function PlayerPage({ params, searchParams }: { params: Pro
             </dl>
           </Panel>
 
-          {(can(u, "users.suspend") || can(u, "wallets.adjust")) && (
+          {(can(u, "users.suspend") || can(u, "wallets.adjust") || can(u, "verification.review")) && (
             <Panel title="Actions" icon="lock">
-              <PlayerActions playerId={p.id} email={p.email} status={p.status} canSuspend={can(u, "users.suspend")} canAdjust={can(u, "wallets.adjust")} />
+              <PlayerActions
+                playerId={p.id}
+                email={p.email}
+                status={p.status}
+                canSuspend={can(u, "users.suspend")}
+                canAdjust={can(u, "wallets.adjust")}
+                canVerify={can(u, "verification.review")}
+                verified={p.kycStatus === "VERIFIED"}
+              />
             </Panel>
           )}
         </div>

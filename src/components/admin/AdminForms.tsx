@@ -365,9 +365,25 @@ export function RoleEditor({ perms, role }: { perms: PermInfo[]; role?: RoleInfo
 }
 
 /** Staff actions on a player: suspend/reactivate (users.suspend), balance correction (wallets.adjust). */
-export function PlayerActions({ playerId, email, status, canSuspend, canAdjust }: { playerId: string; email: string; status: string; canSuspend: boolean; canAdjust: boolean }) {
+export function PlayerActions({
+  playerId,
+  email,
+  status,
+  canSuspend,
+  canAdjust,
+  canVerify,
+  verified,
+}: {
+  playerId: string;
+  email: string;
+  status: string;
+  canSuspend: boolean;
+  canAdjust: boolean;
+  canVerify: boolean;
+  verified: boolean;
+}) {
   const router = useRouter();
-  const [action, setAction] = useState<"status" | "adjust" | null>(null);
+  const [action, setAction] = useState<"status" | "adjust" | "verify" | null>(null);
   const [reason, setReason] = useState("");
   const [amount, setAmount] = useState("");
   const [key, setKey] = useState(newId);
@@ -379,6 +395,11 @@ export function PlayerActions({ playerId, email, status, canSuspend, canAdjust }
       {canSuspend && (
         <button type="button" onClick={() => { setReason(""); setAction("status"); }} className={`btn px-4 py-2 text-sm ${suspending ? "border border-danger/50 text-danger hover:bg-danger/10" : "btn-lime"}`}>
           {suspending ? "Suspend player" : "Reactivate player"}
+        </button>
+      )}
+      {canVerify && !verified && (
+        <button type="button" onClick={() => setAction("verify")} className="btn-lime px-4 py-2 text-sm">
+          Verify account
         </button>
       )}
       {canAdjust && (
@@ -451,6 +472,25 @@ export function PlayerActions({ playerId, email, status, canSuspend, canAdjust }
           setAmount("");
           setReason("");
           setDone("Correction posted");
+          router.refresh();
+          return null;
+        }}
+      />
+      <ConfirmDialog
+        open={action === "verify"}
+        title="Verify account"
+        message={
+          <>
+            Mark <b className="text-white">{email}</b> as verified. They can then withdraw without the standard verification step. Any money held for verification is released to their balance. Recorded in the audit log.
+          </>
+        }
+        confirmLabel="Verify"
+        onClose={() => setAction(null)}
+        onConfirm={async (password) => {
+          const { error } = await send(`/api/admin/players/${playerId}`, "POST", { action: "verify", password });
+          if (error) return error;
+          setAction(null);
+          setDone("Account verified");
           router.refresh();
           return null;
         }}

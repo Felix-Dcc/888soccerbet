@@ -162,6 +162,28 @@ export async function reviewVerification(userId: string, approve: boolean): Prom
   });
 }
 
+/**
+ * Admin verifies a player directly (no verification payments needed): they can then withdraw
+ * without the standard verification step. Any money already held for verification is released to
+ * their balance, as on a normal approval. Safe to call on an already-verified player (no-op credit).
+ */
+export async function verifyPlayer(userId: string): Promise<{ released: bigint }> {
+  return prisma.$transaction(async (tx) => {
+    const { id: holdId } = await heldForVerification(tx, userId);
+    await tx.$queryRaw`SELECT id FROM "LedgerAccount" WHERE id = ${holdId} FOR UPDATE`;
+    const held = await accountBalance(tx, holdId);
+    if (held > 0n) {
+      const cashId = await userAccountId(tx, userId, "USER_CASH");
+      await postTransaction(tx, "VERIFICATION_RELEASE", `verify_release:${holdId}:${Date.now()}`, [
+        { accountId: holdId, amount: -held },
+        { accountId: cashId, amount: held },
+      ], { approved: true, direct: true });
+    }
+    await tx.user.update({ where: { id: userId }, data: { kycStatus: "VERIFIED" } });
+    return { released: held };
+  });
+}
+
 export async function initiateWithdrawal(userId: string, amountGhs: number, msisdn: string, idempotencyKey: string, network: Network = guessNetwork(msisdn), accountName?: string) {
   const amount = toPesewas(amountGhs);
   if (amount <= 0n) throw new WalletError("BAD_AMOUNT", "Amount must be positive");

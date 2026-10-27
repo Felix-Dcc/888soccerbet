@@ -266,6 +266,7 @@ const ACTION_TEXT: Record<string, string> = {
   VOID_FIXTURE: "voided a match",
   APPROVE_VERIFICATION: "approved a verification",
   REJECT_VERIFICATION: "rejected a verification",
+  PLAYER_VERIFIED: "verified a player",
   PAYOUT_MARKED_PAID: "paid a withdrawal",
   PAYOUT_MARKED_FAILED: "returned a withdrawal",
   BALANCE_ADJUSTMENT: "corrected a balance",
