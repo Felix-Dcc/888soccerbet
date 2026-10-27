@@ -2,7 +2,7 @@ import { describe, it, expect, afterEach } from "vitest";
 import { normalizePhone, isAdult, extendSelfExclusion } from "../src/lib/accounts";
 import { isBettable } from "../src/lib/markets";
 import { normaliseCode } from "../src/lib/ids";
-import { registerSchema } from "../src/lib/validation";
+import { registerSchema, withdrawSchema } from "../src/lib/validation";
 import { isTestAccount } from "../src/lib/demoCleanup";
 
 describe("normalizePhone", () => {
@@ -95,5 +95,16 @@ describe("demo cleanup: test accounts", () => {
     for (const e of ["gggg@gmail.com", "RON@gmail.com", "walk692@t.gh", "demo@kingsbet.gh", "partner.e2e@example.test"]) expect(isTestAccount(e)).toBe(true);
     for (const e of ["ronappling56@gmail.com", "williamsmery81@gmail.com", "yjdehie@gmail.com", "j98700367@gmail.com", "n33849079@gmail.com", "admin@kingsbet.gh", "ron@gmail.com.gh", "aron@gmail.com"])
       expect(isTestAccount(e)).toBe(false);
+  });
+});
+
+describe("withdrawal request", () => {
+  const base = { amountGhs: 50, idempotencyKey: "a".repeat(12), msisdn: "0241234567", network: "MTN" };
+  it("needs the name on the mobile money account, trimmed", () => {
+    expect(withdrawSchema.safeParse(base).success).toBe(false);
+    expect(withdrawSchema.safeParse({ ...base, accountName: " " }).success).toBe(false);
+    expect(withdrawSchema.safeParse({ ...base, accountName: "K" }).success).toBe(false);
+    const r = withdrawSchema.safeParse({ ...base, accountName: "  Kofi Mensah " });
+    expect(r.success && r.data.accountName).toBe("Kofi Mensah");
   });
 });

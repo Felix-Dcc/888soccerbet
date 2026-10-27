@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { ConfirmDialog, send } from "./ConfirmDialog";
 
 /** Paid / Failed for one hand-paid withdrawal. Both re-ask the admin's password. */
-export function PayoutActions({ refCode, amount, msisdn, network }: { refCode: string; amount: string; msisdn: string; network: string }) {
+export function PayoutActions({ refCode, amount, msisdn, network, accountName }: { refCode: string; amount: string; msisdn: string; network: string; accountName?: string }) {
   const router = useRouter();
   const [open, setOpen] = useState<"PAID" | "FAILED" | null>(null);
   const record = async (password: string) => {
@@ -30,7 +30,8 @@ export function PayoutActions({ refCode, amount, msisdn, network }: { refCode: s
         message={
           open === "PAID" ? (
             <>
-              Only after you have sent <strong>GHS {amount}</strong> to <strong>{msisdn}</strong> ({network}). The player is emailed that it&apos;s paid.
+              Only after you have sent <strong>GHS {amount}</strong> to <strong>{msisdn}</strong> ({network}
+              {accountName ? <>, {accountName}</> : null}). The player is emailed that it&apos;s paid.
             </>
           ) : (
             <>

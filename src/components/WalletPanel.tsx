@@ -27,6 +27,7 @@ export function WalletPanel({ minDepositGhs, verification }: { minDepositGhs: nu
   // Hidden until a big win makes it apply (or money is already held for review).
   const showVerification = verification.required || verification.heldGhs > 0;
   const [msisdn, setMsisdn] = useState("");
+  const [accountName, setAccountName] = useState(""); // withdrawals only: the name an admin pays by hand
   const [network, setNetwork] = useState<Network>("MTN");
   const [networkPicked, setNetworkPicked] = useState(false); // once chosen by hand, the prefix guess stops overriding it
   const [busy, setBusy] = useState(false);
@@ -109,7 +110,7 @@ export function WalletPanel({ minDepositGhs, verification }: { minDepositGhs: nu
     const res = await fetch(`/api/wallet/${mode}`, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ amountGhs: Number(amount), msisdn, network, idempotencyKey: newId() }),
+      body: JSON.stringify({ amountGhs: Number(amount), msisdn, network, idempotencyKey: newId(), ...(mode === "withdraw" ? { accountName } : {}) }),
     });
     const d = await res.json();
     setBusy(false);
@@ -160,6 +161,27 @@ export function WalletPanel({ minDepositGhs, verification }: { minDepositGhs: nu
       setMsg({ ok: false, text: "Already processed" });
     }
   }
+
+  const networkField = (
+    <div>
+      <label className="label" htmlFor="network">Network</label>
+      <select
+        id="network"
+        className="input"
+        value={network}
+        onChange={(e) => {
+          setNetwork(e.target.value as Network);
+          setNetworkPicked(true);
+        }}
+      >
+        {NETWORKS.map((n) => (
+          <option key={n} value={n}>
+            {NETWORK_LABEL[n]}
+          </option>
+        ))}
+      </select>
+    </div>
+  );
 
   return (
     <div className="card p-5">
@@ -227,38 +249,53 @@ export function WalletPanel({ minDepositGhs, verification }: { minDepositGhs: nu
             value={amount}
             onChange={(e) => setAmount(Number(e.target.value))}
           />
-          <div className="mt-2 flex gap-2">
-            {[50, 100, 200, 500].map((v) => (
-              <button type="button" key={v} onClick={() => setAmount(v)} className="flex-1 rounded-lg border border-line py-1.5 text-xs font-semibold text-fog hover:border-lime hover:text-lime">
-                {v}
-              </button>
-            ))}
-          </div>
+          {mode === "deposit" && (
+            <div className="mt-2 flex gap-2">
+              {[50, 100, 200, 500].map((v) => (
+                <button type="button" key={v} onClick={() => setAmount(v)} className="flex-1 rounded-lg border border-line py-1.5 text-xs font-semibold text-fog hover:border-lime hover:text-lime">
+                  {v}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
+        {/* Withdrawals are paid by hand, so they ask the way the admin needs it: network, number, then the name on the account. */}
+        {mode === "withdraw" && networkField}
         <div>
-          <label className="label" htmlFor="msisdn">Mobile money number</label>
-          <input id="msisdn" type="tel" inputMode="numeric" autoComplete="tel-national" maxLength={10} required className="input" value={msisdn} onChange={(e) => onNumber(e.target.value)} />
-        </div>
-        <div>
-          <label className="label" htmlFor="network">Network</label>
-          <select
-            id="network"
+          <label className="label" htmlFor="msisdn">{mode === "withdraw" ? "Account number" : "Mobile money number"}</label>
+          <input
+            id="msisdn"
+            type="tel"
+            inputMode="numeric"
+            autoComplete="tel-national"
+            maxLength={10}
+            required
+            placeholder="024 000 0000"
             className="input"
-            value={network}
-            onChange={(e) => {
-              setNetwork(e.target.value as Network);
-              setNetworkPicked(true);
-            }}
-          >
-            {NETWORKS.map((n) => (
-              <option key={n} value={n}>
-                {NETWORK_LABEL[n]}
-              </option>
-            ))}
-          </select>
+            value={msisdn}
+            onChange={(e) => onNumber(e.target.value)}
+          />
         </div>
+        {mode === "withdraw" ? (
+          <div>
+            <label className="label" htmlFor="acctname">Account name</label>
+            <input
+              id="acctname"
+              type="text"
+              autoComplete="name"
+              maxLength={60}
+              required
+              placeholder="Full name on the account"
+              className="input"
+              value={accountName}
+              onChange={(e) => setAccountName(e.target.value)}
+            />
+          </div>
+        ) : (
+          networkField
+        )}
         <button className="btn-lime w-full py-3" disabled={busy || locked}>
-          {busy ? "Working…" : mode === "deposit" ? "Deposit" : locked ? "Verify to withdraw" : "Withdraw"}
+          {busy ? "Working…" : mode === "deposit" ? "Deposit" : locked ? "Verify to withdraw" : "Request withdrawal"}
         </button>
       </form>
       )}

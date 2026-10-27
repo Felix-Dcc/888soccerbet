@@ -162,7 +162,7 @@ export async function reviewVerification(userId: string, approve: boolean): Prom
   });
 }
 
-export async function initiateWithdrawal(userId: string, amountGhs: number, msisdn: string, idempotencyKey: string, network: Network = guessNetwork(msisdn)) {
+export async function initiateWithdrawal(userId: string, amountGhs: number, msisdn: string, idempotencyKey: string, network: Network = guessNetwork(msisdn), accountName?: string) {
   const amount = toPesewas(amountGhs);
   if (amount <= 0n) throw new WalletError("BAD_AMOUNT", "Amount must be positive");
 
@@ -187,7 +187,7 @@ export async function initiateWithdrawal(userId: string, amountGhs: number, msis
       const intent = await tx.paymentIntent.create({
         data: {
           ref, userId, direction: "WITHDRAWAL", amount, status: "PENDING",
-          provider: provider.name, idempotencyKey, metadata: { msisdn, network },
+          provider: provider.name, idempotencyKey, metadata: { msisdn, network, ...(accountName ? { accountName } : {}) },
         },
       });
       // Hold the funds now so they can't be spent while the payout is in flight.

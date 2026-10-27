@@ -69,6 +69,8 @@ export const withdrawSchema = z.object({
   idempotencyKey: z.string().min(8).max(100),
   msisdn,
   network,
+  // Payouts are sent by hand, so the admin needs the name registered on the mobile money account.
+  accountName: z.string().trim().min(2, "Enter the name on the account").max(60),
 });
 
 // --- Admin: manually created games ---

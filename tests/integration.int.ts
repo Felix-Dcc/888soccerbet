@@ -265,7 +265,9 @@ describe("wallet", () => {
     const initiate = vi.fn(async () => ({ providerRef: null, status: "PENDING" as const }));
     psp.override = { name: "shinobipay", isSandbox: true, payouts: "manual", initiate, verifyWebhook: async () => ({ ok: false }) };
     try {
-      const paid = await initiateWithdrawal(user.id, 40, "0241234567", randomUUID());
+      const paid = await initiateWithdrawal(user.id, 40, "0241234567", randomUUID(), "MTN", "Kofi Mensah");
+      // The admin pays this one by hand, so the queue must carry the name on the mobile money account.
+      expect((await manualPayoutQueue()).find((i) => i.ref === paid.ref)?.metadata).toMatchObject({ msisdn: "0241234567", network: "MTN", accountName: "Kofi Mensah" });
       const refused = await initiateWithdrawal(user.id, 25, "0241234567", randomUUID());
       expect(initiate).not.toHaveBeenCalled(); // nobody asks the PSP to pay
       expect(await userCashBalance(prisma, user.id)).toBe(toPesewas(35)); // both held

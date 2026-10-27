@@ -67,7 +67,7 @@ export default async function OperationsPage({ searchParams }: { searchParams: P
         <Panel title="Withdrawals to pay" icon="coins" flush actions={<span className="text-xs text-fog">{ghs(payouts.reduce((n, p) => n + p.amount, 0n))} total</span>}>
           <ul className="divide-y divide-white/[0.05]">
             {payouts.map((p) => {
-              const m = (p.metadata ?? {}) as { msisdn?: string; network?: string };
+              const m = (p.metadata ?? {}) as { msisdn?: string; network?: string; accountName?: string };
               return (
                 <li key={p.id} className="flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3">
                   <span className="min-w-0 flex-1">
@@ -75,10 +75,12 @@ export default async function OperationsPage({ searchParams }: { searchParams: P
                       {ghs(p.amount)} <span className="font-normal text-fog">to</span> <span className="font-mono">{m.msisdn ?? "—"}</span> <span className="text-fog">{m.network ?? ""}</span>
                     </span>
                     <span className="block truncate text-xs text-fog">
+                      {m.accountName ? <span className="text-white">{m.accountName}</span> : null}
+                      {m.accountName ? " · " : ""}
                       {p.user.displayName ?? p.user.email} · {p.ref} · asked {ago(p.createdAt)}
                     </span>
                   </span>
-                  <PayoutActions refCode={p.ref} amount={formatPesewas(p.amount)} msisdn={m.msisdn ?? "?"} network={m.network ?? "?"} />
+                  <PayoutActions refCode={p.ref} amount={formatPesewas(p.amount)} msisdn={m.msisdn ?? "?"} network={m.network ?? "?"} accountName={m.accountName} />
                 </li>
               );
             })}
