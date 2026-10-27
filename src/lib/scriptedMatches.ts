@@ -9,6 +9,8 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "./db";
 import { settleFixture } from "./settlement";
+import { inPlayFootballOdds } from "./matchGenerator";
+import { toMilliOdds } from "./money";
 
 export type Side = "H" | "A";
 export interface MatchScript {
@@ -49,14 +51,16 @@ export function buildScript(sport: "football" | "basketball", ht: [number, numbe
 
 const lerp = (from: number, to: number, t: number) => Math.round(from + (to - from) * Math.min(1, Math.max(0, t)));
 
+/** Real minutes since kick-off -> minutes of play: the clock stops during the interval. */
+const playedMin = (t: { halfMin: number; breakMin: number }, elapsed: number) =>
+  elapsed <= t.halfMin ? Math.max(0, elapsed)
+  : elapsed <= t.halfMin + t.breakMin ? t.halfMin
+  : t.halfMin + (elapsed - t.halfMin - t.breakMin);
+
 /** The score to show `elapsed` real minutes after kick-off, and whether the match is over. */
 export function scoreAt(s: MatchScript, elapsed: number): { home: number; away: number; finished: boolean } {
   if (elapsed >= scriptLengthMin(s)) return { home: s.ft[0], away: s.ft[1], finished: true };
-  // Real time -> minutes of play: the clock stops during the interval.
-  const played =
-    elapsed <= s.halfMin ? Math.max(0, elapsed)
-    : elapsed <= s.halfMin + s.breakMin ? s.halfMin
-    : s.halfMin + (elapsed - s.halfMin - s.breakMin);
+  const played = playedMin(s, elapsed);
 
   if (s.goals.length || (s.ft[0] === 0 && s.ft[1] === 0))
     return { home: s.goals.filter((g) => g.side === "H" && g.m <= played).length, away: s.goals.filter((g) => g.side === "A" && g.m <= played).length, finished: false };
@@ -78,14 +82,54 @@ const isScript = (v: unknown): v is MatchScript => {
 /** Read a fixture's stored script, or null when it has none (every feed and hand-entered game). */
 export const readScript = (v: Prisma.JsonValue | null | undefined): MatchScript | null => (isScript(v) ? v : null);
 
+// After a goal a generated match's markets stay suspended this long before they reopen at new prices.
+const GOAL_SUSPEND_MS = 10_000;
+// Refresh the in-play freshness stamp this often (well inside LIVE_ODDS_MAX_AGE_MS) without making
+// players' pages reload on every tick.
+const STAMP_EVERY_MS = 30_000;
+
+type Running = Prisma.FixtureGetPayload<{ select: typeof runningSelect }>;
+const runningSelect = {
+  id: true, sportKey: true, script: true, startsAt: true, status: true, homeScore: true, awayScore: true, oddsAt: true, scoreChangedAt: true,
+  markets: { select: { id: true, type: true, line: true, status: true, selections: { select: { id: true, code: true, milliOdds: true } } } },
+} satisfies Prisma.FixtureSelect;
+
+/**
+ * Reprice a generated football match in play from its score and the minutes left only (never its
+ * script, see inPlayFootballOdds), and stamp oddsAt so it can take live bets (isBettable).
+ */
+async function priceInPlay(f: Running, home: number, away: number, elapsed: number, now: Date) {
+  const t = TIMING.football;
+  const left = Math.round(t.fullMin - playedMin(t, elapsed)); // whole minutes: prices move once a minute
+  const ou = f.markets.find((m) => m.type === "OVER_UNDER");
+  const odds = inPlayFootballOdds(home, away, left, ou?.line != null ? Number(ou.line) : null);
+  const byType: Partial<Record<string, Record<string, number> | null>> = { MATCH_RESULT: odds.result, OVER_UNDER: odds.total, BTTS: odds.btts };
+  for (const m of f.markets) {
+    if (m.status === "SETTLED") continue;
+    const prices = byType[m.type];
+    if (!prices) {
+      if (m.status === "OPEN") await prisma.market.update({ where: { id: m.id }, data: { status: "SUSPENDED" } });
+      continue;
+    }
+    for (const s of m.selections) {
+      const o = prices[s.code];
+      if (o !== undefined && toMilliOdds(o) !== s.milliOdds) await prisma.selection.update({ where: { id: s.id }, data: { milliOdds: toMilliOdds(o) } });
+    }
+    if (m.status !== "OPEN") await prisma.market.update({ where: { id: m.id }, data: { status: "OPEN" } });
+  }
+  if (!f.oddsAt || now.getTime() - f.oddsAt.getTime() >= STAMP_EVERY_MS) await prisma.fixture.update({ where: { id: f.id }, data: { oddsAt: now } });
+}
+
 /**
  * Walk every running generated match to the score its script says it should be on now, and settle
- * the ones that have finished. Safe to run as often as you like: it only writes on a change.
+ * the ones that have finished. Safe to run as often as you like: it only writes on a change. With
+ * LIVE_BETTING on, generated football matches are also priced in play: a goal suspends every market
+ * for GOAL_SUSPEND_MS, then they reopen at prices for the new score.
  */
 export async function advanceScriptedMatches(now = new Date()): Promise<{ updated: number; settled: number }> {
   const running = await prisma.fixture.findMany({
     where: { providerRef: null, status: { in: ["SCHEDULED", "LIVE"] }, startsAt: { lte: now }, script: { not: Prisma.DbNull } },
-    select: { id: true, script: true, startsAt: true, homeScore: true, awayScore: true },
+    select: runningSelect,
     take: 200,
   });
   let updated = 0;
@@ -100,9 +144,21 @@ export async function advanceScriptedMatches(now = new Date()): Promise<{ update
         await settleFixture(f.id, home, away); // final whistle: grade and pay out
         settled++;
       } else if (home !== f.homeScore || away !== f.awayScore) {
-        // Guarded on status so a result an admin entered meanwhile is never overwritten.
-        const r = await prisma.fixture.updateMany({ where: { id: f.id, status: { in: ["SCHEDULED", "LIVE"] } }, data: { homeScore: home, awayScore: away, status: "LIVE", lastSyncedAt: now } });
+        const goal = home !== (f.homeScore ?? 0) || away !== (f.awayScore ?? 0); // kick-off (no score -> 0-0) isn't one
+        // Guarded on status so a result an admin entered meanwhile is never overwritten. Clearing
+        // oddsAt closes live bets at once; the markets are then suspended until the next pricing.
+        const r = await prisma.fixture.updateMany({
+          where: { id: f.id, status: { in: ["SCHEDULED", "LIVE"] } },
+          data: { homeScore: home, awayScore: away, status: "LIVE", lastSyncedAt: now, ...(goal && { scoreChangedAt: now, oddsAt: null }) },
+        });
+        if (goal && r.count) await prisma.market.updateMany({ where: { fixtureId: f.id, status: "OPEN" }, data: { status: "SUSPENDED" } });
         updated += r.count;
+      } else if (
+        f.sportKey === "football" && // basketball scores ramp toward the pre-set final: never priced in play
+        process.env.LIVE_BETTING === "true" &&
+        (!f.scoreChangedAt || now.getTime() - f.scoreChangedAt.getTime() >= GOAL_SUSPEND_MS)
+      ) {
+        await priceInPlay(f, home, away, elapsed, now);
       }
     } catch (e) {
       console.error(`[scripted] ${f.id} failed:`, e instanceof Error ? e.message : e);

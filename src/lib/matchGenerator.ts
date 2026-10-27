@@ -17,8 +17,60 @@ const VENUES = ["Horizon Arena", "Starfall Park", "Summit Grounds", "Lumen Stadi
 
 const pick = <T>(xs: readonly T[]): T => xs[Math.floor(Math.random() * xs.length)]!;
 const range = (lo: number, hi: number) => lo + Math.random() * (hi - lo);
-/** Decimal odds from a win probability, with the house margin baked in; clamped to a realistic band. */
-const oddsFrom = (prob: number, margin = 1.08) => Math.min(26, Math.max(1.08, Math.round((margin / prob) * 100) / 100));
+/**
+ * Decimal odds from a win probability, with the house margin baked in (each outcome priced as if
+ * `margin` times likelier, so a book's implied probabilities sum to ~1.08); clamped to a realistic band.
+ */
+export const oddsFrom = (prob: number, margin = 1.08) => Math.min(26, Math.max(1.08, Math.round((1 / (prob * margin)) * 100) / 100));
+
+// Goals a side scores per 90 minutes in the in-play model (home, away): typical league rates.
+const GOAL_RATE = [1.45, 1.15] as const;
+const poisson = (mean: number, max = 12): number[] => {
+  const p = [Math.exp(-mean)];
+  for (let k = 1; k <= max; k++) p.push((p[k - 1]! * mean) / k);
+  return p;
+};
+
+/** In-play decimal odds per market for a generated football match; null = decided or nearly so (suspend it). */
+export interface InPlayOdds {
+  result: { "1": number; X: number; "2": number } | null;
+  total: { OVER: number; UNDER: number } | null;
+  btts: { BTTS_YES: number; BTTS_NO: number } | null;
+}
+
+/**
+ * In-play prices for a generated football match from what every viewer can see: the score and the
+ * minutes of play left (plus the over/under market's own line). It must never be given the match's
+ * script: the admin pre-sets the final score, and prices built from it would give the result away.
+ * Remaining goals are Poisson at league-average rates. A market whose likeliest outcome is above 90%
+ * is suspended: the 1.08 odds floor would otherwise pay more than it's worth.
+ */
+export function inPlayFootballOdds(home: number, away: number, minutesLeft: number, line: number | null, margin = 1.08): InPlayOdds {
+  const t = Math.max(0, minutesLeft) / 90;
+  const [ph, pa] = [poisson(GOAL_RATE[0] * t), poisson(GOAL_RATE[1] * t)];
+  let [win, draw, loss, over, btts, mass] = [0, 0, 0, 0, 0, 0];
+  ph.forEach((p1, i) =>
+    pa.forEach((p2, j) => {
+      const p = p1 * p2;
+      const [h, a] = [home + i, away + j];
+      mass += p;
+      if (h > a) win += p;
+      else if (h === a) draw += p;
+      else loss += p;
+      if (line !== null && h + a > line) over += p;
+      if (h > 0 && a > 0) btts += p;
+    }),
+  );
+  const price = (probs: number[]) => (Math.max(...probs) / mass > 0.9 ? null : probs.map((p) => oddsFrom(p / mass, margin)));
+  const r = price([win, draw, loss]);
+  const o = line !== null && line % 1 === 0.5 ? price([over, mass - over]) : null; // half lines only: no push to model
+  const b = price([btts, mass - btts]);
+  return {
+    result: r && { "1": r[0]!, X: r[1]!, "2": r[2]! },
+    total: o && { OVER: o[0]!, UNDER: o[1]! },
+    btts: b && { BTTS_YES: b[0]!, BTTS_NO: b[1]! },
+  };
+}
 
 /** Two distinct fictional team names. */
 function twoTeams(): [string, string] {

@@ -8,9 +8,10 @@
  * refreshed — a line that moved (2.5 -> 3.0), or a market the bookmakers stopped quoting —
  * is SUSPENDED, so a stale price can never be bet on. A market that comes back reopens.
  *
- * In play: a score change suspends all of a match's open markets (updateLiveScores), and only odds
- * fetched after that change reopen them; Fixture.oddsAt records the fetch so stale live prices
- * can't be bet on (isBettable).
+ * In play: only the match result stays open (IN_PLAY_MARKET_TYPES), a score change suspends all of
+ * a match's open markets (updateLiveScores), and only odds fetched after that change reopen them.
+ * Fixture.oddsAt records the fetch, for LIVE_BETTING_LEAGUES only, so stale live prices and other
+ * leagues can't be bet on in play (isBettable).
  */
 import type { MarketType } from "@prisma/client";
 import { prisma } from "./db";
@@ -20,6 +21,7 @@ import { SettlementError, settleFixture } from "./settlement";
 import { applyCachedBadges } from "./assets";
 import { competitionRank } from "./queries";
 import { runAutoCashouts } from "./cashout";
+import { IN_PLAY_MARKET_TYPES, liveBettingLeagues } from "./markets";
 
 const SPORTS = ["football", "basketball"];
 
@@ -55,11 +57,16 @@ export async function applyMarkets(fixtureId: string, markets: ProviderMarket[],
     });
 }
 
-/** `leagues` limits the fetch to those provider leagues (the in-play refresh); default all. */
-export async function syncFixtures(leagues?: string[]): Promise<{ fixtures: number; provider: string; sandbox: boolean }> {
+/**
+ * `leagues` limits the fetch to those provider leagues; `inPlay` is the in-play refresh: match result
+ * only, so it leaves the other markets of upcoming matches in those leagues alone.
+ */
+export async function syncFixtures({ leagues, inPlay = false }: { leagues?: string[]; inPlay?: boolean } = {}): Promise<{ fixtures: number; provider: string; sandbox: boolean }> {
   const provider = oddsProvider();
   const fetchedAt = new Date(); // before the fetch: prices are at least this old
-  const fixtures = await provider.fetchFixtures(SPORTS, leagues);
+  const fixtures = await provider.fetchFixtures(SPORTS, { leagues, mainOnly: inPlay });
+  const owned = inPlay ? provider.bulkMarketTypes.filter((t) => IN_PLAY_MARKET_TYPES.includes(t)) : provider.bulkMarketTypes;
+  const live = liveBettingLeagues();
 
   // Ensure sports exist.
   await prisma.sport.upsert({ where: { key: "football" }, create: { key: "football", name: "Football", position: 1 }, update: {} });
@@ -92,11 +99,14 @@ export async function syncFixtures(leagues?: string[]): Promise<{ fixtures: numb
       },
       update: { startsAt, lastSyncedAt: now, status, ...meta },
     });
-    await applyMarkets(fixture.id, f.markets, provider.bulkMarketTypes);
+    if (status === "LIVE") {
+      await applyMarkets(fixture.id, f.markets.filter((m) => IN_PLAY_MARKET_TYPES.includes(m.type)), owned);
+      await closeInPlayExtras(fixture.id);
+    } else await applyMarkets(fixture.id, f.markets, owned);
     // Prices fetched before the latest goal must not stay open: the score change wins.
     const fresh = await prisma.fixture.updateMany({
       where: { id: fixture.id, OR: [{ scoreChangedAt: null }, { scoreChangedAt: { lt: fetchedAt } }] },
-      data: { oddsAt: fetchedAt },
+      data: { oddsAt: f.providerLeague && live.includes(f.providerLeague) ? fetchedAt : null },
     });
     if (!fresh.count) await prisma.market.updateMany({ where: { fixtureId: fixture.id, status: "OPEN" }, data: { status: "SUSPENDED" } });
   }
@@ -104,6 +114,10 @@ export async function syncFixtures(leagues?: string[]): Promise<{ fixtures: numb
   await runAutoCashouts(); // new prices may reach players' auto cash out targets
   return { fixtures: fixtures.length, provider: provider.name, sandbox: provider.isSandbox };
 }
+
+/** In play only the match result is offered: every other open market on the match closes. */
+const closeInPlayExtras = (fixtureId: string) =>
+  prisma.market.updateMany({ where: { fixtureId, status: "OPEN", type: { notIn: IN_PLAY_MARKET_TYPES } }, data: { status: "SUSPENDED" } });
 
 /**
  * Per-match markets (all over/under and handicap lines, team totals, correct score, odd/even,
@@ -199,27 +213,29 @@ const leaguesOf = (fs: { competition: { providerRef: string | null } }[]) =>
   [...new Set(fs.map((f) => f.competition.providerRef).filter((l): l is string => !!l))];
 
 /**
- * In-play odds: the bulk odds sync for leagues with a match in play only, run every
- * LIVE_ODDS_INTERVAL_MS so live prices stay within LIVE_ODDS_MAX_AGE_MS. Off unless LIVE_BETTING=true.
- * Costs 1 credit per bulk market per region per league per run. Pauses at LIVE_ODDS_RESERVE credits
- * (never below LIVE_SCORES_RESERVE: live odds without goal detection would be unsafe) so the
- * pre-match sync keeps running; live betting then closes by itself as the odds age.
+ * In-play odds: the match result only, for LIVE_BETTING_LEAGUES with a match in play, run every
+ * LIVE_ODDS_INTERVAL_MS so live prices stay within LIVE_ODDS_MAX_AGE_MS. Nothing while LIVE_BETTING
+ * is off. Costs 1 credit per league per run (h2h, one region). Pauses at LIVE_ODDS_RESERVE credits,
+ * never below LIVE_SCORES_RESERVE (live odds without goal detection would be unsafe), so live odds
+ * stop first, then live scores, and the pre-match sync keeps running; live betting then closes by
+ * itself as the odds age.
  */
 export async function syncLiveOdds(): Promise<{ live: number; fixtures?: number; skipped?: string }> {
-  if (process.env.LIVE_BETTING !== "true") return { live: 0 };
-  const leagues = leaguesOf(await inPlay(Date.now()));
+  const allowed = liveBettingLeagues();
+  const leagues = leaguesOf(await inPlay(Date.now())).filter((l) => allowed.includes(l));
   if (!leagues.length) return { live: 0 };
-  const reserve = Math.max(Number(process.env.LIVE_ODDS_RESERVE ?? 150), Number(process.env.LIVE_SCORES_RESERVE ?? 150));
+  const reserve = Math.max(Number(process.env.LIVE_ODDS_RESERVE ?? 300), Number(process.env.LIVE_SCORES_RESERVE ?? 150));
   const left = oddsProvider().creditsRemaining;
   if (left != null && left <= reserve) return { live: leagues.length, skipped: `credit reserve: ${left} left` };
-  return { live: leagues.length, fixtures: (await syncFixtures(leagues)).fixtures };
+  return { live: leagues.length, fixtures: (await syncFixtures({ leagues, inPlay: true })).fixtures };
 }
 
-export async function updateLiveScores(): Promise<{ live: number; updated: number; settled: number; skipped?: string }> {
+/** `only` picks which provider leagues this run polls (the worker polls live-betting leagues faster); default all. */
+export async function updateLiveScores(only: (league: string) => boolean = () => true): Promise<{ live: number; updated: number; settled: number; skipped?: string }> {
   const provider = oddsProvider();
   if (!provider.fetchLiveScores) return { live: 0, updated: 0, settled: 0 };
   const now = Date.now();
-  const live = await inPlay(now);
+  const live = (await inPlay(now)).filter((f) => f.competition.providerRef && only(f.competition.providerRef));
   const leagues = leaguesOf(live);
   if (!leagues.length) return { live: live.length, updated: 0, settled: 0 };
 
@@ -236,10 +252,11 @@ export async function updateLiveScores(): Promise<{ live: number; updated: numbe
     if (r.finished) {
       if (await settleIfOpen(f.id, r.homeScore, r.awayScore)) settled++;
     } else {
-      // A goal makes every price on the match stale: suspend them all until odds fetched after it arrive.
+      // A goal makes every price on the match stale: suspend them all until odds fetched after it
+      // arrive. Otherwise only the match result stays open in play.
       const goal = (f.homeScore ?? 0) !== r.homeScore || (f.awayScore ?? 0) !== r.awayScore;
       await prisma.$transaction([
-        ...(goal ? [prisma.market.updateMany({ where: { fixtureId: f.id, status: "OPEN" }, data: { status: "SUSPENDED" } })] : []),
+        goal ? prisma.market.updateMany({ where: { fixtureId: f.id, status: "OPEN" }, data: { status: "SUSPENDED" } }) : closeInPlayExtras(f.id),
         // Guarded on status so a match an admin settled meanwhile is never flipped back to LIVE.
         prisma.fixture.updateMany({
           where: { id: f.id, status: { in: ["SCHEDULED", "LIVE"] } },

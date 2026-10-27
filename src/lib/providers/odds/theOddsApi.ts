@@ -447,11 +447,12 @@ export class TheOddsApiProvider implements OddsProvider {
     return r;
   }
 
-  async fetchFixtures(sports: string[], leagues?: string[]): Promise<ProviderFixture[]> {
+  async fetchFixtures(sports: string[], { leagues, mainOnly }: { leagues?: string[]; mainOnly?: boolean } = {}): Promise<ProviderFixture[]> {
     const out: ProviderFixture[] = [];
+    const markets = mainOnly ? "h2h" : this.markets; // 1 credit per league instead of 3
     for (const sport of sports) {
       for (const leagueKey of (SPORT_KEYS[sport] ?? []).filter((k) => !leagues || leagues.includes(k))) {
-        const url = `${API}/sports/${leagueKey}/odds?apiKey=${this.key}&regions=${this.region}&markets=${this.markets}&oddsFormat=decimal&dateFormat=iso`;
+        const url = `${API}/sports/${leagueKey}/odds?apiKey=${this.key}&regions=${this.region}&markets=${markets}&oddsFormat=decimal&dateFormat=iso`;
         const r = await this.get(url);
         if (!r.ok) continue; // league inactive / out of credits — skip, keep others
         const events = (await r.json()) as ApiEvent[];
