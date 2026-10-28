@@ -561,3 +561,48 @@ export function AdminBalanceCredit({ adminId, email }: { adminId: string; email:
     </div>
   );
 }
+
+/** Delete an admin account's settled financial history (the transaction-list rows). Any admin; balances and the ledger are left alone, pending items kept. */
+export function AdminClearHistory({ adminId, email }: { adminId: string; email: string }) {
+  const router = useRouter();
+  const [withdrawals, setWithdrawals] = useState(true);
+  const [deposits, setDeposits] = useState(false);
+  const [open, setOpen] = useState(false);
+  const [done, setDone] = useState<string | null>(null);
+  const directions = ([withdrawals && "WITHDRAWAL", deposits && "DEPOSIT"] as const).filter(Boolean) as ("WITHDRAWAL" | "DEPOSIT")[];
+  const what = directions.length === 2 ? "withdrawals and deposits" : withdrawals ? "withdrawals" : "deposits";
+  return (
+    <div className="space-y-2">
+      <form className="space-y-3" onSubmit={(e) => { e.preventDefault(); setOpen(true); }}>
+        <div className="flex flex-wrap gap-4 text-sm text-white">
+          <label className="flex items-center gap-2"><input type="checkbox" checked={withdrawals} onChange={(e) => setWithdrawals(e.target.checked)} /> Withdrawals</label>
+          <label className="flex items-center gap-2"><input type="checkbox" checked={deposits} onChange={(e) => setDeposits(e.target.checked)} /> Deposits</label>
+        </div>
+        <button disabled={directions.length === 0} className="btn px-4 py-2 text-sm bg-danger text-white hover:bg-danger/90 disabled:opacity-50">Clear history</button>
+      </form>
+      {done && <p role="status" className="text-sm text-lime">{done}</p>}
+      <ConfirmDialog
+        open={open}
+        title="Clear financial history"
+        danger
+        message={
+          <>
+            Permanently delete {email}&apos;s settled {what} records. Balances and the ledger are untouched, and anything still pending is kept. This can&apos;t be undone.
+          </>
+        }
+        confirmLabel="Clear history"
+        onClose={() => setOpen(false)}
+        onConfirm={async (password) => {
+          const { error, data } = await send(`/api/admin/admins/${adminId}/clear-history`, "POST", { directions, password });
+          if (error) return error;
+          setOpen(false);
+          const removed = Number(data.removed ?? 0);
+          const kept = Number(data.keptPending ?? 0);
+          setDone(`Removed ${removed} record${removed === 1 ? "" : "s"}${kept ? `, kept ${kept} pending` : ""}.`);
+          router.refresh();
+          return null;
+        }}
+      />
+    </div>
+  );
+}

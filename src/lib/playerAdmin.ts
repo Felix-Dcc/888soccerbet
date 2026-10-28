@@ -75,3 +75,19 @@ export const adjustBalance = (actor: User, playerId: string, amount: bigint, rea
 /** Credit (+) or debit (-) an administrator's own cash balance (staff place bets too). Idempotent on key. */
 export const adjustAdminBalance = (actor: User, adminId: string, amount: bigint, reason: string, idempotencyKey: string, ip?: string) =>
   postAdjustment(actor, adminId, amount, reason, idempotencyKey, ip, ["ADMIN", "SUPER_ADMIN"]);
+
+/**
+ * Clear an admin account's financial history: delete the settled PaymentIntent records (the rows
+ * shown in the transaction lists) for the chosen directions. Balances are untouched — those come
+ * from the ledger, which this never changes — and pending items (money still in flight) are always
+ * kept. Admin accounts only; the deletion is recorded in the audit log.
+ */
+export async function clearAdminFinancialHistory(actor: User, adminId: string, directions: ("WITHDRAWAL" | "DEPOSIT")[], ip?: string) {
+  if (directions.length === 0) throw new AdminError("BAD_REQUEST", "Pick what to clear", 422);
+  const target = await prisma.user.findUnique({ where: { id: adminId }, select: { role: true, email: true } });
+  if (!target || !["ADMIN", "SUPER_ADMIN"].includes(target.role)) throw new AdminError("NOT_FOUND", "Admin account not found", 404);
+  const keptPending = await prisma.paymentIntent.count({ where: { userId: adminId, direction: { in: directions }, status: "PENDING" } });
+  const { count } = await prisma.paymentIntent.deleteMany({ where: { userId: adminId, direction: { in: directions }, status: { not: "PENDING" } } });
+  await audit({ actorUserId: actor.id, action: "ADMIN_HISTORY_CLEARED", targetType: "User", targetId: adminId, metadata: { directions, removed: count, keptPending, email: target.email }, ip });
+  return { removed: count, keptPending };
+}

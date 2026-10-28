@@ -5,7 +5,7 @@ import { adminPage } from "@/lib/adminPage";
 import { can, effectivePermissions, PERMISSIONS, permissionGroups, type Permission } from "@/lib/permissions";
 import { parseRange } from "@/lib/adminAnalytics";
 import { formatReferralCode } from "@/lib/admins";
-import { AdminAccessEditor, AdminActions, AdminBalanceCredit } from "@/components/admin/AdminForms";
+import { AdminAccessEditor, AdminActions, AdminBalanceCredit, AdminClearHistory } from "@/components/admin/AdminForms";
 import { userCashBalance } from "@/lib/ledger";
 import { formatPesewas } from "@/lib/money";
 import { ReferralDashboard } from "@/components/admin/ReferralDashboard";
@@ -106,6 +106,10 @@ export default async function AdminProfilePage({ params, searchParams }: { param
             ) : (
               <p className="text-sm text-fog">The account's cash balance for betting.</p>
             )}
+          </Panel>
+          <Panel title="Financial history" icon="audit">
+            <p className="mb-3 text-sm text-fog">Clear this admin&apos;s settled transaction records. Balances and the ledger stay as they are; pending items are kept.</p>
+            <AdminClearHistory adminId={admin.id} email={admin.email} />
           </Panel>
           {manage && (
             <Panel title="Account" icon="team">
