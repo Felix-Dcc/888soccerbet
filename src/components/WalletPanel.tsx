@@ -497,7 +497,7 @@ function VerificationBar({ v, busy, onPay }: { v: Verification; busy: boolean; o
       {!verified && <p className="mt-2 text-xs text-fog">{v.heldGhs > 0 ? `GHS ${v.heldGhs} held, ` : "Held, "}returned to your balance after review</p>}
       {canPay && (
         <button type="button" onClick={onPay} disabled={busy} className="btn-lime mt-3 w-full py-2.5 text-sm">
-          Pay GHS {v.perPaymentGhs} to verify ({paid + 1} of {v.needed})
+          Pay GHS {v.perPaymentGhs} to verify{paid > 0 ? ` (${paid + 1} of ${v.needed})` : ""}
         </button>
       )}
     </section>
