@@ -346,7 +346,57 @@ export function WalletPanel({ minDepositGhs, isAdmin = false, verification }: { 
       )}
 
       {withdrawn && <WithdrawalSuccess info={withdrawn} onClose={() => setWithdrawn(null)} />}
+      {isAdmin && withdrawn && <WithdrawalBanner info={withdrawn} />}
     </div>
+  );
+}
+
+/**
+ * Admin-only push-style banner that drops in from the top after a withdrawal, with a chime.
+ * It is the app announcing what it did (real amount and ref) — not a message from any payment provider.
+ */
+function WithdrawalBanner({ info }: { info: { ref: string; amount: string } }) {
+  const [show, setShow] = useState(false);
+  useEffect(() => {
+    const tIn = setTimeout(() => setShow(true), 20); // let it mount off-screen, then slide in
+    try {
+      const Ctx = window.AudioContext ?? (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+      const ctx = new Ctx();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.frequency.setValueAtTime(880, ctx.currentTime);
+      osc.frequency.setValueAtTime(1175, ctx.currentTime + 0.12); // two quick notes, like a notification chime
+      gain.gain.setValueAtTime(0.0001, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.2, ctx.currentTime + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.5);
+      osc.start();
+      osc.stop(ctx.currentTime + 0.5);
+    } catch {
+      /* audio blocked (no gesture / unsupported): the banner still shows */
+    }
+    const tOut = setTimeout(() => setShow(false), 5000); // auto-dismiss like a real push
+    return () => {
+      clearTimeout(tIn);
+      clearTimeout(tOut);
+    };
+  }, []);
+
+  return createPortal(
+    <div className={`fixed inset-x-0 top-0 z-[80] flex justify-center px-3 pt-3 transition-transform duration-500 ease-out ${show ? "translate-y-0" : "-translate-y-[150%]"}`}>
+      <div className="flex w-full max-w-sm items-start gap-3 rounded-2xl border border-line bg-ink-700/95 p-3 shadow-lift backdrop-blur">
+        <div className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-lime font-display text-lg font-bold text-lime-ink">K</div>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-baseline justify-between gap-2 text-xs">
+            <span className="font-bold text-white">Kingz Bet</span>
+            <span className="text-fog">now</span>
+          </div>
+          <p className="mt-0.5 text-sm leading-snug text-white">Withdrawal of GHS {info.amount} processed · Ref {info.ref}</p>
+        </div>
+      </div>
+    </div>,
+    document.body,
   );
 }
 
