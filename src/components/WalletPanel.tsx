@@ -41,6 +41,7 @@ export function WalletPanel({ minDepositGhs, isAdmin = false, verification }: { 
   const [approveNote, setApproveNote] = useState<string | null>(null);
   // A withdrawal request that just went through: shows the success modal.
   const [withdrawn, setWithdrawn] = useState<{ ref: string; amount: string; network: Network; msisdn: string } | null>(null);
+  const [review, setReview] = useState(false); // withdrawals confirm the details before sending
 
   // Back from the payment provider's approval page (it adds ?status=&tx_ref= to our wallet URL).
   useEffect(() => {
@@ -109,6 +110,8 @@ export function WalletPanel({ minDepositGhs, isAdmin = false, verification }: { 
 
   async function initiate(e: React.FormEvent) {
     e.preventDefault();
+    // Withdrawals: the first submit reviews the details; the next one sends.
+    if (mode === "withdraw" && !review) { setReview(true); return; }
     setBusy(true);
     setMsg(null);
     const res = await fetch(`/api/wallet/${mode}`, {
@@ -123,6 +126,7 @@ export function WalletPanel({ minDepositGhs, isAdmin = false, verification }: { 
         afterCharge(d);
       } else {
         setWithdrawn({ ref: d.intent.ref, amount: formatPesewas(BigInt(d.intent.amount)), network, msisdn });
+        setReview(false);
         setMsisdn("");
         setAccountName("");
         window.dispatchEvent(new Event("stakra:refresh"));
@@ -195,7 +199,7 @@ export function WalletPanel({ minDepositGhs, isAdmin = false, verification }: { 
         {(["deposit", "withdraw"] as Mode[]).map((m) => (
           <button
             key={m}
-            onClick={() => { setMode(m); setMsg(null); setPending(null); setAmount(m === "deposit" ? depositStart : 0); }}
+            onClick={() => { setMode(m); setMsg(null); setPending(null); setReview(false); setAmount(m === "deposit" ? depositStart : 0); }}
             className={`rounded-md py-2 text-sm font-semibold capitalize transition ${mode === m ? "bg-lime text-lime-ink" : "text-fog"}`}
           >
             {m}
@@ -245,6 +249,23 @@ export function WalletPanel({ minDepositGhs, isAdmin = false, verification }: { 
         </section>
       ) : (
       <form onSubmit={initiate} className="space-y-4">
+        {mode === "withdraw" && review ? (
+          <>
+            <dl className="space-y-2 rounded-lg border border-line bg-ink-800 p-4 text-sm">
+              <div className="flex justify-between gap-3"><dt className="text-fog">Amount</dt><dd className="font-bold text-white">GHS {amount}</dd></div>
+              <div className="flex justify-between gap-3"><dt className="text-fog">Network</dt><dd className="font-semibold text-white">{NETWORK_LABEL[network]}</dd></div>
+              <div className="flex justify-between gap-3"><dt className="text-fog">Account number</dt><dd className="font-semibold text-white">{msisdn}</dd></div>
+              <div className="flex justify-between gap-3"><dt className="text-fog">Account name</dt><dd className="truncate font-semibold text-white">{accountName}</dd></div>
+            </dl>
+            <button className="btn-lime w-full py-3" disabled={busy || locked}>
+              {busy ? "Working…" : "Confirm and send"}
+            </button>
+            <button type="button" onClick={() => setReview(false)} disabled={busy} className="w-full py-1 text-center text-xs font-semibold text-fog hover:underline">
+              Edit details
+            </button>
+          </>
+        ) : (
+          <>
         <div>
           <label className="label" htmlFor="amt">Amount (GHS)</label>
           <input
@@ -296,6 +317,8 @@ export function WalletPanel({ minDepositGhs, isAdmin = false, verification }: { 
         <button className="btn-lime w-full py-3" disabled={busy || locked}>
           {busy ? "Working…" : mode === "deposit" ? "Deposit" : locked ? "Verify to withdraw" : "Request withdrawal"}
         </button>
+          </>
+        )}
       </form>
       )}
 
