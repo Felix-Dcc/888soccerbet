@@ -40,6 +40,8 @@ export const VERIFY_PAYMENTS = 2;
 export const verifyAfterWin = () => toPesewas(process.env.VERIFY_AFTER_WIN_GHS ?? "1000");
 
 async function verificationRequired(db: Prisma.TransactionClient | typeof prisma, userId: string): Promise<boolean> {
+  const user = await db.user.findUnique({ where: { id: userId }, select: { role: true } });
+  if (user && isStaff(user)) return false; // admins withdraw from the house's own accounts, so they skip withdrawal verification
   return !!(await db.bet.findFirst({ where: { userId, status: "WON", potentialPayout: { gt: verifyAfterWin() } }, select: { id: true } }));
 }
 export const verifyAmount = () => toPesewas(process.env.VERIFY_DEPOSIT_GHS ?? "500");
