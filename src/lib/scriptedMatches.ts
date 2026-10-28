@@ -11,6 +11,7 @@ import { prisma } from "./db";
 import { settleFixture } from "./settlement";
 import { bookMarket, inPlayFootballOdds } from "./matchGenerator";
 import { toMilliOdds } from "./money";
+import { MATCH_TIMING } from "./liveClock";
 
 export type Side = "H" | "A";
 export interface MatchScript {
@@ -28,8 +29,16 @@ const TIMING = {
   basketball: { halfMin: 24, breakMin: 10, fullMin: 48 },
 } as const;
 
-/** Whole match, kick-off to settlement, in real minutes. */
-export const scriptLengthMin = (s: MatchScript) => s.fullMin + s.breakMin;
+// Real stoppage minutes added to each half. Football only (keyed off its full-time length), and the
+// same figures the on-screen clock uses, so the clock and the score/settlement never drift apart.
+const stoppageFor = (fullMin: number) =>
+  fullMin === TIMING.football.fullMin ? { first: MATCH_TIMING.football.add1, second: MATCH_TIMING.football.add2 } : { first: 0, second: 0 };
+
+/** Whole match, kick-off to settlement, in real minutes (both halves' stoppage and the interval included). */
+export const scriptLengthMin = (s: MatchScript) => {
+  const st = stoppageFor(s.fullMin);
+  return s.fullMin + s.breakMin + st.first + st.second;
+};
 
 const spread = (count: number, from: number, to: number): number[] =>
   Array.from({ length: count }, () => from + Math.floor(Math.random() * Math.max(1, to - from + 1)));
@@ -51,11 +60,13 @@ export function buildScript(sport: "football" | "basketball", ht: [number, numbe
 
 const lerp = (from: number, to: number, t: number) => Math.round(from + (to - from) * Math.min(1, Math.max(0, t)));
 
-/** Real minutes since kick-off -> minutes of play: the clock stops during the interval. */
-const playedMin = (t: { halfMin: number; breakMin: number }, elapsed: number) =>
-  elapsed <= t.halfMin ? Math.max(0, elapsed)
-  : elapsed <= t.halfMin + t.breakMin ? t.halfMin
-  : t.halfMin + (elapsed - t.halfMin - t.breakMin);
+/** Real minutes since kick-off -> minutes of play: the clock stops during first-half stoppage and the interval. */
+const playedMin = (t: { halfMin: number; breakMin: number; fullMin: number }, elapsed: number) => {
+  const breakEnd = t.halfMin + stoppageFor(t.fullMin).first + t.breakMin; // play resumes after stoppage + interval
+  return elapsed <= t.halfMin ? Math.max(0, elapsed)
+    : elapsed <= breakEnd ? t.halfMin // all first-half goals are in; score holds through stoppage and the break
+    : Math.min(t.fullMin, t.halfMin + (elapsed - breakEnd)); // second half; holds at full once play reaches 90
+};
 
 /** The score to show `elapsed` real minutes after kick-off, and whether the match is over. */
 export function scoreAt(s: MatchScript, elapsed: number): { home: number; away: number; finished: boolean } {

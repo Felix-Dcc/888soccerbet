@@ -5,6 +5,7 @@ import type { UiFixture, UiMarket } from "@/lib/queries";
 import { OddsButton } from "./betslip/OddsButton";
 import { Crest } from "./Crest";
 import { kickoffDay, kickoffTime } from "@/lib/time";
+import { liveClockLabel } from "@/lib/liveClock";
 
 /** Market tabs. A tab only appears when at least one listed fixture actually has that market. */
 const TABS = [
@@ -121,13 +122,13 @@ function Row({ f, tab, withTotals }: { f: UiFixture; tab: Tab; withTotals: boole
   return (
     <li className="flex items-center gap-2 border-t border-line px-3 py-2 transition hover:bg-ink-600/40 sm:gap-3">
       <div className="hidden w-14 shrink-0 text-center sm:block">
-        {started ? <LivePill /> : <div className="text-sm font-bold tabular-nums text-white">{kickoffTime(f.startsAt)}</div>}
+        {started ? <LivePill startsAt={f.startsAt} sportKey={f.sportKey} /> : <div className="text-sm font-bold tabular-nums text-white">{kickoffTime(f.startsAt)}</div>}
         <div className="mt-0.5 text-[10px] tabular-nums text-fog-muted">ID {f.code}</div>
       </div>
 
       <Link href={`/fixture/${f.id}`} className="group min-w-0 flex-1">
         <div className="mb-1 flex items-center gap-2 text-[11px] text-fog-muted sm:hidden">
-          {started ? <LivePill /> : <span className="font-semibold text-fog">{kickoffTime(f.startsAt)}</span>}
+          {started ? <LivePill startsAt={f.startsAt} sportKey={f.sportKey} /> : <span className="font-semibold text-fog">{kickoffTime(f.startsAt)}</span>}
           <span className="tabular-nums">ID {f.code}</span>
         </div>
         <Team name={f.homeTeam} logo={f.homeTeamLogo} score={f.homeScore} goal={f.sportKey === "football"} />
@@ -223,14 +224,23 @@ function Team({ name, logo, score, goal }: { name: string; logo: string | null; 
   );
 }
 
-export function LivePill() {
+/** The red live badge; with a kick-off time it also shows the running match clock (e.g. 23', HT, 90+3'). */
+export function LivePill({ startsAt, sportKey }: { startsAt?: string | Date; sportKey?: string } = {}) {
+  const [now, setNow] = useState(0); // 0 until mounted: server and first client render both show "Live" (no hydration mismatch)
+  useEffect(() => {
+    if (!startsAt) return;
+    setNow(Date.now());
+    const id = setInterval(() => setNow(Date.now()), 15_000);
+    return () => clearInterval(id);
+  }, [startsAt]);
+  const label = startsAt && now ? liveClockLabel(sportKey ?? "football", new Date(startsAt).getTime(), now) : null;
   return (
     <span className="inline-flex items-center gap-1 rounded-md bg-danger/15 px-1.5 py-0.5 text-[10px] font-extrabold uppercase tracking-wider text-danger">
       <span className="relative flex h-1.5 w-1.5">
         <span className="absolute inline-flex h-full w-full animate-ping2 rounded-full bg-danger" />
         <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-danger" />
       </span>
-      Live
+      {label ?? "Live"}
     </span>
   );
 }

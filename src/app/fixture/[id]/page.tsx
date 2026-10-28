@@ -98,7 +98,7 @@ export default async function FixturePage({ params, searchParams }: { params: Pr
                 {finished ? (
                   <span className="rounded-full bg-white/10 px-2.5 py-0.5 text-[11px] font-bold text-fog">Full time</span>
                 ) : started ? (
-                  <LivePill />
+                  <LivePill startsAt={f.startsAt} sportKey={f.sportKey} />
                 ) : (
                   <Countdown to={f.startsAt} className="rounded-full bg-white/10 px-2.5 py-0.5 text-[11px] font-semibold text-lime" />
                 )}
