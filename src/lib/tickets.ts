@@ -8,7 +8,7 @@ const ticketInclude = {
   selections: {
     orderBy: { id: "asc" },
     include: {
-      fixture: { select: { id: true, homeTeam: true, awayTeam: true, startsAt: true, status: true, homeScore: true, awayScore: true } },
+      fixture: { select: { id: true, homeTeam: true, awayTeam: true, startsAt: true, status: true, homeScore: true, awayScore: true, sportKey: true } },
       selection: { select: { market: { select: { selections: { select: { name: true, status: true } } } } } },
     },
   },

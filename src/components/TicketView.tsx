@@ -5,6 +5,7 @@ import { legOutcome, ticketTotals, type Ticket } from "@/lib/tickets";
 import { Trophy } from "./BetTicket";
 import { ShareTicket } from "./ShareTicket";
 import { CashoutPanel, type CashoutQuote } from "./CashoutPanel";
+import { LivePill } from "./MatchTable";
 
 const legTime = new Intl.DateTimeFormat("en-GB", {
   timeZone: process.env.NEXT_PUBLIC_TIMEZONE || "Africa/Accra",
@@ -273,10 +274,7 @@ function RunningTicket({ bet, cashout }: { bet: Ticket; cashout?: CashoutProps }
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2 text-xs tabular-nums">
                   {live ? (
-                    <span className="inline-flex items-center gap-1 rounded bg-danger/10 px-1.5 py-0.5 font-bold uppercase text-danger">
-                      <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-danger" aria-hidden />
-                      Live
-                    </span>
+                    <LivePill startsAt={f.startsAt} sportKey={f.sportKey} />
                   ) : leg.status === "OPEN" && over ? (
                     <span className="font-semibold text-fog">Awaiting result</span>
                   ) : (
