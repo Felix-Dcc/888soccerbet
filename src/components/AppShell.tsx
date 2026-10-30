@@ -31,7 +31,7 @@ function BottomNav({ onSlip }: { onSlip: () => void }) {
         {tab("/", "Home", "all", path === "/")}
         {tab("/live", "Live", "live", path === "/live")}
         <button onClick={onSlip} aria-label={`Open betslip, ${picks.length} selections`} className="relative -mt-5 flex flex-1 flex-col items-center gap-0.5 pb-2 text-[10px] font-semibold text-fog">
-          <span className={`grid h-12 w-12 place-items-center rounded-full ring-4 ring-ink-900 ${picks.length ? "bg-lime text-lime-ink shadow-lime" : "bg-ink-600 text-white"}`}>
+          <span className={`grid h-12 w-12 place-items-center rounded-full ring-4 ring-ink-900 ${picks.length ? "bg-lime text-lime-ink" : "bg-ink-600 text-white"}`}>
             <SportIcon sport="bets" className="h-6 w-6" />
           </span>
           Betslip
@@ -76,7 +76,7 @@ function MobileSlip({ open, onClose }: { open: boolean; onClose: () => void }) {
 
 export { OPEN_SLIP_EVENT };
 
-export function AppShell({ sidebar, minStakeGhs, bonus, children }: { sidebar: React.ReactNode; minStakeGhs: number; bonus: BonusRules; children: React.ReactNode }) {
+export function AppShell({ sidebar, footer, minStakeGhs, bonus, children }: { sidebar: React.ReactNode; footer?: React.ReactNode; minStakeGhs: number; bonus: BonusRules; children: React.ReactNode }) {
   const [slipOpen, setSlipOpen] = useState(false);
   const close = () => setSlipOpen(false);
   // Focused pages (admin console, sign-in, sign-up) get the full width: no sports menu or betslip rails.
@@ -114,7 +114,7 @@ export function AppShell({ sidebar, minStakeGhs, bonus, children }: { sidebar: R
       </Suspense>
       {staffArea ? (
         // The admin console is its own dark workspace: full width, no player navigation.
-        <main id="main" tabIndex={-1} className="theme-dark min-h-[calc(100vh-56px)] min-w-0 bg-[#0A0E13] text-white outline-none">
+        <main id="main" tabIndex={-1} className="min-w-0 outline-none">
           {children}
         </main>
       ) : adminView ? (
@@ -137,6 +137,8 @@ export function AppShell({ sidebar, minStakeGhs, bonus, children }: { sidebar: R
           </aside>
         </div>
       )}
+      {/* The console is its own workspace: the player footer and tab bar don't belong in it. */}
+      {!staffArea && footer}
       {!staffArea && <BottomNav onSlip={() => setSlipOpen(true)} />}
       <MobileSlip open={slipOpen} onClose={close} />
       <WinningPopup />

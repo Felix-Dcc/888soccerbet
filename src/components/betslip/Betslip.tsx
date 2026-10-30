@@ -134,7 +134,7 @@ export function Betslip() {
   return (
     <div className="card overflow-hidden">
       <>
-        <div className="theme-dark flex items-center justify-between bg-[linear-gradient(180deg,#0B4A2A_0%,#083B21_100%)] px-4 py-3">
+        <div className="theme-dark flex items-center justify-between border-b border-line bg-ink-800 px-4 py-3">
           <span className="flex items-center gap-2 font-display font-bold text-white">
             Betslip
             {picks.length > 0 && (

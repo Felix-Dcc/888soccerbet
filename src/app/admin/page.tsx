@@ -74,9 +74,9 @@ export default async function AdminDashboard({ searchParams }: { searchParams: P
               <Icon name="download" />
               Export
             </summary>
-            <div className="absolute right-0 z-20 mt-1 w-44 rounded-md border border-white/[0.09] bg-[#121820] p-1 shadow-lift">
+            <div className="absolute right-0 z-20 mt-1 w-44 rounded-md border border-line bg-ink-700 p-1 shadow-lift">
               {(["players", "bets", "payments", ...(can(u, "admins.view") ? ["admins"] : [])] as const).map((k) => (
-                <a key={k} href={`/api/admin/export?kind=${k}&range=${range.key}`} className="block rounded px-3 py-2 text-sm capitalize text-white hover:bg-white/[0.06]">
+                <a key={k} href={`/api/admin/export?kind=${k}&range=${range.key}`} className="block rounded px-3 py-2 text-sm capitalize text-white hover:bg-ink-500">
                   {k} (CSV)
                 </a>
               ))}
@@ -107,21 +107,21 @@ export default async function AdminDashboard({ searchParams }: { searchParams: P
                 <Delta cur={m.money.withdrawals.total} prev={prev?.money.withdrawals.total ?? null} invert /> {m.money.withdrawals.count} payments
               </dd>
             </div>
-            <div className="col-span-2 flex items-baseline justify-between border-t border-white/[0.06] pt-3">
+            <div className="col-span-2 flex items-baseline justify-between border-t border-line pt-3">
               <dt className="text-fog">Net cash flow</dt>
-              <dd className={`font-display text-lg font-bold tabular-nums ${net < 0n ? "text-[#FF7A7A]" : "text-white"}`}>{ghs(net)}</dd>
+              <dd className={`font-display text-lg font-bold tabular-nums ${net < 0n ? "text-danger" : "text-white"}`}>{ghs(net)}</dd>
             </div>
           </dl>
-          <div className="mt-4 border-t border-white/[0.06] pt-3">
+          <div className="mt-4 border-t border-line pt-3">
             <div className="mb-2 flex items-baseline justify-between text-sm">
               <span className="text-fog">Owed to players now</span>
               <span className="font-display font-bold tabular-nums text-white">{ghs(liab.total)}</span>
             </div>
             <Stack
               parts={[
-                { label: "Balances", value: num(liab.cash), color: "#3B82F6", display: ghsShort(liab.cash) },
-                { label: "Open stakes", value: num(liab.escrow), color: "#F5C451", display: ghsShort(liab.escrow) },
-                { label: "Verification held", value: num(liab.held), color: "#8B95A5", display: ghsShort(liab.held) },
+                { label: "Balances", value: num(liab.cash), color: "rgb(var(--lime))", display: ghsShort(liab.cash) },
+                { label: "Open stakes", value: num(liab.escrow), color: "rgb(var(--warn))", display: ghsShort(liab.escrow) },
+                { label: "Verification held", value: num(liab.held), color: "rgb(var(--fog))", display: ghsShort(liab.held) },
               ]}
             />
           </div>
@@ -145,10 +145,10 @@ export default async function AdminDashboard({ searchParams }: { searchParams: P
           {attention.length === 0 ? (
             <EmptyState icon="check" title="Nothing waiting" />
           ) : (
-            <ul className="divide-y divide-white/[0.05]">
+            <ul className="divide-y divide-line">
               {attention.map((a) => (
                 <li key={a.key}>
-                  <Link href={a.href} className="flex items-start gap-3 px-4 py-3 text-sm hover:bg-white/[0.03]">
+                  <Link href={a.href} className="flex items-start gap-3 px-4 py-3 text-sm hover:bg-ink-500">
                     <span className="mt-1.5">
                       <Light level={a.level} />
                     </span>
@@ -166,13 +166,13 @@ export default async function AdminDashboard({ searchParams }: { searchParams: P
         <Panel title="Settled bets" icon="ticket">
           <Stack
             parts={[
-              { label: "Won", value: m.betting.won.count, color: "#22C55E" },
-              { label: "Lost", value: m.betting.lost.count, color: "#FF5A5F" },
-              { label: "Void", value: m.betting.void.count, color: "#8B95A5" },
-              { label: "Cash outs", value: m.betting.cashouts.count, color: "#F5C451" },
+              { label: "Won", value: m.betting.won.count, color: "rgb(var(--teal))" },
+              { label: "Lost", value: m.betting.lost.count, color: "rgb(var(--danger))" },
+              { label: "Void", value: m.betting.void.count, color: "rgb(var(--fog))" },
+              { label: "Cash outs", value: m.betting.cashouts.count, color: "rgb(var(--warn))" },
             ]}
           />
-          <dl className="mt-4 space-y-1.5 border-t border-white/[0.06] pt-3 text-sm">
+          <dl className="mt-4 space-y-1.5 border-t border-line pt-3 text-sm">
             <div className="flex justify-between">
               <dt className="text-fog">Winnings paid</dt>
               <dd className="tabular-nums text-white">{ghs(m.betting.won.paid)}</dd>
@@ -197,7 +197,7 @@ export default async function AdminDashboard({ searchParams }: { searchParams: P
                 .sort((a, b) => b.metrics.players.total - a.metrics.players.total)
                 .slice(0, 6)
                 .map((a) => ({ key: a.id, label: a.displayName ?? a.email, value: a.metrics.players.total, display: `${a.metrics.players.total} players · ${ghsShort(a.metrics.revenue.ggr)}`, href: `/admin/admins/${a.id}` }))}
-              color="#C6F24E"
+              color="rgb(var(--lime))"
               empty="No administrators"
             />
           </Panel>
@@ -205,8 +205,8 @@ export default async function AdminDashboard({ searchParams }: { searchParams: P
           <Panel title="Payments" icon="coins">
             <Stack
               parts={[
-                { label: "Pending", value: m.money.pending.count, color: "#F5C451" },
-                { label: "Failed", value: m.money.failed.count, color: "#FF5A5F" },
+                { label: "Pending", value: m.money.pending.count, color: "rgb(var(--warn))" },
+                { label: "Failed", value: m.money.failed.count, color: "rgb(var(--danger))" },
               ]}
             />
           </Panel>

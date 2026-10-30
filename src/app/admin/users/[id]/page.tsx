@@ -63,7 +63,7 @@ export default async function PlayerPage({ params, searchParams }: { params: Pro
 
   return (
     <>
-      <header className="flex flex-wrap items-center gap-4 border-b border-white/[0.06] pb-4">
+      <header className="flex flex-wrap items-center gap-4 border-b border-line pb-4">
         <Avatar name={p.email} size="h-12 w-12 text-sm" />
         <div className="min-w-0 flex-1">
           <h1 className="truncate font-display text-[22px] font-bold text-white">{p.email}</h1>
@@ -163,7 +163,7 @@ export default async function PlayerPage({ params, searchParams }: { params: Pro
                 <Light level="ok" /> Nothing unusual on record
               </p>
             ) : (
-              <ul className="divide-y divide-white/[0.05]">
+              <ul className="divide-y divide-line">
                 {signals.map((s) => (
                   <li key={s.text} className="flex items-start gap-3 px-4 py-2.5 text-sm text-white">
                     <span className="mt-1.5">

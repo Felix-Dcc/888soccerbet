@@ -82,7 +82,7 @@ export default async function PlayersPage({ searchParams }: { searchParams: Prom
             { key: "SUSPENDED", label: "Suspended", href: href("SUSPENDED"), count: count("SUSPENDED") },
           ]}
         />
-        <form role="search" className="flex flex-wrap items-end gap-2 border-b border-white/[0.06] px-4 py-3">
+        <form role="search" className="flex flex-wrap items-end gap-2 border-b border-line px-4 py-3">
           {status && <input type="hidden" name="status" value={status} />}
           <div className="min-w-52 flex-1">
             <label htmlFor="pq" className="mb-1 block text-xs font-semibold text-fog">

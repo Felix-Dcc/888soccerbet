@@ -18,7 +18,7 @@ const config: Config = {
         line: v("line"),
         fog: { DEFAULT: v("fog"), muted: v("fog-muted") },
         lime: { DEFAULT: v("lime"), 600: v("lime-600"), ink: v("lime-ink") },
-        gold: { DEFAULT: "#F5C451", 600: "#E0AE35" },
+        gold: { DEFAULT: v("lime"), 600: v("lime-600") }, // alias of the amber accent (odds/bonuses)
         teal: { DEFAULT: v("teal"), 600: v("teal") },
         danger: v("danger"),
         warn: v("warn"),
@@ -33,8 +33,6 @@ const config: Config = {
       boxShadow: {
         card: "var(--shadow-card)",
         lift: "var(--shadow-lift)",
-        lime: "0 8px 24px -8px rgb(var(--lime) / .45)",
-        glow: "0 0 0 1px rgb(var(--lime) / .5), 0 0 18px -4px rgb(var(--lime) / .45)",
       },
       keyframes: {
         shimmer: { "100%": { transform: "translateX(100%)" } },

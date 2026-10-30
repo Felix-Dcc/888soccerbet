@@ -1,36 +1,50 @@
 import { getCurrentUser } from "@/lib/session";
 import { isStaff } from "@/lib/permissions";
 import { visibleNav } from "@/lib/adminPage";
-import { AdminNavLinks } from "@/components/admin/AdminNavLinks";
-import { Avatar } from "@/components/admin/kit";
-import { CrownMark } from "@/components/Logo";
+import { AdminShell, ADMIN_THEME_SCRIPT, type NavSection } from "@/components/admin/AdminShell";
 
 export const dynamic = "force-dynamic";
 
-/** Console frame: left rail on desktop (scrolling bar on phones) showing only permitted sections; each page re-checks access. */
+/** Group the permitted sections into labelled blocks, and give each a Lucide icon key. */
+const GROUPS: { label: string; hrefs: string[] }[] = [
+  { label: "Overview", hrefs: ["/admin"] },
+  { label: "Operations", hrefs: ["/admin/operations"] },
+  { label: "Growth & Content", hrefs: ["/admin/referrals"] },
+  { label: "Administration", hrefs: ["/admin/users", "/admin/admins", "/admin/roles", "/admin/audit", "/admin/system"] },
+];
+const ICON_KEY: Record<string, string> = {
+  "/admin": "dashboard",
+  "/admin/operations": "operations",
+  "/admin/referrals": "referrals",
+  "/admin/users": "players",
+  "/admin/admins": "team",
+  "/admin/roles": "roles",
+  "/admin/audit": "audit",
+  "/admin/system": "system",
+};
+
+/** Console frame: grouped collapsible rail on desktop, slide-in drawer on phones. Each page re-checks access. */
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const user = await getCurrentUser();
   if (!user || !isStaff(user)) return <div className="mx-auto max-w-[1280px] px-4 py-8">{children}</div>; // the page redirects or refuses
-  const nav = visibleNav(user).map(({ href, label, icon }) => ({ href, label, icon }));
+
+  const nav = visibleNav(user);
+  const byHref = new Map(nav.map((n) => [n.href, n]));
+  const sections: NavSection[] = GROUPS.map((g) => ({
+    label: g.label,
+    items: g.hrefs.filter((h) => byHref.has(h)).map((h) => ({ href: h, label: byHref.get(h)!.label, icon: ICON_KEY[h] ?? "dashboard" })),
+  })).filter((s) => s.items.length > 0);
+
   const name = user.displayName ?? user.email;
+  const roleLabel = user.role === "SUPER_ADMIN" ? "Super admin" : (user.adminRole?.name ?? "Admin");
+
   return (
-    <div className="mx-auto grid max-w-[1500px] lg:grid-cols-[14.5rem_minmax(0,1fr)]">
-      {/* min-w-0: on phones the menu is one sideways-scrolling row; without it the grid column grows to fit every link and widens the page. */}
-      <aside className="min-w-0 border-b border-white/[0.06] bg-[#0C1117] lg:sticky lg:top-[60px] lg:flex lg:h-[calc(100vh-60px)] lg:flex-col lg:border-b-0 lg:border-r">
-        <div className="hidden items-center gap-2 px-5 pb-3 pt-5 lg:flex">
-          <CrownMark size={22} />
-          <span className="font-display text-sm font-bold tracking-wide text-white">Console</span>
-        </div>
-        <AdminNavLinks items={nav} />
-        <div className="mt-auto hidden items-center gap-3 border-t border-white/[0.06] px-5 py-4 lg:flex">
-          <Avatar name={name} />
-          <div className="min-w-0">
-            <div className="truncate text-sm font-semibold text-white">{name}</div>
-            <div className="text-xs text-fog">{user.role === "SUPER_ADMIN" ? "Super admin" : (user.adminRole?.name ?? "Admin")}</div>
-          </div>
-        </div>
-      </aside>
-      <div className="min-w-0 space-y-5 px-4 pb-16 pt-5 lg:px-8 lg:pt-7">{children}</div>
-    </div>
+    <>
+      {/* Sets the saved console theme before paint, so there's no flash of the wrong theme. */}
+      <script dangerouslySetInnerHTML={{ __html: ADMIN_THEME_SCRIPT }} />
+      <AdminShell sections={sections} user={name} roleLabel={roleLabel} roleBadge={roleLabel}>
+        {children}
+      </AdminShell>
+    </>
   );
 }

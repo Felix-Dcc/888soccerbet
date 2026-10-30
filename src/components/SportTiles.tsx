@@ -16,7 +16,7 @@ export function SportTiles({ sports, active }: { sports: { key: string; name: st
             href={on ? "/" : `/?sport=${s.key}`}
             aria-current={on ? "page" : undefined}
             className={`theme-dark group relative isolate flex h-24 items-end overflow-hidden rounded-lg border p-3 transition sm:h-28 ${
-              on ? "border-lime/70 shadow-glow" : "border-white/[0.08] hover:border-white/20"
+              on ? "border-lime ring-1 ring-lime" : "border-white/[0.08] hover:border-white/20"
             }`}
           >
             <Image src={sportPhoto(s.key)} alt="" fill placeholder="blur" sizes="(min-width: 1024px) 400px, 50vw" className="-z-20 object-cover transition duration-500 group-hover:scale-105" />

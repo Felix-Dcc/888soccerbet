@@ -23,7 +23,7 @@ export default async function SystemPage() {
         </span>
       </Head>
 
-      <div className="grid gap-px overflow-hidden rounded-md border border-white/[0.07] bg-white/[0.07] sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-px overflow-hidden rounded-md border border-line bg-ink-500 sm:grid-cols-2 xl:grid-cols-4">
         {h.alerts.map((a) => {
           const body = (
             <>
@@ -35,7 +35,7 @@ export default async function SystemPage() {
               <span className="mt-1 block text-xs text-fog">{a.detail}</span>
             </>
           );
-          const tile = `block h-full px-4 py-3 ${a.level === "critical" ? "bg-[#2A1215]" : a.level === "warn" ? "bg-[#211C0E]" : "bg-[#10151C]"}`;
+          const tile = `block h-full px-4 py-3 ${a.level === "critical" ? "bg-danger/10" : a.level === "warn" ? "bg-warn/10" : "bg-ink-700"}`;
           return a.href && a.level !== "ok" ? (
             <Link key={a.title} href={a.href} className={`${tile} hover:brightness-125`}>
               {body}
@@ -50,7 +50,7 @@ export default async function SystemPage() {
 
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]">
         <Panel title="Providers" icon="system">
-          <dl className="divide-y divide-white/[0.05] text-sm">
+          <dl className="divide-y divide-line text-sm">
             {h.providers.map((p) => (
               <div key={p.name} className="flex flex-wrap items-center justify-between gap-2 py-2.5 first:pt-0">
                 <dt className="text-fog">{p.name}</dt>

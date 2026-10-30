@@ -78,7 +78,7 @@ export function Icon({ name, className = "h-4 w-4" }: { name: IconName; classNam
 /** Page title row: the title, and the controls that act on the whole page. */
 export function Head({ title, children }: { title: React.ReactNode; children?: React.ReactNode }) {
   return (
-    <header className="flex flex-wrap items-center justify-between gap-3 border-b border-white/[0.06] pb-4">
+    <header className="flex flex-wrap items-center justify-between gap-3 border-b border-line pb-4">
       <h1 className="font-display text-[22px] font-bold tracking-tight text-white">{title}</h1>
       {children && <div className="flex flex-wrap items-center gap-2">{children}</div>}
     </header>
@@ -102,9 +102,9 @@ export function Panel({
   className?: string;
 }) {
   return (
-    <section className={`min-w-0 rounded-md border border-white/[0.07] bg-[#10151C] ${className}`}>
+    <section className={`min-w-0 rounded-md border border-line bg-ink-700 ${className}`}>
       {(title || actions) && (
-        <div className="flex min-h-11 items-center justify-between gap-3 border-b border-white/[0.06] px-4 py-2">
+        <div className="flex min-h-11 items-center justify-between gap-3 border-b border-line px-4 py-2">
           {title && (
             <h2 className="flex items-center gap-2 text-[13px] font-semibold uppercase tracking-[0.08em] text-fog">
               {icon && <Icon name={icon} className="h-4 w-4 text-lime" />}
@@ -131,7 +131,7 @@ export function Delta({ cur, prev, invert = false }: { cur: number | bigint; pre
   if (Math.abs(pct) < 0.5) return <span className="text-xs text-fog">no change</span>;
   const good = invert ? pct < 0 : pct > 0;
   return (
-    <span className={`inline-flex items-center gap-0.5 text-xs font-semibold tabular-nums ${good ? "text-lime" : "text-[#FF7A7A]"}`}>
+    <span className={`inline-flex items-center gap-0.5 text-xs font-semibold tabular-nums ${good ? "text-teal" : "text-danger"}`}>
       <Icon name={pct > 0 ? "up" : "down"} className="h-3 w-3" />
       {Math.abs(pct) >= 1000 ? ">999" : Math.abs(pct).toFixed(0)}%
     </span>
@@ -143,7 +143,7 @@ export function Figure({ label, value, delta, note, tone, title }: { label: stri
   return (
     <div className="min-w-0 px-4 py-3" title={title}>
       <div className="truncate text-[11px] font-semibold uppercase tracking-[0.08em] text-fog">{label}</div>
-      <div className={`mt-1 truncate font-display text-lg font-bold tabular-nums ${tone === "good" ? "text-lime" : tone === "bad" ? "text-[#FF7A7A]" : "text-white"}`}>{value}</div>
+      <div className={`mt-1 truncate font-display text-lg font-bold tabular-nums ${tone === "good" ? "text-teal" : tone === "bad" ? "text-danger" : "text-white"}`}>{value}</div>
       {(delta || note) && (
         <div className="mt-0.5 flex items-center gap-2 truncate text-xs text-fog">
           {delta}
@@ -158,7 +158,7 @@ export function Figure({ label, value, delta, note, tone, title }: { label: stri
 /** Figures side by side, separated by hairlines (not a grid of cards). */
 export function Strip({ children, cols = "grid-cols-2 sm:grid-cols-3 lg:grid-cols-6" }: { children: React.ReactNode; cols?: string }) {
   // Hairline separators are the 1px gaps showing the border colour, so wrapping rows stay clean.
-  return <div className={`grid ${cols} gap-px overflow-hidden rounded-md border border-white/[0.07] bg-white/[0.07] [&>*]:bg-[#10151C]`}>{children}</div>;
+  return <div className={`grid ${cols} gap-px overflow-hidden rounded-md border border-line bg-line [&>*]:bg-ink-700`}>{children}</div>;
 }
 
 /** Tiny trend line from a series of real values. */
@@ -176,7 +176,7 @@ export function Spark({ values, color = "rgb(var(--lime))", className = "h-8 w-2
 }
 
 /** Ranked horizontal bars. Values are real; bars are scaled to the largest. */
-export function BarList({ rows, color = "#3B82F6", empty = "Nothing yet" }: { rows: { key: string; label: React.ReactNode; value: number; display: string; href?: string }[]; color?: string; empty?: string }) {
+export function BarList({ rows, color = "rgb(var(--lime))", empty = "Nothing yet" }: { rows: { key: string; label: React.ReactNode; value: number; display: string; href?: string }[]; color?: string; empty?: string }) {
   if (!rows.length) return <p className="py-4 text-center text-sm text-fog">{empty}</p>;
   const max = Math.max(...rows.map((r) => Math.abs(r.value)), 1);
   return (
@@ -188,12 +188,12 @@ export function BarList({ rows, color = "#3B82F6", empty = "Nothing yet" }: { ro
               <span className="min-w-0 truncate text-white">{r.label}</span>
               <span className="shrink-0 tabular-nums text-fog">{r.display}</span>
             </div>
-            <div className="h-1.5 overflow-hidden rounded-full bg-white/[0.06]">
-              <div className="h-full rounded-full" style={{ width: `${Math.max(2, (Math.abs(r.value) / max) * 100)}%`, background: r.value < 0 ? "#FF7A7A" : color }} />
+            <div className="h-1.5 overflow-hidden rounded-full bg-ink-500">
+              <div className="h-full rounded-full" style={{ width: `${Math.max(2, (Math.abs(r.value) / max) * 100)}%`, background: r.value < 0 ? "rgb(var(--danger))" : color }} />
             </div>
           </>
         );
-        return <li key={r.key}>{r.href ? <Link href={r.href} className="block rounded hover:bg-white/[0.03]">{inner}</Link> : inner}</li>;
+        return <li key={r.key}>{r.href ? <Link href={r.href} className="block rounded transition-colors duration-150 hover:bg-ink-500">{inner}</Link> : inner}</li>;
       })}
     </ul>
   );
@@ -209,7 +209,7 @@ export function Funnel({ steps }: { steps: { label: string; value: number }[] })
         return (
           <li key={s.label} className="grid grid-cols-[7.5rem_1fr_3.5rem] items-center gap-3 text-sm">
             <span className="truncate text-fog">{s.label}</span>
-            <div className="h-6 overflow-hidden rounded-sm bg-white/[0.05]">
+            <div className="h-6 overflow-hidden rounded-sm bg-ink-500">
               <div className="flex h-full items-center rounded-sm bg-lime/80 px-2 text-xs font-bold text-lime-ink" style={{ width: `${Math.max(top ? pct : 0, s.value ? 6 : 0)}%` }}>
                 {s.value}
               </div>
@@ -227,7 +227,7 @@ export function Stack({ parts }: { parts: { label: string; value: number; color:
   const total = parts.reduce((n, p) => n + Math.max(0, p.value), 0);
   return (
     <div>
-      <div className="flex h-3 gap-0.5 overflow-hidden rounded-full bg-white/[0.05]" role="img" aria-label={parts.map((p) => `${p.label} ${p.display ?? p.value}`).join(", ")}>
+      <div className="flex h-3 gap-0.5 overflow-hidden rounded-full bg-ink-500" role="img" aria-label={parts.map((p) => `${p.label} ${p.display ?? p.value}`).join(", ")}>
         {total > 0 && parts.map((p) => (p.value > 0 ? <div key={p.label} style={{ width: `${(p.value / total) * 100}%`, background: p.color }} /> : null))}
       </div>
       <ul className="mt-3 grid grid-cols-2 gap-x-4 gap-y-1.5 text-sm">
@@ -247,7 +247,7 @@ export function Stack({ parts }: { parts: { label: string; value: number; color:
 
 export type Level = "ok" | "warn" | "critical" | "idle";
 export function Light({ level, pulse = false }: { level: Level; pulse?: boolean }) {
-  const c = { ok: "bg-lime", warn: "bg-gold", critical: "bg-[#FF5A5F]", idle: "bg-fog/60" }[level];
+  const c = { ok: "bg-teal", warn: "bg-warn", critical: "bg-danger", idle: "bg-fog/60" }[level];
   return (
     <span className="relative inline-flex h-2.5 w-2.5 shrink-0" aria-hidden>
       {pulse && <span className={`absolute inset-0 animate-ping rounded-full opacity-60 ${c}`} />}
@@ -259,11 +259,11 @@ export function Light({ level, pulse = false }: { level: Level; pulse?: boolean 
 export type Tone = "good" | "bad" | "warn" | "info" | "neutral";
 export function Pill({ tone, children }: { tone: Tone; children: React.ReactNode }) {
   const cls = {
-    good: "bg-lime/10 text-lime ring-lime/25",
-    bad: "bg-[#FF5A5F]/10 text-[#FF8A8D] ring-[#FF5A5F]/25",
-    warn: "bg-gold/10 text-gold ring-gold/25",
-    info: "bg-[#3B82F6]/10 text-[#8DB8FF] ring-[#3B82F6]/25",
-    neutral: "bg-white/[0.05] text-fog ring-white/10",
+    good: "bg-teal/10 text-teal ring-teal/25",
+    bad: "bg-danger/10 text-danger ring-danger/25",
+    warn: "bg-warn/10 text-warn ring-warn/25",
+    info: "bg-lime/10 text-lime ring-lime/25",
+    neutral: "bg-ink-500 text-fog ring-line",
   }[tone];
   return <span className={`inline-flex items-center rounded px-1.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide ring-1 ring-inset ${cls}`}>{children}</span>;
 }
@@ -286,13 +286,27 @@ export function Avatar({ name, size = "h-9 w-9 text-xs" }: { name: string; size?
 
 /* ---------------------------------------------------------------- tables & controls */
 
-/** Dense table. Numeric columns are right-aligned by passing their indexes. */
+/** Stable short id per column set, so each table's mobile labels get their own CSS rules. */
+const headKey = (head: string[]) => {
+  let h = 0;
+  for (const ch of head.join("|")) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+  return `tc${h.toString(36)}`;
+};
+
+/**
+ * Dense table. Numeric columns are right-aligned by passing their indexes.
+ * On phones `.table-cards` (globals.css) stacks each row into a card; the per-column labels
+ * come from the rules below, so pages don't have to annotate their own cells.
+ */
 export function Grid({ head, right = [], children, minWidth = "40rem" }: { head: string[]; right?: number[]; children: React.ReactNode; minWidth?: string }) {
+  const cls = headKey(head);
+  const labels = head.map((h, i) => `.${cls} tbody td:nth-child(${i + 1})::before{content:${JSON.stringify(h)}}`).join("");
   return (
-    <div className="relative overflow-x-auto">
+    <div className={`table-cards ${cls} relative overflow-x-auto`}>
+      <style>{`@media (max-width:767px){${labels}}`}</style>
       <table className="w-full text-left text-[13px]" style={{ minWidth }}>
-        <thead>
-          <tr className="border-b border-white/[0.06] text-[11px] uppercase tracking-[0.08em] text-fog">
+        <thead className="sticky top-0 z-10 bg-ink-700">
+          <tr className="border-b border-line text-[11px] uppercase tracking-[0.08em] text-fog">
             {head.map((h, i) => (
               <th key={i} scope="col" className={`whitespace-nowrap px-4 py-2 font-semibold ${right.includes(i) ? "text-right" : ""}`}>
                 {h}
@@ -300,7 +314,7 @@ export function Grid({ head, right = [], children, minWidth = "40rem" }: { head:
             ))}
           </tr>
         </thead>
-        <tbody className="divide-y divide-white/[0.05] [&>tr:hover]:bg-white/[0.025]">{children}</tbody>
+        <tbody className="divide-y divide-line [&>tr:hover]:bg-ink-500">{children}</tbody>
       </table>
     </div>
   );
@@ -311,7 +325,7 @@ export const tdNum = "px-4 py-2.5 text-right tabular-nums";
 export function EmptyState({ icon = "check", title, children }: { icon?: IconName; title: string; children?: React.ReactNode }) {
   return (
     <div className="flex flex-col items-center gap-2 px-6 py-10 text-center">
-      <span className="grid h-10 w-10 place-items-center rounded-md bg-white/[0.04] text-fog">
+      <span className="grid h-10 w-10 place-items-center rounded-md bg-ink-500 text-fog">
         <Icon name={icon} className="h-5 w-5" />
       </span>
       <p className="font-semibold text-white">{title}</p>
@@ -324,13 +338,13 @@ export function EmptyState({ icon = "check", title, children }: { icon?: IconNam
 export function Range({ path, current, params = {} }: { path: string; current: string; params?: Record<string, string | undefined> }) {
   const href = (range: string) => `${path}?${new URLSearchParams(Object.entries({ ...params, range }).filter((e): e is [string, string] => !!e[1]))}`;
   return (
-    <nav aria-label="Date range" className="inline-flex rounded-md border border-white/[0.08] bg-[#0D1218] p-0.5">
+    <nav aria-label="Date range" className="inline-flex rounded-md border border-line bg-ink-800 p-0.5">
       {RANGE_PRESETS.map((r) => (
         <Link
           key={r.key}
           href={href(r.key)}
           aria-current={current === r.key ? "page" : undefined}
-          className={`rounded px-2.5 py-1 text-xs font-semibold ${current === r.key ? "bg-white/[0.09] text-white" : "text-fog hover:text-white"}`}
+          className={`rounded px-2.5 py-1 text-xs font-semibold transition-colors duration-150 ${current === r.key ? "bg-lime/12 text-lime" : "text-fog hover:text-white"}`}
         >
           {r.label}
         </Link>
@@ -342,7 +356,7 @@ export function Range({ path, current, params = {} }: { path: string; current: s
 /** Link-based tabs for views within a page (server-rendered, shareable URLs). */
 export function Tabs({ tabs, current }: { tabs: { key: string; label: string; href: string; count?: number }[]; current: string }) {
   return (
-    <nav aria-label="Views" className="flex gap-1 overflow-x-auto border-b border-white/[0.06] px-2 [scrollbar-width:none]">
+    <nav aria-label="Views" className="flex gap-1 overflow-x-auto border-b border-line px-2 [scrollbar-width:none]">
       {tabs.map((t) => (
         <Link
           key={t.key}
@@ -351,7 +365,7 @@ export function Tabs({ tabs, current }: { tabs: { key: string; label: string; hr
           className={`relative shrink-0 whitespace-nowrap px-3 py-2.5 text-sm font-semibold ${current === t.key ? "text-white" : "text-fog hover:text-white"}`}
         >
           {t.label}
-          {t.count !== undefined && <span className="ml-1.5 rounded bg-white/[0.07] px-1.5 text-[11px] tabular-nums text-fog">{t.count}</span>}
+          {t.count !== undefined && <span className="ml-1.5 rounded bg-ink-500 px-1.5 text-[11px] tabular-nums text-fog">{t.count}</span>}
           {current === t.key && <span className="absolute inset-x-2 bottom-0 h-0.5 bg-lime" />}
         </Link>
       ))}
@@ -363,7 +377,7 @@ export function Pager({ path, page, pages, params = {} }: { path: string; page: 
   if (pages <= 1) return null;
   const href = (p: number) => `${path}?${new URLSearchParams(Object.entries({ ...params, page: String(p) }).filter((e): e is [string, string] => !!e[1]))}`;
   return (
-    <nav aria-label="Pages" className="flex items-center justify-between border-t border-white/[0.06] px-4 py-2.5 text-sm">
+    <nav aria-label="Pages" className="flex items-center justify-between border-t border-line px-4 py-2.5 text-sm">
       {page > 1 ? (
         <Link href={href(page - 1)} className="font-semibold text-lime hover:underline">
           ← Newer
@@ -386,6 +400,6 @@ export function Pager({ path, page, pages, params = {} }: { path: string; page: 
 }
 export const pageOf = (raw: string | undefined) => Math.max(1, Math.min(10_000, Number.parseInt(raw ?? "1", 10) || 1));
 
-export const field = "h-9 rounded-md border border-white/[0.09] bg-[#0D1218] px-3 text-sm text-white placeholder:text-fog/70 focus:border-lime focus:outline-none focus:ring-2 focus:ring-lime/25";
-export const btnGhost = "inline-flex h-9 items-center gap-1.5 rounded-md border border-white/[0.09] px-3 text-sm font-semibold text-white hover:bg-white/[0.05]";
+export const field = "h-9 rounded-md border border-line bg-ink-800 px-3 text-sm text-white placeholder:text-fog/70 focus:border-lime focus:outline-none focus:ring-2 focus:ring-lime/25";
+export const btnGhost = "inline-flex h-9 items-center gap-1.5 rounded-md border border-line px-3 text-sm font-semibold text-white hover:bg-ink-600";
 export const btnPrimary = "inline-flex h-9 items-center gap-1.5 rounded-md bg-lime px-3.5 text-sm font-bold text-lime-ink hover:bg-lime-600 disabled:opacity-50";

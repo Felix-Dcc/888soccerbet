@@ -18,8 +18,8 @@ const COLUMNS: { title: string; links: { href: string; label: string }[] }[] = [
 
 export function Footer() {
   return (
-    <footer className="theme-dark mt-6 bg-[#0A0F17] pb-28 lg:pb-10">
-      <div className="h-1 bg-[linear-gradient(90deg,#0B4A2A,#0F8A3C,#F5C451,#0F8A3C,#0B4A2A)]" />
+    <footer className="theme-dark mt-6 border-t border-line bg-ink-800 pb-28 lg:pb-10">
+      <div className="h-0.5 bg-lime" />
       <div className="mx-auto grid max-w-[1280px] grid-cols-2 gap-8 px-4 pt-10 sm:grid-cols-[1.4fr_repeat(4,1fr)]">
         <div className="col-span-2 sm:col-span-1">
           <Logo />

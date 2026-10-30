@@ -18,7 +18,7 @@ export function PayoutActions({ refCode, amount, msisdn, network, accountName }:
         <button type="button" onClick={() => setOpen("PAID")} className="inline-flex h-8 items-center rounded-md bg-lime px-3 text-xs font-bold text-lime-ink hover:bg-lime-600">
           Paid
         </button>
-        <button type="button" onClick={() => setOpen("FAILED")} className="inline-flex h-8 items-center rounded-md border border-[#FF5A5F]/50 px-3 text-xs font-semibold text-[#FF8A8D] hover:bg-[#FF5A5F]/10">
+        <button type="button" onClick={() => setOpen("FAILED")} className="inline-flex h-8 items-center rounded-md border border-danger/50 px-3 text-xs font-semibold text-danger hover:bg-danger/10">
           Failed
         </button>
       </div>

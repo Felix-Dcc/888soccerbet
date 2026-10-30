@@ -59,6 +59,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <AppShell
           minStakeGhs={minStakeGhs()}
           bonus={bonusRules()}
+          footer={<Footer />}
           sidebar={
             <Suspense>
               <SideNavWithData />
@@ -67,7 +68,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         >
           {children}
         </AppShell>
-        <Footer />
       </body>
     </html>
   );

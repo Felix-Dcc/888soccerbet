@@ -54,7 +54,7 @@ export function Header() {
   return (
     <>
       {/* Only this top bar stays pinned; the tab row and sports row scroll away beneath it. */}
-      <header className="theme-dark sticky top-0 z-40 bg-[#0B4A2A] shadow-[0_6px_16px_-10px_rgb(0_0_0/0.45)]">
+      <header className="theme-dark sticky top-0 z-40 border-b border-line bg-ink-800">
         <div className="mx-auto flex h-14 max-w-[1280px] items-center gap-2 px-3 max-[390px]:gap-1.5 sm:gap-3 sm:px-4 lg:h-[60px] lg:gap-6">
           <Link href="/" aria-label="Kingz Bet home" className="shrink-0">
             {/* Slightly smaller wordmark on narrow phones, so search, the balance eye, balance and menu fit beside it. */}
@@ -151,17 +151,17 @@ export function Header() {
         )}
       </header>
       {me?.user?.emailVerified === false && path !== "/verify-email" && (
-        <div role="status" className="border-b border-[#F5C451]/30 bg-[#FFF7DB] text-[#5C4300]">
+        <div role="status" className="theme-dark border-b border-lime/25 bg-lime/10 text-white">
           <div className="mx-auto flex max-w-[1280px] flex-wrap items-center justify-between gap-x-3 gap-y-1 px-3 py-2 text-sm sm:px-4">
             <span>Confirm your email to deposit and withdraw.</span>
-            <Link href="/verify-email" className="font-bold underline underline-offset-2">
+            <Link href="/verify-email" className="font-bold text-lime underline underline-offset-2">
               Enter code
             </Link>
           </div>
         </div>
       )}
       {!path.startsWith("/admin") && (
-      <div className="theme-dark hidden bg-[linear-gradient(180deg,#0B4A2A_0%,#083B21_100%)] md:block">
+      <div className="theme-dark hidden border-b border-line bg-ink-800 md:block">
         <nav aria-label="Main" className="mx-auto hidden h-11 max-w-[1280px] items-end gap-1 px-4 md:flex">
           {nav.map((n) => {
             const active = n.href === "/" ? path === "/" || path.startsWith("/fixture") : path.startsWith(n.href);
@@ -171,7 +171,7 @@ export function Header() {
                 href={n.href}
                 aria-current={active ? "page" : undefined}
                 className={`flex h-10 items-center gap-1.5 rounded-t-lg px-4 text-sm font-bold transition ${
-                  active ? "bg-snow text-[#0B4A2A]" : "text-white/85 hover:bg-white/10 hover:text-white"
+                  active ? "bg-ink-900 text-lime" : "text-white/85 hover:bg-white/10 hover:text-white"
                 }`}
               >
                 {n.label === "Live" && <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-danger" />}

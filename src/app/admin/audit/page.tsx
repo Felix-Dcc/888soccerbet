@@ -36,14 +36,14 @@ export default async function AuditPage({ searchParams }: { searchParams: Promis
     <>
       <Head title="Audit trail" />
 
-      <div className={`flex items-center gap-3 rounded-md border px-4 py-3 text-sm ${chain.ok ? "border-lime/20 bg-lime/[0.05]" : "border-[#FF5A5F]/40 bg-[#FF5A5F]/10"}`} role="status">
+      <div className={`flex items-center gap-3 rounded-md border px-4 py-3 text-sm ${chain.ok ? "border-lime/20 bg-lime/[0.05]" : "border-danger/40 bg-danger/10"}`} role="status">
         <Light level={chain.ok ? "ok" : "critical"} pulse={!chain.ok} />
         <span className="font-semibold text-white">{chain.ok ? "Chain intact" : `Chain broken at entry #${chain.brokenAtSeq}`}</span>
         <span className="text-fog">{chain.checked} entries verified</span>
       </div>
 
       <Panel flush>
-        <form role="search" className="flex flex-wrap items-end gap-2 border-b border-white/[0.06] px-4 py-3">
+        <form role="search" className="flex flex-wrap items-end gap-2 border-b border-line px-4 py-3">
           <div className="min-w-44 flex-1">
             <label htmlFor="aa" className="mb-1 block text-xs font-semibold text-fog">
               Action
@@ -82,7 +82,7 @@ export default async function AuditPage({ searchParams }: { searchParams: Promis
         ) : (
           days.map((d) => (
             <section key={d.day}>
-              <h2 className="sticky top-[56px] z-[1] border-b border-white/[0.05] bg-[#0E1319] px-4 py-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-fog lg:top-[60px]">{d.day}</h2>
+              <h2 className="sticky top-[56px] z-[1] border-b border-line bg-ink-700 px-4 py-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-fog lg:top-[60px]">{d.day}</h2>
               <ol className="divide-y divide-white/[0.04]">
                 {d.rows.map((r) => {
                   const before = json(r.before);
@@ -91,7 +91,7 @@ export default async function AuditPage({ searchParams }: { searchParams: Promis
                   return (
                     <li key={r.id}>
                       <details className="group">
-                        <summary className="grid cursor-pointer list-none grid-cols-[4.5rem_minmax(0,1fr)] items-baseline gap-x-3 gap-y-0.5 px-4 py-2.5 hover:bg-white/[0.02] sm:grid-cols-[4.5rem_minmax(0,14rem)_minmax(0,1fr)_auto] [&::-webkit-details-marker]:hidden">
+                        <summary className="grid cursor-pointer list-none grid-cols-[4.5rem_minmax(0,1fr)] items-baseline gap-x-3 gap-y-0.5 px-4 py-2.5 hover:bg-ink-500 sm:grid-cols-[4.5rem_minmax(0,14rem)_minmax(0,1fr)_auto] [&::-webkit-details-marker]:hidden">
                           <span className="text-xs tabular-nums text-fog">{clock(r.createdAt)}</span>
                           <span className="truncate font-mono text-xs font-semibold text-white">{r.action}</span>
                           <span className="col-start-2 truncate text-xs text-fog sm:col-start-auto">

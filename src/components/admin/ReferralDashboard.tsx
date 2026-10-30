@@ -74,7 +74,7 @@ export async function ReferralDashboard({
             <span className="font-mono text-2xl font-bold tracking-[0.12em] text-white">{code}</span>
             <CopyButton text={code} label="Copy code" />
           </div>
-          <div className="mt-3 flex min-w-0 items-center gap-2 rounded-md border border-white/[0.07] bg-[#0D1218] px-3 py-2">
+          <div className="mt-3 flex min-w-0 items-center gap-2 rounded-md border border-line bg-ink-800 px-3 py-2">
             <span className="min-w-0 flex-1 truncate font-mono text-[13px] text-fog">{url}</span>
             <CopyButton text={url} label="Copy link" />
           </div>
@@ -127,7 +127,7 @@ export async function ReferralDashboard({
               Search referred players
             </label>
             <input id="rp-q" name="q" defaultValue={search} placeholder="Search email" className={`${field} w-44 sm:w-56`} />
-            <button className="grid h-9 w-9 place-items-center rounded-md border border-white/[0.09] text-fog hover:text-white" aria-label="Search">
+            <button className="grid h-9 w-9 place-items-center rounded-md border border-line text-fog hover:text-white" aria-label="Search">
               <Icon name="search" />
             </button>
           </form>

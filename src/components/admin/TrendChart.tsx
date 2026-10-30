@@ -11,9 +11,9 @@ export interface TrendPoint {
 }
 
 const VIEWS = {
-  money: { label: "Deposits & withdrawals", series: [{ key: "deposits", name: "Deposits", color: "#2a78d6" }, { key: "withdrawals", name: "Withdrawals", color: "#eb6834" }], money: true },
-  betting: { label: "Stakes & GGR", series: [{ key: "stakes", name: "Stakes placed", color: "#2a78d6" }, { key: "ggr", name: "GGR", color: "#0ca30c" }], money: true },
-  players: { label: "Registrations", series: [{ key: "registrations", name: "New players", color: "#2a78d6" }], money: false },
+  money: { label: "Deposits & withdrawals", series: [{ key: "deposits", name: "Deposits", color: "rgb(var(--lime))" }, { key: "withdrawals", name: "Withdrawals", color: "rgb(var(--warn))" }], money: true },
+  betting: { label: "Stakes & GGR", series: [{ key: "stakes", name: "Stakes placed", color: "rgb(var(--lime))" }, { key: "ggr", name: "GGR", color: "rgb(var(--teal))" }], money: true },
+  players: { label: "Registrations", series: [{ key: "registrations", name: "New players", color: "rgb(var(--lime))" }], money: false },
 } as const;
 type View = keyof typeof VIEWS;
 
