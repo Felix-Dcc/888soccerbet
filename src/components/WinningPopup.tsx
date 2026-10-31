@@ -41,7 +41,7 @@ export function WinningPopup() {
       if (fresh.length) {
         fresh.forEach((w) => known.current.add(w.id));
         setQueue((q) => [...q, ...fresh]);
-        window.dispatchEvent(new Event("stakra:refresh")); // the header balance now includes the winnings
+        window.dispatchEvent(new Event("sb:refresh")); // the header balance now includes the winnings
       }
     } catch {
       /* offline: try again on the next tick */
@@ -53,12 +53,12 @@ export function WinningPopup() {
   useEffect(() => {
     void check();
     const onFocus = () => void check();
-    window.addEventListener("stakra:refresh", onFocus); // login, bets, wallet changes
+    window.addEventListener("sb:refresh", onFocus); // login, bets, wallet changes
     window.addEventListener("focus", onFocus);
     document.addEventListener("visibilitychange", onFocus);
     const t = setInterval(onFocus, POLL_MS);
     return () => {
-      window.removeEventListener("stakra:refresh", onFocus);
+      window.removeEventListener("sb:refresh", onFocus);
       window.removeEventListener("focus", onFocus);
       document.removeEventListener("visibilitychange", onFocus);
       clearInterval(t);
@@ -135,7 +135,7 @@ function WinCard({ win, remaining, onClose }: { win: Win; remaining: number; onC
         <div className="w-full max-w-sm animate-win-pop text-center [text-shadow:0_2px_10px_rgba(0,0,0,.65)] motion-reduce:animate-none">
           {win.beatPct !== null && win.beatPct > 0 && (
             <p className="mx-auto mb-3 max-w-[16rem] text-[15px] leading-snug text-white/80">
-              Your win beats <span className="font-bold text-[#33D17A]">{win.beatPct}%</span> of wins on Kingz Bet this month.
+              Your win beats <span className="font-bold text-teal">{win.beatPct}%</span> of wins on 888SoccerBet this month.
             </p>
           )}
           <h2
@@ -144,7 +144,7 @@ function WinCard({ win, remaining, onClose }: { win: Win; remaining: number; onC
           >
             You won!
           </h2>
-          <p className="mt-3 text-[11px] font-bold uppercase tracking-[0.3em] text-[#33D17A]">Amount won</p>
+          <p className="mt-3 text-[11px] font-bold uppercase tracking-[0.3em] text-teal">Amount won</p>
           <p id="win-amount" className="mt-1 font-display text-[2.4rem] font-extrabold leading-none text-white tabular-nums sm:text-[2.75rem]">
             <span className="sr-only">GHS {amount}</span>
             <span aria-hidden>
@@ -161,7 +161,7 @@ function WinCard({ win, remaining, onClose }: { win: Win; remaining: number; onC
           </div>
 
           <p className="mt-1 text-sm text-white/70">
-            Verify Code: <span className="select-all font-mono font-bold tracking-wider text-[#33D17A]">{win.verifyCode}</span>
+            Verify Code: <span className="select-all font-mono font-bold tracking-wider text-teal">{win.verifyCode}</span>
           </p>
           <div className="mt-3 flex justify-center text-white">
             <Logo />
@@ -171,7 +171,7 @@ function WinCard({ win, remaining, onClose }: { win: Win; remaining: number; onC
             <Link
               href={`/bets/${encodeURIComponent(win.ref)}`}
               onClick={onClose}
-              className="btn h-14 w-full rounded-xl bg-[linear-gradient(135deg,#3BE38A,#16A34A)] text-base font-bold text-[#04210f] shadow-[0_10px_30px_-10px_rgba(51,209,122,.75)] hover:brightness-110"
+              className="btn h-14 w-full rounded-xl bg-lime text-base font-bold text-lime-ink hover:bg-lime-600"
             >
               <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
                 <path d="M3 8a2 2 0 0 0 2-2h14a2 2 0 0 0 2 2v2a2 2 0 0 0 0 4v2a2 2 0 0 0-2 2H5a2 2 0 0 0-2-2v-2a2 2 0 0 0 0-4z" />
@@ -308,7 +308,7 @@ function Sparkles() {
 
 /** Falling confetti; positions are fixed per piece so it renders the same every time. */
 function Confetti() {
-  const colors = ["#FFD24D", "#33D17A", "#FFFFFF", "#F2B232", "#3BE38A", "#FFE59A"];
+  const colors = ["#F5C451", "#3CDC3C", "#FFFFFF", "#E1AC35", "#22C58B", "#FFE59A"]; // the logo: crown gold, swoosh green, white
   return (
     <div aria-hidden className="pointer-events-none fixed inset-0 z-0 overflow-hidden motion-reduce:hidden">
       {Array.from({ length: 28 }, (_, i) => (

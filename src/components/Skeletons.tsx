@@ -28,12 +28,12 @@ export function TableSkeleton({ groups = 2, rows = 4 }: { groups?: number; rows?
     <div className="space-y-4" aria-hidden>
       {Array.from({ length: groups }, (_, g) => (
         <div key={g} className="card overflow-hidden">
-          <div className="flex items-center gap-3 border-b border-white/[0.06] px-3 py-3">
+          <div className="flex items-center gap-3 border-b border-line px-3 py-3">
             <div className="skeleton h-7 w-7 rounded-full" />
             <div className="skeleton h-4 w-40" />
           </div>
           {Array.from({ length: rows }, (_, r) => (
-            <div key={r} className="flex items-center gap-3 border-b border-white/[0.04] px-3 py-3 last:border-0">
+            <div key={r} className="flex items-center gap-3 border-b border-line px-3 py-3 last:border-0">
               <div className="flex-1 space-y-2">
                 <div className="skeleton h-3.5 w-36" />
                 <div className="skeleton h-3.5 w-28" />

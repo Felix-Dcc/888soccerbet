@@ -92,8 +92,8 @@ describe("self-exclusion", () => {
 
 describe("demo cleanup: test accounts", () => {
   it("matches the live test sign-ups exactly, never a real look-alike", () => {
-    for (const e of ["gggg@gmail.com", "RON@gmail.com", "walk692@t.gh", "demo@kingsbet.gh", "partner.e2e@example.test"]) expect(isTestAccount(e)).toBe(true);
-    for (const e of ["ronappling56@gmail.com", "williamsmery81@gmail.com", "yjdehie@gmail.com", "j98700367@gmail.com", "n33849079@gmail.com", "admin@kingsbet.gh", "ron@gmail.com.gh", "aron@gmail.com"])
+    for (const e of ["gggg@gmail.com", "RON@gmail.com", "walk692@t.gh", "demo@888soccerbet.com", "partner.e2e@example.test"]) expect(isTestAccount(e)).toBe(true);
+    for (const e of ["ronappling56@gmail.com", "williamsmery81@gmail.com", "yjdehie@gmail.com", "j98700367@gmail.com", "n33849079@gmail.com", "admin@888soccerbet.com", "ron@gmail.com.gh", "aron@gmail.com"])
       expect(isTestAccount(e)).toBe(false);
   });
 });

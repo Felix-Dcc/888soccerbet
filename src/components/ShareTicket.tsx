@@ -26,10 +26,10 @@ export function ShareTicket({ code, won, amount, className = "btn-lime h-12 w-fu
 
   async function share() {
     const url = `${window.location.origin}/verify/${code}`;
-    const text = won ? `I won GHS ${amount} on Kingz Bet! Verify my ticket:` : "My Kingz Bet ticket:";
+    const text = won ? `I won GHS ${amount} on 888SoccerBet! Verify my ticket:` : "My 888SoccerBet ticket:";
     if (navigator.share) {
       try {
-        await navigator.share({ title: "Kingz Bet ticket", text, url });
+        await navigator.share({ title: "888SoccerBet ticket", text, url });
         return;
       } catch (e) {
         if (e instanceof DOMException && e.name === "AbortError") return; // share sheet closed

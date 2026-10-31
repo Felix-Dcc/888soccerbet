@@ -8,14 +8,14 @@ const SPARKS = [8, 19, 27, 36, 44, 52, 61, 69, 77, 88]; // % across the beam; fi
 /**
  * Brand loading screen shown when the site is opened (once per browser tab session).
  * Reveal, ~1.8s: spotlight and sparks fade in -> the crown's outline draws itself -> gold fills
- * in and the jewels pop -> a light glint sweeps across -> "Kingz Bet" tracks in from blur ->
+ * in and the jewels pop -> a light glint sweeps across -> "888SoccerBet" tracks in from blur ->
  * the little crown drops onto the "z". Plain server-rendered SVG + CSS, so it paints in the
  * first bytes; SPLASH_SCRIPT (in <head>) decides whether to show it and when to fade it out.
  * Every element's resting style is its final frame, so reduced-motion users see the finished logo.
  */
 export function Splash() {
   return (
-    <div id="kb-splash" className="theme-dark" role="status" aria-live="polite" aria-label="Loading Kingz Bet">
+    <div id="kb-splash" className="theme-dark" role="status" aria-live="polite" aria-label="Loading 888SoccerBet">
       <div className="kb-splash-beam" aria-hidden />
       <div className="kb-splash-sparks" aria-hidden>
         {SPARKS.map((x, i) => (
@@ -57,8 +57,8 @@ export function Splash() {
         </g>
         <circle className="kb-jewel" style={{ animationDelay: ".85s" }} cx="6" cy="10.6" r="1.5" fill="url(#kbs-gold)" />
         <circle className="kb-jewel" style={{ animationDelay: ".95s" }} cx="26" cy="10.6" r="1.5" fill="url(#kbs-gold)" />
-        <circle className="kb-jewel" style={{ animationDelay: "1.1s" }} cx="16" cy="6.9" r="1.8" fill="#C6F24E" />
-        <circle className="kb-jewel" style={{ animationDelay: "1.15s" }} cx="16" cy="23.7" r=".95" fill="#C6F24E" />
+        <circle className="kb-jewel" style={{ animationDelay: "1.1s" }} cx="16" cy="6.9" r="1.8" fill="#3CDC3C" />
+        <circle className="kb-jewel" style={{ animationDelay: "1.15s" }} cx="16" cy="23.7" r=".95" fill="#3CDC3C" />
       </svg>
 
       <p className="kb-splash-word font-display text-4xl font-extrabold tracking-tight text-snow" aria-hidden>

@@ -1,7 +1,8 @@
 import { getCurrentUser } from "@/lib/session";
 import { isStaff } from "@/lib/permissions";
 import { visibleNav } from "@/lib/adminPage";
-import { AdminShell, ADMIN_THEME_SCRIPT, type NavSection } from "@/components/admin/AdminShell";
+import { AdminShell, type NavSection } from "@/components/admin/AdminShell";
+import { ADMIN_THEME_SCRIPT } from "@/lib/theme";
 
 export const dynamic = "force-dynamic";
 

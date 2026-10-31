@@ -54,7 +54,7 @@ export function WalletPanel({ minDepositGhs, isAdmin = false, verification }: { 
         : { ok: true, text: "Payment submitted. Your balance updates as soon as it's confirmed." },
     );
     window.history.replaceState(null, "", window.location.pathname);
-    window.dispatchEvent(new Event("stakra:refresh"));
+    window.dispatchEvent(new Event("sb:refresh"));
   }, []);
 
   const onNumber = (v: string) => {
@@ -81,7 +81,7 @@ export function WalletPanel({ minDepositGhs, isAdmin = false, verification }: { 
       const d = await res.json().catch(() => ({}));
       if (!res.ok) return setApproveNote(d.error ?? "Couldn't check right now. Try again in a moment.");
       if (d.status === "SUCCEEDED") {
-        window.dispatchEvent(new Event("stakra:refresh"));
+        window.dispatchEvent(new Event("sb:refresh"));
         if (d.purpose === "VERIFICATION") {
           // Held for review, not spendable: stay on the wallet and show the updated verification bar.
           setApproving(null);
@@ -129,7 +129,7 @@ export function WalletPanel({ minDepositGhs, isAdmin = false, verification }: { 
         setReview(false);
         setMsisdn("");
         setAccountName("");
-        window.dispatchEvent(new Event("stakra:refresh"));
+        window.dispatchEvent(new Event("sb:refresh"));
         router.refresh();
       }
     } else {
@@ -165,7 +165,7 @@ export function WalletPanel({ minDepositGhs, isAdmin = false, verification }: { 
     if (res.ok && d.webhook?.result === "processed") {
       setMsg({ ok: outcome === "SUCCEEDED", text: outcome === "SUCCEEDED" ? "Payment confirmed" : "Payment declined" });
       setPending(null);
-      window.dispatchEvent(new Event("stakra:refresh"));
+      window.dispatchEvent(new Event("sb:refresh"));
       router.refresh();
     } else {
       setMsg({ ok: false, text: "Already processed" });
@@ -223,7 +223,7 @@ export function WalletPanel({ minDepositGhs, isAdmin = false, verification }: { 
               "Checking with your network. This takes a few seconds."
             ) : (
               <>
-                GHS {approving.amount} to Kingz Bet. Enter your MoMo PIN on the prompt.
+                GHS {approving.amount} to 888SoccerBet. Enter your MoMo PIN on the prompt.
                 {approving.ussd && <> No prompt? Dial {approving.ussd}.</>}
               </>
             )}
@@ -389,7 +389,7 @@ function WithdrawalBanner({ info }: { info: { ref: string; amount: string } }) {
         <div className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-lime font-display text-lg font-bold text-lime-ink">K</div>
         <div className="min-w-0 flex-1">
           <div className="flex items-baseline justify-between gap-2 text-xs">
-            <span className="font-bold text-white">Kingz Bet</span>
+            <span className="font-bold text-white">888SoccerBet</span>
             <span className="text-fog">now</span>
           </div>
           <p className="mt-0.5 text-sm leading-snug text-white">Withdrawal of GHS {info.amount} processed · Ref {info.ref}</p>

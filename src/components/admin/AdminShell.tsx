@@ -25,7 +25,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { Avatar } from "./kit";
-import { CrownMark } from "@/components/Logo";
+import { BrandMark } from "@/components/Logo";
 
 /** Lucide icon per nav item (keys set in the admin layout). 20px, 1.75 stroke throughout. */
 const ICONS: Record<string, LucideIcon> = {
@@ -38,12 +38,6 @@ const ICONS: Record<string, LucideIcon> = {
   audit: ScrollText,
   system: Settings,
 };
-
-/**
- * Applies the remembered console theme to <html> before the first paint, so reloading in light
- * mode doesn't flash the dark theme. Only affects `.admin-shell` descendants.
- */
-export const ADMIN_THEME_SCRIPT = `(function(){try{var t=localStorage.getItem("kb.admin.theme");if(t)document.documentElement.dataset.adminTheme=t}catch(e){}})();`;
 
 export interface NavSection {
   label: string;
@@ -239,7 +233,7 @@ export function AdminShell({
 function RailHeader({ collapsed, roleBadge, inline = false }: { collapsed: boolean; roleBadge: string; inline?: boolean }) {
   return (
     <div className={inline ? "flex items-center gap-2" : "flex h-14 items-center gap-2 border-b border-line px-4"}>
-      <CrownMark size={24} />
+      <BrandMark size={24} />
       {!collapsed && (
         <>
           <span className="font-display text-sm font-bold tracking-wide text-white">Console</span>
@@ -291,7 +285,7 @@ function useLogout() {
   const router = useRouter();
   return async () => {
     await fetch("/api/auth/logout", { method: "POST" });
-    window.dispatchEvent(new Event("stakra:refresh"));
+    window.dispatchEvent(new Event("sb:refresh"));
     router.push("/");
     router.refresh();
   };

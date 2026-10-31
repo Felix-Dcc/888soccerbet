@@ -8,11 +8,13 @@ import { combineMilliOdds, formatMilliOdds, formatPesewas, potentialPayout, toPe
 import { multipleBonus } from "@/lib/bonus";
 import { formatStamp } from "@/lib/time";
 import { newId } from "@/lib/clientId";
+import { Logo } from "../Logo";
 
 type Status =
   { k: "idle" } | { k: "placing" } | { k: "ok"; refs: string[] } | { k: "oddschanged"; placed?: string[] } | { k: "needlogin" } | { k: "error"; msg: string };
 
-export function Betslip() {
+/** `bare` drops the card chrome and title, for when the rail's tab bar is already the header. */
+export function Betslip({ bare = false }: { bare?: boolean } = {}) {
   const { picks, stake, minStake, bonus, setStake, remove, clear, replace } = useBetslip();
   const [status, setStatus] = useState<Status>({ k: "idle" });
   const stakeId = useId(); // the slip renders twice (desktop rail + mobile drawer): ids must be unique
@@ -57,7 +59,7 @@ export function Betslip() {
         idemRef.current = newId();
         clear();
         setStatus({ k: "ok", refs: [data.bet.ref] });
-        window.dispatchEvent(new Event("stakra:refresh"));
+        window.dispatchEvent(new Event("sb:refresh"));
         return;
       }
       if (res.status === 401) return setStatus({ k: "needlogin" });
@@ -120,7 +122,7 @@ export function Betslip() {
     }
     const left = picks.filter((p) => !placed.has(p.selectionId)).map((p) => (p.selectionId === changed?.selectionId ? { ...p, milliOdds: changed.now } : p));
     replace(left);
-    if (refs.length) window.dispatchEvent(new Event("stakra:refresh"));
+    if (refs.length) window.dispatchEvent(new Event("sb:refresh"));
     if (next.k === "error" && refs.length)
       return setStatus({
         k: "error",
@@ -132,23 +134,33 @@ export function Betslip() {
   }
 
   return (
-    <div className="card overflow-hidden">
+    <div className={bare ? "" : "card overflow-hidden"}>
       <>
-        <div className="theme-dark flex items-center justify-between border-b border-line bg-ink-800 px-4 py-3">
-          <span className="flex items-center gap-2 font-display font-bold text-white">
-            Betslip
+        {bare ? (
+          picks.length > 0 && (
+            <div className="flex justify-end border-b border-line px-4 py-2">
+              <button onClick={clear} className="text-sm font-semibold text-fog hover:text-white">
+                Remove all
+              </button>
+            </div>
+          )
+        ) : (
+          <div className="theme-dark flex items-center justify-between border-b border-line bg-ink-800 px-4 py-3">
+            <span className="flex items-center gap-2 font-display font-bold text-white">
+              Betslip
+              {picks.length > 0 && (
+                <span key={picks.length} className="grid h-5 min-w-5 animate-pop place-items-center rounded-full bg-gold px-1.5 text-xs font-bold text-gold-ink">
+                  {picks.length}
+                </span>
+              )}
+            </span>
             {picks.length > 0 && (
-              <span key={picks.length} className="grid h-5 min-w-5 animate-pop place-items-center rounded-full bg-gold px-1.5 text-xs font-bold text-black">
-                {picks.length}
-              </span>
+              <button onClick={clear} className="text-sm font-semibold text-white/70 hover:text-white">
+                Remove all
+              </button>
             )}
-          </span>
-          {picks.length > 0 && (
-            <button onClick={clear} className="text-sm font-semibold text-white/70 hover:text-white">
-              Remove all
-            </button>
-          )}
-        </div>
+          </div>
+        )}
 
         {picks.length > 1 && (
           <div role="tablist" aria-label="Bet type" className="grid grid-cols-2 border-b border-line text-sm font-semibold">
@@ -177,13 +189,13 @@ export function Betslip() {
           </Link>
         )}
 
-        <ul className="divide-y divide-white/[0.05]">
+        <ul className="divide-y divide-line">
           {picks.map((p) => (
             <li key={p.selectionId} className="flex animate-fade-in items-start gap-3 px-4 py-3">
               <button
                 onClick={() => remove(p.selectionId)}
                 aria-label={`Remove ${p.selectionName}, ${p.fixtureName}`}
-                className="mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-full bg-white/[0.06] text-[10px] text-fog hover:bg-danger/20 hover:text-danger"
+                className="mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-full bg-ink-500 text-[10px] text-fog hover:bg-danger/20 hover:text-danger"
               >
                 ✕
               </button>
@@ -192,7 +204,7 @@ export function Betslip() {
                 <div className="truncate text-xs text-fog">{p.marketName}</div>
                 <div className="truncate text-xs text-fog-muted">{p.fixtureName}</div>
               </div>
-              <span className="rounded-md bg-lime/10 px-2 py-1 text-sm font-bold tabular-nums text-lime">{formatMilliOdds(p.milliOdds)}</span>
+              <span className="rounded-md bg-gold/10 px-2 py-1 text-sm font-bold tabular-nums text-gold">{formatMilliOdds(p.milliOdds)}</span>
             </li>
           ))}
         </ul>
@@ -250,12 +262,12 @@ export function Betslip() {
               {maxBonus > 0n && (
                 <div className="flex justify-between text-fog">
                   <dt>Max bonus</dt>
-                  <dd className="font-semibold tabular-nums text-lime">GHS {formatPesewas(maxBonus)}</dd>
+                  <dd className="font-semibold tabular-nums text-gold">GHS {formatPesewas(maxBonus)}</dd>
                 </div>
               )}
               <div className="flex justify-between border-t border-line pt-2 text-base font-bold text-white">
                 <dt>{singles ? "Max return" : "Return"}</dt>
-                <dd className="tabular-nums text-lime">GHS {formatPesewas(payout + maxBonus)}</dd>
+                <dd className="tabular-nums text-gold">GHS {formatPesewas(payout + maxBonus)}</dd>
               </div>
             </dl>
 
@@ -321,7 +333,7 @@ function Booking({ picks, onLoad }: { picks: Pick[]; onLoad: (picks: Pick[]) => 
       if (res.status !== 201) return setState({ k: "error", msg: d.error ?? "Could not book" });
       const at = new Date();
       const image = await drawSlipImage(d.code, picks, at)
-        .then((b) => new File([b], `kingzbet-${d.code}.png`, { type: "image/png" }))
+        .then((b) => new File([b], `888soccerbet-${d.code}.png`, { type: "image/png" }))
         .catch(() => null); // the code is still usable without the picture
       setBooked({ code: d.code, image, at });
       setOpen(true);
@@ -384,7 +396,7 @@ function Booking({ picks, onLoad }: { picks: Pick[]; onLoad: (picks: Pick[]) => 
           )}
         </div>
         {messages}
-        {open && booked && createPortal(<BookingDialog booked={booked} onClose={() => setOpen(false)} />, document.body)}
+        {open && booked && createPortal(<BookingDialog booked={booked} picks={picks} onClose={() => setOpen(false)} />, document.body)}
       </div>
     );
 
@@ -415,8 +427,11 @@ function Booking({ picks, onLoad }: { picks: Pick[]; onLoad: (picks: Pick[]) => 
   );
 }
 
-/** Booking pop-up: code with copy, booking time, the slip picture (tap to enlarge), share row. */
-function BookingDialog({ booked, onClose }: { booked: Booked; onClose: () => void }) {
+/**
+ * Booking pop-up, laid out as a ticket: the logo on the brand header, the code as the hero with
+ * what it holds, a tear line, then the shareable slip picture and the ways to send it.
+ */
+function BookingDialog({ booked, picks, onClose }: { booked: Booked; picks: Pick[]; onClose: () => void }) {
   const { code, image, at } = booked;
   const closeRef = useRef<HTMLButtonElement>(null);
   const [url, setUrl] = useState<string | null>(null);
@@ -463,7 +478,7 @@ function BookingDialog({ booked, onClose }: { booked: Booked; onClose: () => voi
   }
   function save() {
     if (!image || !url) return;
-    if (ios && canShareFile) return void navigator.share({ files: [image], title: `Kingz Bet booking ${code}` }).catch(() => {});
+    if (ios && canShareFile) return void navigator.share({ files: [image], title: `888SoccerBet booking ${code}` }).catch(() => {});
     const a = document.createElement("a");
     a.href = url;
     a.download = image.name;
@@ -471,111 +486,124 @@ function BookingDialog({ booked, onClose }: { booked: Booked; onClose: () => voi
     setSaved(true);
   }
 
-  const text = `Kingz Bet booking code ${code}`;
-  const shareBtn = "flex flex-col items-center gap-1.5 text-xs font-medium text-fog hover:text-white";
-  const shareIcon = "grid h-11 w-11 place-items-center rounded-full";
+  const text = `888SoccerBet booking code ${code}`;
+  const combined = combineMilliOdds(picks.map((p) => p.milliOdds));
+  const shareBtn = "flex flex-col items-center gap-1.5 text-[11px] font-medium text-fog transition-colors hover:text-white";
+  const shareIcon = "grid h-11 w-11 place-items-center rounded-full transition-transform hover:scale-105";
 
   return (
     <div role="dialog" aria-modal="true" aria-label={`Booking code ${code}`} className="fixed inset-0 z-[60] flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/60" onClick={onClose} />
-      <div className="relative w-full max-w-sm animate-fade-in rounded-2xl bg-ink-700 px-6 pb-6 pt-8 text-center shadow-lift">
-        <button
-          ref={closeRef}
-          onClick={onClose}
-          aria-label="Close"
-          className="absolute right-3 top-3 grid h-9 w-9 place-items-center rounded-full text-xl text-fog hover:bg-white/[0.06] hover:text-white"
-        >
-          ✕
-        </button>
-        <p className="text-sm font-semibold text-fog">Booking Code</p>
-        <div className="mt-1 flex items-center justify-center gap-2">
-          <span className="font-display text-4xl font-extrabold tracking-wide text-white">{code}</span>
+      <div className="absolute inset-0 bg-black/70" onClick={onClose} />
+      <div className="relative w-full max-w-sm animate-fade-in overflow-hidden rounded-2xl border border-line bg-ink-700 shadow-lift">
+        {/* ticket head: the logo on the night-pitch body, with its speed swoosh */}
+        <div className="theme-dark relative isolate flex items-center justify-center overflow-hidden bg-[linear-gradient(135deg,#17291F_0%,#0C130F_60%,#132219_100%)] px-6 py-5">
+          <svg aria-hidden className="absolute inset-0 -z-10 h-full w-full" viewBox="0 0 400 120" preserveAspectRatio="none">
+            <path d="M110 120 Q240 26 420 8 Q262 60 156 120 Z" fill="#3CDC3C" opacity=".15" />
+          </svg>
+          <Logo className="h-14" />
           <button
-            onClick={() => copy(code, "code")}
-            aria-label="Copy booking code"
-            className="grid h-9 w-9 place-items-center rounded-lg text-fog hover:bg-white/[0.06] hover:text-white"
+            ref={closeRef}
+            onClick={onClose}
+            aria-label="Close"
+            className="absolute right-2.5 top-2.5 grid h-9 w-9 place-items-center rounded-full text-lg text-white/70 hover:bg-white/10 hover:text-white"
           >
-            {copied === "code" ? (
-              <span className="text-xs font-bold text-lime">✓</span>
-            ) : (
-              <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden>
-                <rect x="8" y="8" width="12" height="12" rx="2" />
-                <path d="M16 8V5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3" />
-              </svg>
-            )}
+            ✕
           </button>
         </div>
-        <p className="mt-1 text-xs tabular-nums text-fog-muted">{formatStamp(at)}</p>
+        <div className="h-1 bg-lime" />
 
-        {url && (
-          <button
-            onClick={() => setZoom(true)}
-            aria-label="Enlarge slip picture"
-            className="group relative mx-auto mt-5 block overflow-hidden rounded-md border border-line shadow-card"
-          >
-            <img src={url} alt="" className="h-32 w-auto" />
-            <span className="absolute inset-0 grid place-items-center bg-black/0 transition group-hover:bg-black/20">
-              <span className="grid h-9 w-9 place-items-center rounded-full bg-black/45 text-snow">
-                <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden>
-                  <circle cx="11" cy="11" r="6" />
-                  <path d="m20 20-4.5-4.5M11 8v6M8 11h6" />
-                </svg>
-              </span>
+        {/* the code, and what it holds */}
+        <div className="px-6 pb-5 pt-5 text-center">
+          <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-fog">Booking code</p>
+          <p className="mt-1.5 select-all font-display text-[40px] font-extrabold leading-none tracking-[0.08em] text-white">{code}</p>
+          <p className="mt-2 text-xs tabular-nums text-fog-muted">{formatStamp(at)}</p>
+          <div className="mt-4 flex flex-wrap justify-center gap-2 text-xs">
+            <span className="rounded-full bg-ink-600 px-3 py-1 font-semibold text-fog">
+              {picks.length} {picks.length === 1 ? "selection" : "selections"}
             </span>
+            <span className="rounded-full bg-gold/10 px-3 py-1 font-bold tabular-nums text-gold">Total odds {formatMilliOdds(combined)}</span>
+          </div>
+          <button onClick={() => copy(code, "code")} className="btn-lime mt-5 w-full py-3 text-sm">
+            {copied === "code" ? "✓ Code copied" : "Copy code"}
           </button>
-        )}
+        </div>
 
-        <div className="mt-6 flex justify-center gap-5">
-          <a
-            href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(link)}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className={shareBtn}
-          >
-            <span className={`${shareIcon} bg-black text-snow`}>
-              <svg viewBox="0 0 24 24" className="h-[18px] w-[18px]" fill="currentColor" aria-hidden>
-                <path d="M17.8 3h3.1l-6.8 7.8L22 21h-6.2l-4.9-6.4L5.3 21H2.2l7.3-8.3L2 3h6.4l4.4 5.8zm-1.1 16.2h1.7L7.4 4.7H5.6z" />
-              </svg>
-            </span>
-            X
-          </a>
-          <a href={`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(link)}`} target="_blank" rel="noopener noreferrer" className={shareBtn}>
-            <span className={`${shareIcon} bg-[#1877F2] text-snow`}>
-              <svg viewBox="0 0 24 24" className="h-5 w-5" fill="currentColor" aria-hidden>
-                <path d="M13.5 21v-7.5h2.5l.4-3h-2.9V8.6c0-.9.3-1.5 1.5-1.5h1.6V4.4A21 21 0 0 0 14.3 4c-2.3 0-3.8 1.4-3.8 3.9v2.6H8v3h2.5V21z" />
-              </svg>
-            </span>
-            Facebook
-          </a>
-          <button onClick={() => copy(link, "link")} className={shareBtn}>
-            <span className={`${shareIcon} bg-ink-500 text-white`}>
-              <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden>
-                <path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1" />
-              </svg>
-            </span>
-            {copied === "link" ? "Copied" : "Copy Link"}
-          </button>
-          {image && (
-            <button onClick={save} className={shareBtn}>
-              <span className={`${shareIcon} bg-ink-500 text-white`}>
-                <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden>
-                  <path d="M12 4v11m0 0-4-4m4 4 4-4M5 20h14" />
-                </svg>
+        {/* tear line */}
+        <div aria-hidden className="mx-6 border-t-2 border-dashed border-line" />
+
+        <div className="px-6 pb-6 pt-5">
+          {url && (
+            <button
+              onClick={() => setZoom(true)}
+              aria-label="Enlarge slip picture"
+              className="group relative mx-auto mb-5 flex w-full items-center gap-3 rounded-xl border border-line bg-ink-600 p-2.5 text-left transition-colors hover:border-ink-400"
+            >
+              <img src={url} alt="" className="h-16 w-auto rounded-md shadow-card" />
+              <span className="min-w-0 flex-1">
+                <span className="block text-sm font-semibold text-white">Shareable slip</span>
+                <span className="block text-xs text-fog-muted">Tap to view full size</span>
               </span>
-              {saved ? "Saved" : "Save"}
+              <svg viewBox="0 0 24 24" className="h-5 w-5 shrink-0 text-fog group-hover:text-white" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden>
+                <circle cx="11" cy="11" r="6" />
+                <path d="m20 20-4.5-4.5M11 8v6M8 11h6" />
+              </svg>
             </button>
           )}
+
+          <p className="mb-3 text-center text-[11px] font-bold uppercase tracking-[0.2em] text-fog-muted">Share</p>
+          <div className="grid grid-cols-5 gap-1">
+            <a href={`https://wa.me/?text=${encodeURIComponent(`${text}: ${link}`)}`} target="_blank" rel="noopener noreferrer" className={shareBtn}>
+              <span className={`${shareIcon} bg-[#25D366] text-snow`}>
+                <svg viewBox="0 0 24 24" className="h-5 w-5" fill="currentColor" aria-hidden>
+                  <path d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2Zm5.3 14.1c-.2.6-1.3 1.2-1.8 1.2-.5.1-1 .2-3.3-.7-2.8-1.1-4.6-4-4.7-4.2-.1-.2-1.1-1.5-1.1-2.9 0-1.4.7-2 1-2.3.2-.3.5-.3.7-.3h.5c.2 0 .4 0 .6.5l.8 2c.1.2.1.4 0 .5l-.3.5-.4.4c-.1.1-.3.3-.1.6.2.3.8 1.3 1.7 2.1 1.2 1 2.1 1.4 2.4 1.5.3.2.5.1.6-.1l.8-1c.2-.3.4-.2.6-.1l1.9.9c.3.1.5.2.5.3.1.2.1.7-.1 1.4Z" />
+                </svg>
+              </span>
+              WhatsApp
+            </a>
+            <a href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(link)}`} target="_blank" rel="noopener noreferrer" className={shareBtn}>
+              <span className={`${shareIcon} bg-black text-snow ring-1 ring-fog/25`}>
+                <svg viewBox="0 0 24 24" className="h-[18px] w-[18px]" fill="currentColor" aria-hidden>
+                  <path d="M17.8 3h3.1l-6.8 7.8L22 21h-6.2l-4.9-6.4L5.3 21H2.2l7.3-8.3L2 3h6.4l4.4 5.8zm-1.1 16.2h1.7L7.4 4.7H5.6z" />
+                </svg>
+              </span>
+              X
+            </a>
+            <a href={`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(link)}`} target="_blank" rel="noopener noreferrer" className={shareBtn}>
+              <span className={`${shareIcon} bg-[#1877F2] text-snow`}>
+                <svg viewBox="0 0 24 24" className="h-5 w-5" fill="currentColor" aria-hidden>
+                  <path d="M13.5 21v-7.5h2.5l.4-3h-2.9V8.6c0-.9.3-1.5 1.5-1.5h1.6V4.4A21 21 0 0 0 14.3 4c-2.3 0-3.8 1.4-3.8 3.9v2.6H8v3h2.5V21z" />
+                </svg>
+              </span>
+              Facebook
+            </a>
+            <button onClick={() => copy(link, "link")} className={shareBtn}>
+              <span className={`${shareIcon} bg-ink-500 text-white`}>
+                <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden>
+                  <path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1" />
+                </svg>
+              </span>
+              {copied === "link" ? "Copied" : "Link"}
+            </button>
+            {image ? (
+              <button onClick={save} className={shareBtn}>
+                <span className={`${shareIcon} bg-ink-500 text-white`}>
+                  <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden>
+                    <path d="M12 4v11m0 0-4-4m4 4 4-4M5 20h14" />
+                  </svg>
+                </span>
+                {saved ? "Saved" : "Save"}
+              </button>
+            ) : (
+              <span />
+            )}
+          </div>
         </div>
       </div>
 
       {zoom && url && (
         <div className="absolute inset-0 z-10 flex items-center justify-center p-4" onClick={() => setZoom(false)}>
-          <div className="absolute inset-0 bg-black/70" />
-          <img
-            src={url}
-            alt={`Booking code ${code} with its selections`}
-            className="relative max-h-full w-auto max-w-full rounded-lg shadow-lift sm:max-w-sm"
-          />
+          <div className="absolute inset-0 bg-black/80" />
+          <img src={url} alt={`Booking code ${code} with its selections`} className="relative max-h-full w-auto max-w-full rounded-lg shadow-lift sm:max-w-sm" />
         </div>
       )}
     </div>

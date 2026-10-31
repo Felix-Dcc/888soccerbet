@@ -37,7 +37,7 @@ export class SandboxMomoProvider implements PaymentProvider {
   }
 
   async verifyWebhook(rawBody: string, headers: Headers): Promise<WebhookResult> {
-    const signature = headers.get("x-stakra-signature");
+    const signature = headers.get("x-sb-signature");
     if (!signature) return { ok: false };
     const expected = hmacHex(secret(), rawBody);
     if (!safeEqualHex(expected, signature)) return { ok: false };

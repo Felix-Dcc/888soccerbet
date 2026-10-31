@@ -1,4 +1,4 @@
-# Brand: Kingz Bet
+# Brand: 888SoccerBet
 
 ## Name selection
 
@@ -13,33 +13,41 @@ international) and distinctiveness from the reference:
 | Oddwin | odds + win | descriptive, weak as a trademark |
 | Sankobet | Sankofa + bet | culturally strong but long and on-the-nose |
 
-**Kingz Bet** was chosen as the final brand by stakeholder decision. It is confident and
-regal, trivially pronounceable in Ghana and internationally, and reads instantly as a
-betting brand.
+**888SoccerBet** was chosen as the final brand by the owner, replacing the earlier working
+name *Kingz Bet*. It names the sport and the product plainly and is easy to say and type.
 
-### Clearance status (temporary brand) — ⚠️ conflict risk
+### Clearance status (temporary brand) — ⚠️ high conflict risk
 
-- Unlike a coined name, **"Kingz Bet" is a common betting-brand construction** ("King
-  Bet", "Kingbet", "Kingz Bet" exist in several markets). A **full trademark and domain
-  clearance is therefore essential and more likely to surface conflicts** than for a
-  coined name. No clearance search was run for this specific name here.
-- This is **not** legal clearance. A registered trademark search (USPTO/EUIPO + Ghana
-  Registrar of Companies service-mark register) and domain registration are required
-  before any launch. Until then Kingz Bet is a **temporary/working brand**.
+- **"888" is an established gambling trademark.** 888 Holdings plc runs 888sport,
+  888casino and 888poker and holds registered marks across many jurisdictions. A betting
+  brand opening with "888" is therefore **substantially more likely to attract an
+  opposition or infringement claim** than a coined name. Treat this as the primary brand
+  risk, ahead of everything else in this document.
+- No clearance search was run for this name here, and this is **not** legal clearance. A
+  registered trademark search (USPTO/EUIPO + Ghana Registrar of Companies service-mark
+  register) and domain registration are required before any launch. Until then
+  888SoccerBet is a **temporary/working brand**.
 
-## Visual identity (deliberately unlike the reference)
+## Visual identity
 
-The reference uses royal blue + gold with a light UI. Kingz Bet is the opposite end of the
-spectrum — a **dark "sport-tech"** identity:
+A restrained **dark** identity. One accent carries actions; colour is never decorative.
 
-- **Ink** base `#0B0F14` with elevated surfaces `#141A22` / `#1B232E`.
-- **Electric lime** accent `#C6F24E` (energy, the "go" of a live price).
-- **Teal** `#16D1B4` for wins/positive signals; **coral** `#FF5A5F` for loss/danger.
-- Typography: **Sora** (display, geometric, confident) + **Manrope** (body, highly
-  legible at small sizes on phones).
-- Logo: a lime rounded-square containing an original crown/chevron mark, with a
-  `Kingz`+lime`Bet` wordmark. Defined in `src/components/Logo.tsx` (inline SVG, no raster
-  asset copied from anywhere).
+- **Base** `#0B1220`, surfaces `#111B2E`, raised `#18253D`, hairline borders `#24334F`.
+- **Text** `#E8EDF5`, muted `#8E9BB3`.
+- **Amber** `#F0A53A` is the single accent: primary actions, odds and bonuses.
+- **Green** `#2EA66F` and **red** `#D9534F` are reserved strictly for win/loss and status.
+- Surfaces are separated by lightness steps and 1px borders — no gradients, no glow.
+- The **admin console** is scoped to its own palette (muted indigo `#5C7CFA` dark /
+  `#3B5BDB` light) with a remembered light/dark toggle, so staff tools never read as the
+  player site.
+- Typography: **Sora** (display) + **Manrope** (body), tabular figures for money and odds.
+- Logo: a dark rounded tile holding a **gold crown over a football**, beside a
+  `888SOCCER` + green `BET` wordmark. Inline SVG in `src/components/Logo.tsx` and
+  `src/app/icon.svg` — no raster asset copied from anywhere.
+
+> **Open point:** the supplied logo uses a vivid green (`#3CDC3C`) while the product UI
+> runs on amber. The logo currently keeps its own green; switching the site accent to
+> green is a one-token change in `src/app/globals.css` if that is preferred.
 
 Tokens live in `tailwind.config.ts`; base styles and component classes in
 `src/app/globals.css`.
@@ -56,7 +64,7 @@ auditable") and always keeps the 18+/responsible-gaming message visible.
   structure from the reference's left-rail/centre/right-slip composition).
 - **Match card**: competition + time header, stacked teams with live score, a 2/3-up odds
   row, and a "N markets" link to the fixture page.
-- **Odds button**: compact, label-over-price, lime when selected — big enough for thumbs.
+- **Odds button**: a quiet tile with the price in amber; filled amber when selected — big enough for thumbs.
 - **Mobile-first**: single-column grid, bottom betslip FAB + drawer, 44px-plus tap
   targets, loading skeletons and explicit empty/error states throughout.
 - **Accessibility**: semantic landmarks, `aria-pressed` odds buttons, labelled inputs,

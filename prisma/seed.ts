@@ -13,12 +13,12 @@ async function main() {
   await houseAccountId(prisma, "PAYMENT_CLEARING");
 
   const admin = await prisma.user.upsert({
-    where: { email: "admin@kingsbet.gh" },
+    where: { email: "admin@888soccerbet.com" },
     create: {
-      email: "admin@kingsbet.gh",
+      email: "admin@888soccerbet.com",
       passwordHash: hashPassword("Admin123!"),
       role: "SUPER_ADMIN",
-      displayName: "Kingz Bet Admin",
+      displayName: "888SoccerBet Admin",
       kycStatus: "VERIFIED",
       dateOfBirth: new Date("1990-01-01"),
       phone: "0240000002",
@@ -28,9 +28,9 @@ async function main() {
   });
 
   const demo = await prisma.user.upsert({
-    where: { email: "demo@kingsbet.gh" },
+    where: { email: "demo@888soccerbet.com" },
     create: {
-      email: "demo@kingsbet.gh",
+      email: "demo@888soccerbet.com",
       passwordHash: hashPassword("Demo1234!"),
       displayName: "Demo Player",
       kycStatus: "VERIFIED",
@@ -54,7 +54,7 @@ async function main() {
 
   const sync = await syncFixtures();
   console.log("Seeded:", { admin: admin.email, demo: demo.email, ...sync });
-  console.log("Logins -> admin@kingsbet.gh or 0240000002 / Admin123!   demo@kingsbet.gh or 0240000001 / Demo1234!   demo referral: /register?ref=DEMOKING");
+  console.log("Logins -> admin@888soccerbet.com or 0240000002 / Admin123!   demo@888soccerbet.com or 0240000001 / Demo1234!   demo referral: /register?ref=DEMOKING");
 }
 
 main()

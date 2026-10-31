@@ -7,20 +7,21 @@
 import { combineMilliOdds, formatMilliOdds, formatPesewas, potentialPayout } from "@/lib/money";
 import { formatStamp } from "@/lib/time";
 import type { Pick } from "./BetslipContext";
+import logoArt from "../../../public/img/brand/888soccerbet-logo.png";
 
 const W = 1080;
 const PAD = 48; // dark margin around the white card
 const IN = 48; // text inset inside the white card
 const C = {
-  brand: "#0F8A3C",
-  brandDark: "#0B6B2F",
-  panel: "#131A24",
-  code: "#C6F24E",
-  ink: "#0B1220",
-  fog: "#4B5565",
-  line: "#E2E7EE",
-  band: "#E7F4EC",
-  bandText: "#0C7C36",
+  brand: "#17211B",
+  brandDark: "#0A0F0C",
+  panel: "#111814",
+  code: "#3CDC3C",
+  ink: "#0A0F0C",
+  fog: "#4E5D53",
+  line: "#E1E8E3",
+  band: "#E5F6E5",
+  bandText: "#167516",
   gold: "#F5C451",
 };
 const EXAMPLE_STAKE = 10_000n; // GHS 100 in pesewas
@@ -48,43 +49,16 @@ function pickLabel(p: Pick): string {
   return p.selectionName;
 }
 
-function crown(ctx: CanvasRenderingContext2D, x: number, y: number, s: number) {
-  ctx.save();
-  ctx.translate(x, y);
-  ctx.scale(s / 32, s / 32);
-  ctx.fillStyle = C.gold;
-  ctx.beginPath();
-  ctx.moveTo(7.5, 21.2); ctx.lineTo(6, 11.2); ctx.lineTo(11.6, 15.5); ctx.lineTo(16, 7.8);
-  ctx.lineTo(20.4, 15.5); ctx.lineTo(26, 11.2); ctx.lineTo(24.5, 21.2); ctx.closePath();
-  ctx.fill();
-  ctx.fillRect(7.5, 22.2, 17, 3);
-  for (const [cx, cy, r] of [[6, 10.6, 1.5], [26, 10.6, 1.5], [16, 6.9, 1.8]] as const) {
-    ctx.beginPath();
-    ctx.arc(cx, cy, r, 0, Math.PI * 2);
-    ctx.fill();
+/** The real logo, decoded before drawing; null if it can't load (the wordmark is drawn instead). */
+async function loadLogo(): Promise<HTMLImageElement | null> {
+  try {
+    const img = new Image();
+    img.src = logoArt.src;
+    await img.decode();
+    return img;
+  } catch {
+    return null;
   }
-  ctx.restore();
-}
-
-/** The wordmark's little crown, centred at x with its base at y, `w` pixels wide. */
-function wordmarkCrown(ctx: CanvasRenderingContext2D, x: number, y: number, w: number) {
-  const k = w / 24; // drawn in the same 24x16 box as the site's SVG
-  ctx.save();
-  ctx.translate(x - 12 * k, y - 15 * k);
-  ctx.scale(k, k);
-  ctx.beginPath();
-  ctx.moveTo(2, 14); ctx.lineTo(1, 4); ctx.lineTo(7, 8.5); ctx.lineTo(12, 1);
-  ctx.lineTo(17, 8.5); ctx.lineTo(23, 4); ctx.lineTo(22, 14); ctx.closePath();
-  ctx.fillStyle = C.gold;
-  ctx.fill();
-  ctx.lineWidth = 1;
-  ctx.strokeStyle = "#B9831A";
-  ctx.stroke();
-  ctx.beginPath();
-  ctx.arc(12, 1.8, 1.6, 0, Math.PI * 2);
-  ctx.fillStyle = "#FFE7A3";
-  ctx.fill();
-  ctx.restore();
 }
 
 export async function drawSlipImage(code: string, picks: Pick[], bookedAt: Date = new Date()): Promise<Blob> {
@@ -94,15 +68,17 @@ export async function drawSlipImage(code: string, picks: Pick[], bookedAt: Date 
     [`800 40px ${f.display}`, `800 36px ${f.body}`, `700 30px ${f.body}`, `600 30px ${f.body}`, `500 30px ${f.body}`].map((x) => document.fonts.load(x).catch(() => [])),
   );
 
+  const logo = await loadLogo();
   const combined = combineMilliOdds(picks.map((p) => p.milliOdds));
-  const BAR = 150;
+  const BAR = 190;
   const PANEL = 400;
   const BAND = 68;
   const ROW = 60;
   const SEL = 196;
   const cardTop = BAR + PANEL;
   const cardH = BAND + ROW * 2 + 24 + BAND + picks.length * SEL;
-  const H = cardTop + cardH + PAD;
+  const FOOT = 110; // domain + 18+ line under the card
+  const H = cardTop + cardH + FOOT;
 
   const canvas = document.createElement("canvas");
   canvas.width = W;
@@ -110,32 +86,48 @@ export async function drawSlipImage(code: string, picks: Pick[], bookedAt: Date 
   const ctx = canvas.getContext("2d")!;
   ctx.textBaseline = "middle";
 
-  // Brand bar: logo left, "Betslip" + booking time right.
+  // Brand bar: the real logo left, "BETSLIP" + booking time right, on the night-pitch body
+  // with the logo's speed swoosh behind it.
   const grad = ctx.createLinearGradient(0, 0, W, BAR);
   grad.addColorStop(0, C.brand);
   grad.addColorStop(1, C.brandDark);
   ctx.fillStyle = grad;
   ctx.fillRect(0, 0, W, BAR);
-  crown(ctx, PAD, BAR / 2 - 34, 68);
-  ctx.fillStyle = "#FFFFFF";
-  ctx.font = `800 46px ${f.display}`;
-  ctx.fillText("Kingz Bet", PAD + 84, BAR / 2);
-  // Small crown on the "z", as in the site's wordmark.
-  const sx = PAD + 84 + ctx.measureText("King").width + ctx.measureText("z").width / 2;
-  wordmarkCrown(ctx, sx, BAR / 2 - 46 * 0.44, 46 * 0.6);
+  ctx.fillStyle = "rgba(60,220,60,.14)";
+  ctx.beginPath();
+  ctx.moveTo(W * 0.35, BAR);
+  ctx.quadraticCurveTo(W * 0.62, BAR * 0.2, W + 20, BAR * 0.05);
+  ctx.quadraticCurveTo(W * 0.66, BAR * 0.5, W * 0.42, BAR);
+  ctx.closePath();
+  ctx.fill();
+  ctx.fillStyle = C.code;
+  ctx.fillRect(0, BAR - 4, W, 4);
+  if (logo) {
+    const lh = 128;
+    ctx.drawImage(logo, PAD, (BAR - lh) / 2, (logo.width / logo.height) * lh, lh);
+  } else {
+    ctx.fillStyle = "#FFFFFF";
+    ctx.font = `800 46px ${f.display}`;
+    ctx.fillText("888SOCCER", PAD, BAR / 2);
+    ctx.fillStyle = C.code;
+    ctx.fillText("BET", PAD + ctx.measureText("888SOCCER").width, BAR / 2);
+  }
   ctx.textAlign = "right";
-  ctx.font = `700 30px ${f.body}`;
-  ctx.fillText("Betslip", W - PAD, BAR / 2 - 20);
-  ctx.font = `600 30px ${f.body}`;
-  ctx.fillText(formatStamp(bookedAt), W - PAD, BAR / 2 + 22);
+  ctx.fillStyle = "#FFFFFF";
+  ctx.font = `800 34px ${f.display}`;
+  ctx.fillText("BETSLIP", W - PAD, BAR / 2 - 20);
+  ctx.fillStyle = "rgba(255,255,255,.7)";
+  ctx.font = `600 28px ${f.body}`;
+  ctx.fillText(formatStamp(bookedAt), W - PAD, BAR / 2 + 24);
 
   // Dark panel: booking code and total odds.
   ctx.fillStyle = C.panel;
   ctx.fillRect(0, BAR, W, H - BAR);
   ctx.textAlign = "center";
   ctx.fillStyle = "#FFFFFF";
-  ctx.font = `600 32px ${f.body}`;
-  ctx.fillText("Booking Code", W / 2, BAR + 64);
+  ctx.fillStyle = "rgba(255,255,255,.7)";
+  ctx.font = `700 28px ${f.body}`;
+  ctx.fillText("BOOKING CODE", W / 2, BAR + 64);
   ctx.fillStyle = C.code;
   ctx.font = `800 104px ${f.display}`;
   ctx.fillText(code, W / 2, BAR + 160);
@@ -147,13 +139,14 @@ export async function drawSlipImage(code: string, picks: Pick[], bookedAt: Date 
   ctx.beginPath();
   ctx.roundRect(boxX, boxY, boxW, 104, 12);
   ctx.fill();
-  ctx.fillStyle = C.code;
+  ctx.fillStyle = C.gold;
   ctx.fillRect(boxX, boxY + 100, boxW, 4);
   ctx.textAlign = "left";
   ctx.fillStyle = "#FFFFFF";
   ctx.font = `600 32px ${f.body}`;
-  ctx.fillText("Odds", boxX + 32, boxY + 52);
+  ctx.fillText("Total odds", boxX + 32, boxY + 52);
   ctx.textAlign = "right";
+  ctx.fillStyle = C.gold;
   ctx.font = `800 52px ${f.display}`;
   ctx.fillText(formatMilliOdds(combined), boxX + boxW - 32, boxY + 52);
 
@@ -211,6 +204,17 @@ export async function drawSlipImage(code: string, picks: Pick[], bookedAt: Date 
     ctx.fillText(fit(ctx, p.marketName, cw - IN * 2), cx + IN - 16, y + 156);
     y += SEL;
   });
+
+  // Footer: where the code works, and the age/harm line a shared betting picture should carry.
+  const fy = cardTop + cardH + FOOT / 2;
+  ctx.textAlign = "left";
+  ctx.fillStyle = "#FFFFFF";
+  ctx.font = `800 30px ${f.display}`;
+  ctx.fillText("888soccerbet.com", PAD, fy);
+  ctx.textAlign = "right";
+  ctx.fillStyle = "rgba(255,255,255,.6)";
+  ctx.font = `600 26px ${f.body}`;
+  ctx.fillText("18+ · Play responsibly", W - PAD, fy);
 
   return new Promise((resolve, reject) => canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("toBlob failed"))), "image/png"));
 }

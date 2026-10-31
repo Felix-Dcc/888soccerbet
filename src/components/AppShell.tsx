@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { BetslipProvider, OPEN_SLIP_EVENT, useBetslip } from "./betslip/BetslipContext";
 import type { BonusRules } from "@/lib/bonus";
-import { Betslip } from "./betslip/Betslip";
+import { BetslipRail } from "./BetslipRail";
 import { Header } from "./Header";
 import { WinningPopup } from "./WinningPopup";
 import { SportIcon } from "./SportIcon";
@@ -26,7 +26,7 @@ function BottomNav({ onSlip }: { onSlip: () => void }) {
     </Link>
   );
   return (
-    <nav aria-label="App" className="fixed inset-x-0 bottom-0 z-40 border-t border-white/[0.06] bg-ink-900/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl lg:hidden">
+    <nav aria-label="App" className="theme-dark fixed inset-x-0 bottom-0 z-40 border-t border-white/[0.06] bg-ink-900/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl lg:hidden">
       <div className="mx-auto flex max-w-md items-end">
         {tab("/", "Home", "all", path === "/")}
         {tab("/live", "Live", "live", path === "/live")}
@@ -36,7 +36,7 @@ function BottomNav({ onSlip }: { onSlip: () => void }) {
           </span>
           Betslip
           {picks.length > 0 && (
-            <span key={picks.length} className="absolute right-[calc(50%-26px)] top-0 grid h-5 min-w-5 animate-pop place-items-center rounded-full bg-gold px-1 text-[10px] font-bold text-black">
+            <span key={picks.length} className="absolute right-[calc(50%-26px)] top-0 grid h-5 min-w-5 animate-pop place-items-center rounded-full bg-gold px-1 text-[10px] font-bold text-gold-ink">
               {picks.length}
             </span>
           )}
@@ -61,13 +61,13 @@ function MobileSlip({ open, onClose }: { open: boolean; onClose: () => void }) {
   return (
     <div className="fixed inset-0 z-50 lg:hidden" role="dialog" aria-modal="true" aria-label="Betslip">
       <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
-      <div className="absolute inset-x-0 bottom-0 max-h-[88vh] animate-slide-up overflow-auto rounded-t-3xl border-t border-white/10 bg-ink-800 p-3 pb-[calc(env(safe-area-inset-bottom)+12px)]">
-        <div className="mx-auto mb-2 h-1 w-10 rounded-full bg-white/20" />
+      <div className="absolute inset-x-0 bottom-0 max-h-[88vh] animate-slide-up overflow-auto rounded-t-3xl border-t border-line bg-ink-800 p-3 pb-[calc(env(safe-area-inset-bottom)+12px)]">
+        <div className="mx-auto mb-2 h-1 w-10 rounded-full bg-fog/30" />
         <button onClick={onClose} className="absolute right-4 top-3 text-sm font-semibold text-fog hover:text-white">
           Close
         </button>
         <div className="pt-4">
-          <Betslip />
+          <BetslipRail />
         </div>
       </div>
     </div>
@@ -76,7 +76,21 @@ function MobileSlip({ open, onClose }: { open: boolean; onClose: () => void }) {
 
 export { OPEN_SLIP_EVENT };
 
-export function AppShell({ sidebar, footer, minStakeGhs, bonus, children }: { sidebar: React.ReactNode; footer?: React.ReactNode; minStakeGhs: number; bonus: BonusRules; children: React.ReactNode }) {
+export function AppShell({
+  sidebar,
+  rail,
+  footer,
+  minStakeGhs,
+  bonus,
+  children,
+}: {
+  sidebar: React.ReactNode;
+  rail?: React.ReactNode; // sits under the betslip on desktop (e.g. the most-backed list)
+  footer?: React.ReactNode;
+  minStakeGhs: number;
+  bonus: BonusRules;
+  children: React.ReactNode;
+}) {
   const [slipOpen, setSlipOpen] = useState(false);
   const close = () => setSlipOpen(false);
   // Focused pages (admin console, sign-in, sign-up) get the full width: no sports menu or betslip rails.
@@ -131,8 +145,9 @@ export function AppShell({ sidebar, footer, minStakeGhs, bonus, children }: { si
             {children}
           </main>
           <aside className="hidden lg:block" aria-label="Betslip">
-            <div className="sticky top-[76px] max-h-[calc(100vh-92px)] overflow-y-auto overscroll-contain pb-4 [scrollbar-width:thin]">
-              <Betslip />
+            <div className="sticky top-[76px] max-h-[calc(100vh-92px)] space-y-4 overflow-y-auto overscroll-contain pb-4 [scrollbar-width:thin]">
+              <BetslipRail />
+              {rail}
             </div>
           </aside>
         </div>

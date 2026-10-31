@@ -4,6 +4,7 @@ import { placeBetSchema } from "@/lib/validation";
 import { json, errorResponse, clientIp } from "@/lib/http";
 import { rateLimit } from "@/lib/rateLimit";
 import { prisma } from "@/lib/db";
+import { quotesFor } from "@/lib/cashout";
 
 export const dynamic = "force-dynamic";
 
@@ -28,9 +29,13 @@ export async function GET() {
       where: { userId: user.id },
       orderBy: { placedAt: "desc" },
       take: 50,
-      include: { selections: true },
+      // startsAt lets the rail tell an in-play bet from one still waiting to kick off.
+      include: { selections: { include: { fixture: { select: { startsAt: true } } } } },
     });
-    return json({ bets });
+    // Which pending bets can be cashed out right now — the same helper the My bets page uses.
+    const quotes = await quotesFor(bets.filter((b) => b.status === "PENDING").map((b) => b.id));
+    const cashoutable = [...quotes].filter(([, q]) => q.available).map(([id]) => id);
+    return json({ bets, cashoutable });
   } catch (e) {
     return errorResponse(e);
   }

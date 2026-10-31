@@ -22,8 +22,8 @@ export default function PromotionsPage() {
           <article key={p.name} className="card card-hover overflow-hidden">
             <div className="theme-dark relative isolate h-36">
               <Image src={p.photo} alt="" fill placeholder="blur" sizes="(min-width: 640px) 450px, 100vw" className="-z-20 object-cover" />
-              <div className="absolute inset-0 -z-10 bg-[linear-gradient(0deg,#131A24_0%,rgba(19,26,36,.2)_100%)]" />
-              <span className={`absolute right-3 top-3 rounded-full px-2.5 py-0.5 text-[10px] font-extrabold uppercase tracking-wider ${p.live ? "bg-lime text-lime-ink" : "bg-black/60 text-fog backdrop-blur"}`}>
+              <div className="absolute inset-0 -z-10 bg-[linear-gradient(0deg,#111814_0%,rgba(17,24,20,.2)_100%)]" />
+              <span className={`absolute right-3 top-3 rounded-full px-2.5 py-0.5 text-[10px] font-extrabold uppercase tracking-wider ${p.live ? "bg-lime text-lime-ink" : "bg-black/60 text-snow/80 backdrop-blur"}`}>
                 {p.live ? "Active" : "Coming soon"}
               </span>
             </div>

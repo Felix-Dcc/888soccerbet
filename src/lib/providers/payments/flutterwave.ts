@@ -33,7 +33,7 @@ export class FlutterwaveProvider implements PaymentProvider {
   constructor(
     private readonly secretKey: string,
     private readonly secretHash: string,
-    private readonly appUrl = (process.env.APP_URL || "https://kingzbet.live").replace(/\/+$/, ""),
+    private readonly appUrl = (process.env.APP_URL || "https://888soccerbet.com").replace(/\/+$/, ""),
   ) {
     this.isSandbox = secretKey.includes("_TEST");
   }
@@ -76,8 +76,8 @@ export class FlutterwaveProvider implements PaymentProvider {
       amount: ghsAmount(req.amountPesewas),
       currency: "GHS",
       reference: req.ref, // unique: Flutterwave rejects a repeat, so a retried request can't pay twice
-      narration: "Kingz Bet withdrawal",
-      beneficiary_name: req.name || "Kingz Bet player",
+      narration: "888SoccerBet withdrawal",
+      beneficiary_name: req.name || "888SoccerBet player",
       callback_url: `${this.appUrl}/api/webhooks/payments`,
     });
     const data = json.data as { id?: number | string } | undefined;

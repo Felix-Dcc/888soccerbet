@@ -1,7 +1,7 @@
 import type { Config } from "tailwindcss";
 
 /**
- * Kingz Bet tokens. Colours are CSS variables (src/app/globals.css) so one class works in
+ * 888SoccerBet tokens. Colours are CSS variables (src/app/globals.css) so one class works in
  * both palettes: the site is light, and `.theme-dark` re-scopes a block (photo heroes) to the
  * dark palette. `white` is the foreground token, so `text-white` = main text colour.
  */
@@ -18,7 +18,7 @@ const config: Config = {
         line: v("line"),
         fog: { DEFAULT: v("fog"), muted: v("fog-muted") },
         lime: { DEFAULT: v("lime"), 600: v("lime-600"), ink: v("lime-ink") },
-        gold: { DEFAULT: v("lime"), 600: v("lime-600") }, // alias of the amber accent (odds/bonuses)
+        gold: { DEFAULT: v("gold"), 600: v("gold-600"), ink: v("gold-ink") }, // the crown gold: value (odds, balance, bonuses)
         teal: { DEFAULT: v("teal"), 600: v("teal") },
         danger: v("danger"),
         warn: v("warn"),

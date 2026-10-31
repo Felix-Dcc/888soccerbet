@@ -53,5 +53,5 @@ export const photos = {
 /** Wide scene for a sport (tiles, match header): neutral venue, never a club's stadium. */
 export const sportPhoto = (sportKey: string) => (sportKey === "basketball" ? basketballHoopCourt : footballStadiumWide);
 
-/** Close-up for a sport's hero banner. */
-export const sportBannerPhoto = (sportKey: string) => (sportKey === "basketball" ? basketballHoopCourt : footballBallFloodlit);
+/** Close-up for a sport's hero banner: a photo with a subject, not an empty venue. */
+export const sportBannerPhoto = (sportKey: string) => (sportKey === "basketball" ? basketballDribbleSilhouette : footballBallFloodlit);

@@ -6,21 +6,23 @@ import { AppShell } from "@/components/AppShell";
 import { SideNav, type NavData } from "@/components/SideNav";
 import { Footer } from "@/components/Footer";
 import { Splash, SPLASH_SCRIPT } from "@/components/Splash";
+import { THEME_SCRIPT } from "@/lib/theme";
 import { minStakeGhs } from "@/lib/betEngine";
 import { bonusRules } from "@/lib/bonus";
-import { listCompetitions, listFixtures, listSports } from "@/lib/queries";
+import { HotMatches } from "@/components/HotMatches";
+import { hotFixtures, listCompetitions, listFixtures, listSports } from "@/lib/queries";
 
 const display = Sora({ subsets: ["latin"], weight: ["600", "700", "800"], variable: "--font-display" });
 const body = Manrope({ subsets: ["latin"], weight: ["400", "500", "600", "700", "800"], variable: "--font-body" });
 
 export const metadata: Metadata = {
-  title: "Kingz Bet — Sports Betting",
+  title: "888SoccerBet — Sports Betting",
   description: "Football and basketball odds across the Premier League, Champions League, La Liga, Serie A, Bundesliga and NBA.",
   // iOS Safari would turn match IDs, odds and booking codes into tel:/mailto: links before React
   // loads, breaking hydration (and making an ID tappable to call it).
   formatDetection: { telephone: false, email: false, address: false, date: false },
 };
-export const viewport: Viewport = { themeColor: "#0B4A2A", width: "device-width", initialScale: 1 };
+export const viewport: Viewport = { themeColor: "#0A0F0C", width: "device-width", initialScale: 1 };
 
 /** Navigation data for the rail. A database outage degrades to an empty nav, not a broken page. */
 async function navData(): Promise<NavData> {
@@ -44,11 +46,22 @@ async function SideNavWithData() {
   return <SideNav data={await navData()} />;
 }
 
+/** Most-backed fixtures for the betslip rail; a database hiccup just drops the panel. */
+async function HotMatchesWithData() {
+  try {
+    return <HotMatches fixtures={await hotFixtures()} />;
+  } catch (e) {
+    console.error("[layout] hot matches unavailable:", e instanceof Error ? e.message : e);
+    return null;
+  }
+}
+
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     // The head script adds a splash class to <html> before hydration; that difference is expected.
     <html lang="en" className={`${display.variable} ${body.variable}`} suppressHydrationWarning>
       <head>
+        <script dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />
         <script dangerouslySetInnerHTML={{ __html: SPLASH_SCRIPT }} />
         <noscript>
           <style>{"#kb-splash{display:none}"}</style>
@@ -63,6 +76,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           sidebar={
             <Suspense>
               <SideNavWithData />
+            </Suspense>
+          }
+          rail={
+            <Suspense>
+              <HotMatchesWithData />
             </Suspense>
           }
         >

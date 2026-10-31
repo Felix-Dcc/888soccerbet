@@ -3,7 +3,7 @@
 @tailwind utilities;
 
 /*
- * Kingz Bet design tokens — restrained dark theme.
+ * 888SoccerBet design tokens — restrained dark theme.
  * Values are "R G B" so Tailwind opacity modifiers work. The whole site is dark; surfaces are
  * separated by lightness steps + 1px borders (no heavy shadows, no gradients, no glow).
  * Colour rules:
@@ -11,33 +11,76 @@
  *   - Green (--teal) / red (--danger) are reserved strictly for win / loss (and money in / out).
  * `.theme-dark` is kept as a no-op alias so blocks that still carry it inherit these same tokens.
  */
-:root {
-  color-scheme: dark;
-  --fg: 232 237 245; /* text primary  #E8EDF5 */
-  --ink-900: 11 18 32; /* page background  #0B1220 */
-  --ink-800: 17 27 46; /* surface: header, inputs  #111B2E */
-  --ink-700: 17 27 46; /* surface: cards  #111B2E */
-  --ink-600: 24 37 61; /* raised surface: odds cells, wells  #18253D */
-  --ink-500: 31 46 73; /* raised, one step up (hover)  #1F2E49 */
-  --ink-400: 46 63 94; /* strong border / hover border  #2E3F5E */
-  --line: 36 51 79; /* hairline border  #24334F */
-  --fog: 166 179 200; /* secondary text  #A6B3C8 */
-  --fog-muted: 142 155 179; /* secondary text, dimmer  #8E9BB3 (>= 4.5:1 on surfaces) */
-  --lime: 240 165 58; /* ACCENT amber  #F0A53A */
-  --lime-600: 217 142 36; /* amber, pressed/hover  #D98E24 */
-  --lime-ink: 11 18 32; /* text on amber  #0B1220 */
-  --teal: 46 166 111; /* WIN green  #2EA66F */
-  --danger: 217 83 79; /* LOSS red  #D9534F */
-  --warn: 240 165 58; /* warnings share the amber accent */
-  /* Soft, flat elevation — surfaces are told apart by lightness + border, not shadow. */
-  --shadow-card: 0 1px 2px rgb(0 0 0 / 0.22);
-  --shadow-lift: 0 4px 14px -6px rgb(0 0 0 / 0.5);
-}
-
-/* The site is dark everywhere; this alias keeps legacy `.theme-dark` blocks on the same tokens. */
+:root,
 .theme-dark {
   color-scheme: dark;
+  /*
+   * "Night pitch" — taken from the logo: a near-black with a faint green cast (the stadium it
+   * sits in), the swoosh green for action and the crown gold for value. Neutrals stay low in
+   * chroma so the two brand colours are the only things that glow.
+   */
+  --fg: 235 243 238; /* text primary  #EBF3EE */
+  --ink-900: 10 15 12; /* page background  #0A0F0C */
+  --ink-800: 17 24 20; /* surface: header, inputs  #111814 */
+  --ink-700: 17 24 20; /* surface: cards  #111814 */
+  --ink-600: 23 33 27; /* raised surface: odds cells, wells  #17211B */
+  --ink-500: 30 43 35; /* raised, one step up (hover)  #1E2B23 */
+  --ink-400: 44 62 51; /* strong border / hover border  #2C3E33 */
+  --line: 33 48 41; /* hairline border  #213029 */
+  --fog: 170 185 175; /* secondary text  #AAB9AF */
+  --fog-muted: 143 160 149; /* secondary text, dimmer  #8FA095 (>= 4.5:1 on surfaces) */
+  --lime: 60 220 60; /* ACTION — the swoosh green  #3CDC3C */
+  --lime-600: 46 190 46; /* green, pressed/hover  #2EBE2E */
+  --lime-ink: 6 18 9; /* text on green  #061209 */
+  --gold: 245 196 81; /* VALUE — the crown gold: odds, balance, bonuses  #F5C451 */
+  --gold-600: 225 172 53; /* gold, pressed  #E1AC35 */
+  --gold-ink: 6 18 9; /* text on gold */
+  --teal: 34 197 139; /* WIN — emerald, kept distinct from the brand green  #22C58B */
+  --danger: 229 83 78; /* LOSS red  #E5534E */
+  --warn: 245 196 81; /* warnings share the crown gold */
+  /* Soft, flat elevation — surfaces are told apart by lightness + border, not shadow. */
+  --shadow-card: 0 1px 2px rgb(0 0 0 / 0.3);
+  --shadow-lift: 0 4px 14px -6px rgb(0 0 0 / 0.6);
+}
+
+/*
+ * Blocks that stay dark in either theme — brand bar, footer, tab bar, photo banners, tickets,
+ * the wallet card. They re-declare the dark tokens above, so they never flip; the logo's white
+ * lettering depends on it.
+ */
+.theme-dark {
   color: rgb(var(--fg));
+}
+
+/*
+ * White mode, chosen under My Account and stored per browser; THEME_SCRIPT applies it before
+ * first paint. Same roles as the dark palette, but the brand green and crown gold are deepened
+ * for text on white: the logo green is ~1.7:1 on white, so it can't carry text here.
+ * Every pairing below measures >= 4.5:1.
+ */
+:root[data-theme="light"] {
+  color-scheme: light;
+  --fg: 14 23 18; /* text  #0E1712 */
+  --ink-900: 243 246 244; /* page  #F3F6F4 */
+  --ink-800: 255 255 255; /* surface: inputs */
+  --ink-700: 255 255 255; /* cards */
+  --ink-600: 237 242 239; /* raised: odds tiles, wells  #EDF2EF */
+  --ink-500: 226 233 229; /* hover  #E2E9E5 */
+  --ink-400: 199 211 204; /* strong border  #C7D3CC */
+  --line: 220 228 223; /* hairline  #DCE4DF */
+  --fog: 69 85 76; /* secondary text  #45554C */
+  --fog-muted: 90 106 97; /* muted text  #5A6A61 */
+  --lime: 21 128 61; /* ACTION — the brand green, deepened for white  #15803D */
+  --lime-600: 22 101 52; /* pressed  #166534 */
+  --lime-ink: 255 255 255; /* text on green */
+  --gold: 146 96 0; /* VALUE — the crown gold, deepened for white  #926000 */
+  --gold-600: 120 79 0;
+  --gold-ink: 255 255 255; /* text on gold */
+  --teal: 4 120 87; /* WIN  #047857 */
+  --danger: 197 48 48; /* LOSS  #C53030 */
+  --warn: 146 96 0;
+  --shadow-card: 0 1px 2px rgb(16 24 20 / 0.06);
+  --shadow-lift: 0 6px 16px -8px rgb(16 24 20 / 0.18);
 }
 
 /*
@@ -138,22 +181,23 @@ body {
   .chip-active {
     @apply border-lime bg-lime text-lime-ink hover:border-lime hover:text-lime-ink;
   }
-  /* Odds cell — amber, the accent reserved for odds. Dark when picked onto the slip. */
+  /*
+   * Odds cell: a quiet tile carrying the price in the accent — the way a printed coupon reads.
+   * A dense coupon shows dozens of these at once, so filling each one would drown the page;
+   * the accent lives in the number. Picking a price onto the slip fills the tile instead, which
+   * makes the selected few obvious against the rest.
+   */
   .odd {
-    @apply flex h-10 flex-col items-center justify-center rounded-md border border-transparent bg-lime leading-tight text-lime-ink transition duration-150 hover:bg-lime-600;
+    @apply flex h-10 flex-col items-center justify-center rounded-md border border-line bg-ink-600 leading-tight text-white transition duration-150 hover:border-lime/50 hover:bg-ink-500;
+  }
+  .odd .odd-price {
+    @apply text-gold;
   }
   .odd-active {
-    @apply animate-pop border-line bg-white text-ink-800 hover:bg-white;
+    @apply animate-pop border-lime bg-lime text-lime-ink hover:bg-lime-600;
   }
-  /* Match page board: neutral tiles with amber prices; the picked one turns solid amber. */
-  .odds-board .odd {
-    @apply border-line bg-ink-600 text-white hover:border-lime/40 hover:bg-ink-500;
-  }
-  .odds-board .odd:not(.odd-active) .odd-price {
-    @apply text-lime;
-  }
-  .odds-board .odd.odd-active {
-    @apply border-lime bg-lime text-lime-ink hover:bg-lime-600;
+  .odd-active .odd-price {
+    @apply text-lime-ink;
   }
   .section-title {
     @apply font-display text-lg font-bold tracking-tight text-white;

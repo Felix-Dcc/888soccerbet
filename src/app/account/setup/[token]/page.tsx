@@ -23,7 +23,7 @@ export default function AccountSetupPage({ params }: { params: Promise<{ token: 
       const r = await fetch("/api/account/setup", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ token, password, confirmPassword: confirm }) });
       const d = await r.json().catch(() => ({}));
       if (!r.ok) return setErr(d.error ?? "Couldn't set your password");
-      window.dispatchEvent(new Event("stakra:refresh"));
+      window.dispatchEvent(new Event("sb:refresh"));
       router.push(d.staff ? "/admin" : "/");
       router.refresh();
     } catch {

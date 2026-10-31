@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { BallOrbit } from "@/components/BallOrbit";
-import { START_FILTERS, competitionRank, listCompetitions, listFixtures, listSports, parseStartFilter, type UiFixture } from "@/lib/queries";
+import { START_FILTERS, competitionRank, listCompetitions, listFixtures, parseStartFilter, type UiFixture } from "@/lib/queries";
 import { photos } from "@/lib/photos";
 import { MatchTable } from "@/components/MatchTable";
 import { FeaturedMatch } from "@/components/FeaturedMatch";
@@ -8,7 +8,6 @@ import { CompetitionStrip } from "@/components/CompetitionStrip";
 import { HeroCarousel } from "@/components/HeroCarousel";
 import { PromoSlide, bannerCtaClass } from "@/components/PromoSlide";
 import { OpenSlipButton } from "@/components/OpenSlipButton";
-import { SportTiles } from "@/components/SportTiles";
 import { TopMatches } from "@/components/TopMatches";
 import { SportIcon } from "@/components/SportIcon";
 import { Crest } from "@/components/Crest";
@@ -26,21 +25,21 @@ const byPrestige = (a: UiFixture, b: UiFixture) =>
 export default async function HomePage({ searchParams }: { searchParams: Promise<{ sport?: string; comp?: string; q?: string; hours?: string }> }) {
   const { sport, comp, q, hours: rawHours } = await searchParams;
   const hours = parseStartFilter(rawHours);
-  const [sports, competitions, fixtures] = await Promise.all([
-    listSports(),
+  const [competitions, fixtures] = await Promise.all([
     listCompetitions(),
     listFixtures({ sportKey: sport, competitionId: comp, q, withinHours: hours }),
   ]);
   const now = Date.now();
   const rankOf = Object.fromEntries(competitions.map((c) => [c.name, competitionRank(c.name)]));
   const ranked = fixtures.filter((f) => upcoming(f, now)).sort(byPrestige);
-  const featured = q ? [] : ranked.slice(0, 3); // headline matches get hero banners
+  // One headline match only: the next two already appear in the Top matches row just below, and
+  // repeating them in the hero padded the top of the page and pushed the coupon off the screen.
+  const featured = q ? [] : ranked.slice(0, 1);
   const activeComp = competitions.find((c) => c.id === comp);
   const unfiltered = !q && !sport && !comp && !hours;
 
   const perSport = new Map<string, number>();
   for (const c of competitions) perSport.set(c.sportKey, (perSport.get(c.sportKey) ?? 0) + c.count);
-  const sportTiles = sports.map((s) => ({ key: s.key, name: s.name, count: perSport.get(s.key) ?? 0 })).filter((s) => s.count > 0);
 
   // Every slide points at something real on the site, and only appears when it has data behind it.
   const live = unfiltered ? fixtures.filter((f) => new Date(f.startsAt).getTime() <= now).length : 0;
@@ -51,12 +50,30 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
     if (live > 0)
       slides.push({
         label: "Live now",
-        node: <PromoSlide photo={photos.footballStadiumCrowd} position="center 55%" title={`${live} ${live === 1 ? "match" : "matches"} in play`} cta="Go live" href="/live" />,
+        node: (
+          <PromoSlide
+            photo={photos.footballStadiumCrowd}
+            position="center 55%"
+            eyebrow="Live now"
+            title={`${live} ${live === 1 ? "match" : "matches"} in play`}
+            cta="Go live"
+            href="/live"
+          />
+        ),
       });
     if (nba > 0)
       slides.push({
         label: "Basketball",
-        node: <PromoSlide photo={photos.basketballDribbleSilhouette} position="center 40%" title={`${nba} NBA ${nba === 1 ? "game" : "games"} open`} cta="Basketball odds" href="/?sport=basketball" />,
+        node: (
+          <PromoSlide
+            photo={photos.basketballDribbleSilhouette}
+            position="center 40%"
+            eyebrow="Basketball"
+            title={`${nba} NBA ${nba === 1 ? "game" : "games"} open`}
+            cta="Basketball odds"
+            href="/?sport=basketball"
+          />
+        ),
       });
     slides.push({
       label: "Booking codes",
@@ -64,6 +81,7 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
         <PromoSlide
           photo={photos.footballBallSpotlight}
           position="center 65%"
+          eyebrow="Booking codes"
           title="Load a friend's betslip with one code"
           cta="Load a code"
           action={<OpenSlipButton className={bannerCtaClass}>Load a code</OpenSlipButton>}
@@ -72,7 +90,9 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
     });
     slides.push({
       label: "Invite friends",
-      node: <PromoSlide photo={photos.footballStadiumDusk} position="center 60%" title="Invite friends with your own code" cta="Get your code" href="/account" />,
+      node: (
+        <PromoSlide photo={photos.footballStadiumDusk} position="center 60%" eyebrow="Referrals" title="Invite friends with your own code" cta="Get your code" href="/account" />
+      ),
     });
   }
 
@@ -105,12 +125,6 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
         </HeroCarousel>
       )}
 
-      {/* Phones get picture tiles; larger screens already have the sports row and side menu. */}
-      {!q && !comp && (
-        <div className="lg:hidden">
-          <SportTiles sports={sportTiles} active={sport} />
-        </div>
-      )}
       {unfiltered && <TopMatches fixtures={ranked.slice(0, 10)} />}
       {!q && <CompetitionStrip competitions={competitions} active={comp} />}
 
@@ -159,7 +173,7 @@ function Empty({ q, filtered, sport }: { q?: string; filtered: boolean; sport?: 
   return (
     <div className="card flex flex-col items-center gap-4 px-6 py-14 text-center">
       {q ? (
-        <span className="grid h-14 w-14 place-items-center rounded-full bg-white/[0.04] text-fog">
+        <span className="grid h-14 w-14 place-items-center rounded-full bg-ink-500 text-fog">
           <SportIcon sport="search" className="h-7 w-7" />
         </span>
       ) : (

@@ -1,8 +1,10 @@
 "use client";
-import { Suspense, useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Logo } from "./Logo";
+import { GhanaFlag } from "./GhanaFlag";
+import { ThemeToggle } from "./ThemeToggle";
 import { SportIcon } from "./SportIcon";
 import { formatPesewas } from "@/lib/money";
 
@@ -35,8 +37,8 @@ export function Header() {
   useEffect(() => {
     load();
     const h = () => load();
-    window.addEventListener("stakra:refresh", h);
-    return () => window.removeEventListener("stakra:refresh", h);
+    window.addEventListener("sb:refresh", h);
+    return () => window.removeEventListener("sb:refresh", h);
   }, [load]);
 
   useEffect(() => {
@@ -56,21 +58,17 @@ export function Header() {
       {/* Only this top bar stays pinned; the tab row and sports row scroll away beneath it. */}
       <header className="theme-dark sticky top-0 z-40 border-b border-line bg-ink-800">
         <div className="mx-auto flex h-14 max-w-[1280px] items-center gap-2 px-3 max-[390px]:gap-1.5 sm:gap-3 sm:px-4 lg:h-[60px] lg:gap-6">
-          <Link href="/" aria-label="Kingz Bet home" className="shrink-0">
+          <Link href="/" aria-label="888SoccerBet home" className="shrink-0">
             {/* Slightly smaller wordmark on narrow phones, so search, the balance eye, balance and menu fit beside it. */}
-            <Logo className="max-[400px]:[&>span:last-child]:text-base max-[390px]:[&>span:last-child]:text-[15px]" />
+            <Logo />
           </Link>
 
-          {!onConsole && (
-            <div className="hidden flex-1 justify-center lg:flex">
-              <SearchForm />
-            </div>
-          )}
+          {!onConsole && <LocaleChip />}
 
           <div className="ml-auto flex items-center gap-1 max-[390px]:gap-0.5 sm:gap-2">
             {!onConsole && (
               <button
-                className="grid h-9 w-8 place-items-center rounded-lg text-white/80 hover:bg-white/10 hover:text-white max-[390px]:w-7 sm:w-9 lg:hidden"
+                className="grid h-9 w-8 place-items-center rounded-lg text-white/80 hover:bg-white/10 hover:text-white max-[390px]:w-7 sm:w-9 md:hidden"
                 aria-label="Search matches"
                 aria-expanded={searching}
                 onClick={() => setSearching((s) => !s)}
@@ -93,16 +91,16 @@ export function Header() {
             ) : loggedIn ? (
               <>
                 <Balance amount={balance} onRefresh={load} />
-                <Link href="/wallet" className="btn-lime hidden px-3 py-1.5 text-[13px] sm:inline-flex sm:px-4 sm:py-2 sm:text-sm">
+                <Pipe />
+                <Link href="/wallet" className={ACCOUNT_LINK}>
                   Deposit
                 </Link>
-                <Link
-                  href="/account"
-                  className="hidden h-9 items-center gap-2 rounded-lg px-2.5 text-sm font-semibold text-white/85 hover:bg-white/10 hover:text-white md:inline-flex"
-                >
-                  <SportIcon sport="account" className="h-5 w-5" />
-                  Account
+                <Pipe />
+                <Link href="/bets" className={ACCOUNT_LINK}>
+                  My Bets
                 </Link>
+                <Pipe />
+                <AccountMenu />
               </>
             ) : (
               <>
@@ -136,13 +134,19 @@ export function Header() {
         </div>
 
         {searching && (
-          <div className="border-t border-white/10 px-4 py-3 lg:hidden">
+          <div className="border-t border-white/10 px-4 py-3">
             <SearchForm autoFocus />
           </div>
         )}
         {menu && (
           <nav aria-label="More" className="animate-fade-in border-t border-white/10 px-4 py-2 md:hidden">
-            {[...nav.filter((n) => n.href !== "/"), { href: "/wallet", label: "Wallet" }].map((n) => (
+            {/* Sport filters live here on phones; the desktop rail carries them on wider screens. */}
+            {[
+              { href: "/?sport=football", label: "Football" },
+              { href: "/?sport=basketball", label: "Basketball" },
+              ...nav.filter((n) => n.href !== "/"),
+              { href: "/wallet", label: "Wallet" },
+            ].map((n) => (
               <Link key={n.href} href={n.href} className="block rounded-lg px-3 py-2.5 font-semibold text-white/85 hover:bg-white/10 hover:text-white">
                 {n.label}
               </Link>
@@ -151,7 +155,7 @@ export function Header() {
         )}
       </header>
       {me?.user?.emailVerified === false && path !== "/verify-email" && (
-        <div role="status" className="theme-dark border-b border-lime/25 bg-lime/10 text-white">
+        <div role="status" className="theme-dark border-b border-lime/25 bg-ink-600 text-white">
           <div className="mx-auto flex max-w-[1280px] flex-wrap items-center justify-between gap-x-3 gap-y-1 px-3 py-2 text-sm sm:px-4">
             <span>Confirm your email to deposit and withdraw.</span>
             <Link href="/verify-email" className="font-bold text-lime underline underline-offset-2">
@@ -162,7 +166,7 @@ export function Header() {
       )}
       {!path.startsWith("/admin") && (
       <div className="theme-dark hidden border-b border-line bg-ink-800 md:block">
-        <nav aria-label="Main" className="mx-auto hidden h-11 max-w-[1280px] items-end gap-1 px-4 md:flex">
+        <nav aria-label="Main" className="mx-auto flex h-12 max-w-[1280px] items-center gap-6 px-4">
           {nav.map((n) => {
             const active = n.href === "/" ? path === "/" || path.startsWith("/fixture") : path.startsWith(n.href);
             return (
@@ -170,62 +174,83 @@ export function Header() {
                 key={n.href}
                 href={n.href}
                 aria-current={active ? "page" : undefined}
-                className={`flex h-10 items-center gap-1.5 rounded-t-lg px-4 text-sm font-bold transition ${
-                  active ? "bg-ink-900 text-lime" : "text-white/85 hover:bg-white/10 hover:text-white"
+                className={`relative flex h-full items-center gap-1.5 whitespace-nowrap font-display text-[15px] font-extrabold italic transition-colors ${
+                  active ? "text-lime" : "text-white/85 hover:text-white"
                 }`}
               >
                 {n.label === "Live" && <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-danger" />}
                 {n.label}
+                {active && <span className="absolute inset-x-0 bottom-0 h-[3px] rounded-t-full bg-lime" />}
               </Link>
             );
           })}
+          <button
+            onClick={() => setSearching((s) => !s)}
+            aria-expanded={searching}
+            className="ml-auto flex shrink-0 items-center gap-1.5 text-sm font-semibold text-white/85 transition-colors hover:text-white"
+          >
+            <SportIcon sport="search" className="h-4 w-4" />
+            Search
+          </button>
         </nav>
       </div>
 
-      )}
-      {/* The admin console has its own navigation; the player rows would only get in the way. */}
-      {!path.startsWith("/admin") && (
-        <Suspense>
-          <SportsBar />
-        </Suspense>
       )}
     </>
   );
 }
 
-/** White sports row under the band: quick filters that every betting session starts from. */
-function SportsBar() {
-  const path = usePathname();
-  const params = useSearchParams();
-  const onHome = path === "/";
-  const sport = params.get("sport");
-  const hours = params.get("hours");
-  const items = [
-    { href: "/", label: "Home", active: onHome && !sport && !hours && !params.get("comp") && !params.get("q") },
-    { href: "/?sport=football", label: "Football", icon: "football", active: onHome && sport === "football" },
-    { href: "/?sport=basketball", label: "Basketball", icon: "basketball", active: onHome && sport === "basketball" },
-    { href: "/live", label: "Live now", icon: "live", active: path === "/live" },
-    { href: "/?hours=3", label: "Next 3 hours", icon: "clock", active: onHome && hours === "3" && !sport },
-    { href: "/?hours=24", label: "Today & tomorrow", icon: "clock", active: onHome && hours === "24" && !sport },
-    { href: "/results", label: "Results", icon: "results", active: path === "/results" },
-  ];
+const ACCOUNT_LINK = "hidden shrink-0 items-center text-sm font-semibold text-lime transition-colors hover:text-white md:inline-flex";
+
+/** Hairline between the account links, as on most books' utility bars. */
+const Pipe = () => <span aria-hidden className="hidden h-4 w-px shrink-0 bg-white/15 md:block" />;
+
+/** Market and currency. 888SoccerBet serves one market, so this states it — it isn't a picker. */
+function LocaleChip() {
   return (
-    <nav aria-label="Sports" className="border-b border-line bg-ink-700">
-      <div className="mx-auto flex h-11 max-w-[1280px] items-stretch gap-1 overflow-x-auto px-2 [scrollbar-width:none] sm:px-4 [&::-webkit-scrollbar]:hidden">
-        {items.map((i) => (
-          <Link
-            key={i.href}
-            href={i.href}
-            aria-current={i.active ? "page" : undefined}
-            className={`relative flex shrink-0 items-center gap-1.5 whitespace-nowrap px-3 text-sm font-semibold transition ${i.active ? "text-lime" : "text-fog hover:text-white"}`}
-          >
-            {i.icon && <SportIcon sport={i.icon} className={`h-4 w-4 ${i.icon === "live" ? "text-danger" : ""}`} />}
+    <span className="hidden shrink-0 items-center gap-1.5 rounded-full border border-white/15 bg-black/20 px-2.5 py-1 text-xs font-semibold text-white/85 lg:inline-flex">
+      <GhanaFlag />
+      Ghana
+    </span>
+  );
+}
+
+/** Account menu; same <details> pattern the console uses, so it needs no extra state. */
+function AccountMenu() {
+  const router = useRouter();
+  const logout = async () => {
+    await fetch("/api/auth/logout", { method: "POST" });
+    window.dispatchEvent(new Event("sb:refresh"));
+    router.push("/");
+    router.refresh();
+  };
+  return (
+    <details className="relative hidden shrink-0 md:block">
+      <summary className="flex cursor-pointer list-none items-center gap-1 text-sm font-semibold text-lime transition-colors hover:text-white [&::-webkit-details-marker]:hidden">
+        My Account
+        <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+          <path d="m6 9 6 6 6-6" />
+        </svg>
+      </summary>
+      <div className="absolute right-0 z-50 mt-2 w-52 rounded-lg border border-line bg-ink-700 p-1 shadow-lift">
+        {[
+          { href: "/account", label: "Account" },
+          { href: "/wallet", label: "Wallet" },
+          { href: "/bets", label: "My bets" },
+        ].map((i) => (
+          <Link key={i.href} href={i.href} className="block rounded px-3 py-2 text-sm text-white hover:bg-ink-500">
             {i.label}
-            {i.active && <span className="absolute inset-x-3 bottom-0 h-[3px] rounded-t-full bg-lime" />}
           </Link>
         ))}
+        <div className="my-1 border-t border-line px-2 pb-1.5 pt-2.5">
+          <div className="mb-1.5 px-1 text-[10px] font-bold uppercase tracking-[0.16em] text-fog-muted">Appearance</div>
+          <ThemeToggle className="w-full" />
+        </div>
+        <button onClick={logout} className="block w-full rounded px-3 py-2 text-left text-sm font-medium text-danger/90 hover:bg-danger/10">
+          Log out
+        </button>
       </div>
-    </nav>
+    </details>
   );
 }
 
@@ -269,7 +294,7 @@ function Balance({ amount, onRefresh }: { amount: string; onRefresh: () => void 
       <div className="flex items-center gap-1 rounded-lg border border-white/20 bg-black/15 py-0.5 pl-2 pr-0.5 sm:hidden">
         <Link
           href="/wallet"
-          className={`whitespace-nowrap font-bold tabular-nums text-lime ${amount.length > 9 ? "text-[12px]" : "text-[13px]"}`}
+          className={`whitespace-nowrap font-bold tabular-nums text-gold ${amount.length > 9 ? "text-[12px]" : "text-[13px]"}`}
           aria-label={hidden ? "Balance hidden, open wallet" : `Balance ${text}, open wallet`}
         >
           {/* On the narrowest phones a 5+ figure balance needs the label's room; the aria-label keeps "GHS". */}
@@ -283,7 +308,7 @@ function Balance({ amount, onRefresh }: { amount: string; onRefresh: () => void 
         </Link>
       </div>
       <div className="hidden items-center gap-0.5 rounded-lg border border-white/20 bg-black/15 py-0.5 pl-3 pr-1 sm:flex">
-        <Link href="/wallet" className="mr-1 text-sm font-bold tabular-nums text-lime" aria-label={hidden ? "Balance hidden" : `Balance ${text}`}>
+        <Link href="/wallet" className="mr-1 text-sm font-bold tabular-nums text-gold" aria-label={hidden ? "Balance hidden" : `Balance ${text}`}>
           {hidden ? "GHS ••••" : text}
         </Link>
         <button onClick={toggle} className={btn} aria-label={hidden ? "Show balance" : "Hide balance"} aria-pressed={hidden}>

@@ -3,10 +3,9 @@ import { getCurrentUser } from "@/lib/session";
 import { prisma } from "@/lib/db";
 import { userCashBalance } from "@/lib/ledger";
 import { formatPesewas } from "@/lib/money";
+import { WalletCard } from "@/components/WalletCard";
 import { WalletPanel } from "@/components/WalletPanel";
 import { minDeposit, reconcilePendingDeposits, verificationState } from "@/lib/wallet";
-import { PageHero } from "@/components/PageHero";
-import { photos } from "@/lib/photos";
 
 export const dynamic = "force-dynamic";
 
@@ -23,15 +22,14 @@ export default async function WalletPage() {
   ]);
 
   return (
-    <div className="space-y-6">
-      <PageHero title="Wallet" photo={photos.footballStadiumBlue} position="center 60%">
-        <span aria-label="Balance" className="ml-auto rounded-xl bg-black/50 px-4 py-2 font-display text-2xl font-extrabold tabular-nums text-lime backdrop-blur sm:text-3xl">
-          GHS {formatPesewas(balance)}
-        </span>
-      </PageHero>
+    <div className="space-y-5">
+      <h1 className="section-title text-2xl">Wallet</h1>
 
-      <div className="grid gap-6 lg:grid-cols-2">
-        <WalletPanel
+      {/* The card sits on top of the deposit form it funds; transactions run alongside. */}
+      <div className="grid items-start gap-6 lg:grid-cols-2">
+        <div className="space-y-6">
+          <WalletCard balance={balance} holder={user.displayName ?? user.email.split("@")[0] ?? user.email} phone={user.phone} since={user.createdAt} />
+          <WalletPanel
           minDepositGhs={Number(minDeposit()) / 100}
           isAdmin={user.role !== "USER"}
           verification={{
@@ -42,7 +40,8 @@ export default async function WalletPage() {
             heldGhs: Number(verification.held) / 100,
             status: verification.status,
           }}
-        />
+          />
+        </div>
 
         <section className="card p-5">
           <h2 className="mb-3 font-semibold text-white">Transactions</h2>

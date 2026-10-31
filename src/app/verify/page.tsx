@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { normaliseCode } from "@/lib/ids";
 import { VerifyForm } from "@/components/VerifyForm";
 
-export const metadata: Metadata = { title: "Verify a ticket — Kingz Bet", robots: { index: false } };
+export const metadata: Metadata = { title: "Verify a ticket — 888SoccerBet", robots: { index: false } };
 
 /** Public ticket check: type a verification code (as printed on a shared ticket). */
 export default async function VerifyPage({ searchParams }: { searchParams: Promise<{ code?: string }> }) {

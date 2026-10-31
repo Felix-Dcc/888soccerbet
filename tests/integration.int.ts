@@ -1857,7 +1857,7 @@ describe("email", () => {
     const m = await makeMatch({ home: 2.0, draw: 3.0, away: 4.0 });
     await placeBet(p.id, { idempotencyKey: randomUUID(), stakeGhs: 10, acceptOddsChange: false, selections: [{ selectionId: m.home.id, expectedMilliOdds: 2000 }] });
     await settleFixture(m.fixture.id, 2, 0);
-    await vi.waitFor(() => expect(lastTo(p.email)?.subject).toBe("You won GHS 20.00 on Kingz Bet"));
+    await vi.waitFor(() => expect(lastTo(p.email)?.subject).toBe("You won GHS 20.00 on 888SoccerBet"));
     const intent = await initiateDeposit(p.id, 30, "0241234567", randomUUID());
     await processPaymentEvent("sandbox", { providerEventId: `evt_${randomUUID()}`, ourRef: intent.ref, status: "SUCCEEDED", amountPesewas: intent.amount });
     await vi.waitFor(() => expect(lastTo(p.email)?.subject).toBe("Deposit received: GHS 30.00"));
