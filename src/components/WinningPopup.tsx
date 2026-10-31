@@ -1,10 +1,12 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import Image from "next/image";
 import Link from "next/link";
 import { formatPesewas } from "@/lib/money";
 import { Logo } from "./Logo";
 import { ShareTicket } from "./ShareTicket";
+import trophyArt from "../../public/img/pin/trophy-congratulations.png";
 
 interface Win {
   id: string;
@@ -198,90 +200,16 @@ function WinCard({ win, remaining, onClose }: { win: Win; remaining: number; onC
   );
 }
 
-/** Original gold trophy: metallic bowl with scroll handles, a crown medallion, and a WELL DONE ribbon. */
+/** The trophy picture (see public/img/pin/CREDITS.md), cut out of its black backdrop. */
 function TrophyArt() {
   return (
-    <svg viewBox="0 0 240 250" className="relative mx-auto h-full w-full animate-win-trophy drop-shadow-[0_18px_28px_rgba(0,0,0,.55)] motion-reduce:animate-none">
-      <defs>
-        {/* Horizontal bands read as a polished, curved metal surface. */}
-        <linearGradient id="kb-metal" x1="0" y1="0" x2="1" y2="0">
-          <stop offset="0" stopColor="#8A5400" />
-          <stop offset=".16" stopColor="#E9A923" />
-          <stop offset=".36" stopColor="#FFF1B5" />
-          <stop offset=".5" stopColor="#FFD24D" />
-          <stop offset=".78" stopColor="#C8860C" />
-          <stop offset="1" stopColor="#7A4A00" />
-        </linearGradient>
-        <linearGradient id="kb-metal-v" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0" stopColor="#FFE8A0" />
-          <stop offset=".5" stopColor="#E3A21C" />
-          <stop offset="1" stopColor="#8F5A04" />
-        </linearGradient>
-        <linearGradient id="kb-handle" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0" stopColor="#F7C548" />
-          <stop offset="1" stopColor="#9A6200" />
-        </linearGradient>
-        <radialGradient id="kb-inside" cx=".5" cy=".3" r=".8">
-          <stop offset="0" stopColor="#7A4A00" />
-          <stop offset="1" stopColor="#3D2400" />
-        </radialGradient>
-        <radialGradient id="kb-medal" cx=".35" cy=".3" r=".9">
-          <stop offset="0" stopColor="#FFF6D6" />
-          <stop offset=".55" stopColor="#F5C238" />
-          <stop offset="1" stopColor="#A86A00" />
-        </radialGradient>
-        <linearGradient id="kb-ribbon" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0" stopColor="#FFE38A" />
-          <stop offset=".5" stopColor="#F2B232" />
-          <stop offset="1" stopColor="#B87405" />
-        </linearGradient>
-        <clipPath id="kb-bowl">
-          <path d="M62 44C62 112 88 140 120 146C152 140 178 112 178 44Z" />
-        </clipPath>
-      </defs>
-
-      {/* handles */}
-      <path d="M68 60C32 52 22 82 38 100c10 11 24 15 38 19" fill="none" stroke="url(#kb-handle)" strokeWidth="10" strokeLinecap="round" />
-      <path d="M68 60C40 56 32 80 44 95" fill="none" stroke="#FFF1B5" strokeWidth="2.5" strokeLinecap="round" opacity=".55" />
-      <path d="M172 60c36-8 46 22 30 40-10 11-24 15-38 19" fill="none" stroke="url(#kb-handle)" strokeWidth="10" strokeLinecap="round" />
-      <path d="M172 60c28-4 36 20 24 35" fill="none" stroke="#FFF1B5" strokeWidth="2.5" strokeLinecap="round" opacity=".35" />
-
-      {/* bowl */}
-      <path d="M62 44C62 112 88 140 120 146C152 140 178 112 178 44Z" fill="url(#kb-metal)" />
-      <g clipPath="url(#kb-bowl)">
-        <path d="M84 50c0 44 10 70 28 88" fill="none" stroke="#FFF8DD" strokeWidth="7" strokeLinecap="round" opacity=".35" />
-        <rect className="kb-shine" x="0" y="20" width="34" height="150" fill="#FFFFFF" opacity=".28" />
-      </g>
-      {/* rim */}
-      <ellipse cx="120" cy="44" rx="60" ry="11" fill="url(#kb-metal-v)" />
-      <ellipse cx="120" cy="44" rx="53" ry="7.5" fill="url(#kb-inside)" />
-
-      {/* crown medallion */}
-      <circle cx="120" cy="90" r="25" fill="url(#kb-medal)" stroke="#FFF3C4" strokeWidth="2" />
-      <circle cx="120" cy="90" r="19.5" fill="none" stroke="#9A6200" strokeWidth="1.2" opacity=".6" />
-      <path d="M106 99l-3-17 9 7 8-12 8 12 9-7-3 17z" fill="#7A4A00" />
-      <rect x="105.5" y="100" width="29" height="4" rx="1.5" fill="#7A4A00" />
-      <circle cx="103" cy="81" r="2" fill="#7A4A00" />
-      <circle cx="120" cy="76" r="2" fill="#7A4A00" />
-      <circle cx="137" cy="81" r="2" fill="#7A4A00" />
-
-      {/* stem */}
-      <path d="M110 144h20l-3 14h-14z" fill="url(#kb-metal)" />
-      <ellipse cx="120" cy="160" rx="15" ry="5" fill="url(#kb-metal-v)" />
-      <path d="M113 163h14l5 22h-24z" fill="url(#kb-metal)" />
-
-      {/* base */}
-      <rect x="90" y="184" width="60" height="12" rx="3" fill="url(#kb-metal)" />
-      <path d="M78 196h84l8 26H70z" fill="url(#kb-metal-v)" />
-
-      {/* ribbon */}
-      <path d="M62 206H34l10 12-10 12h30z" fill="#B87405" />
-      <path d="M178 206h28l-10 12 10 12h-30z" fill="#B87405" />
-      <path d="M56 200Q120 191 184 200L180 230Q120 222 60 230Z" fill="url(#kb-ribbon)" stroke="#FFF1B5" strokeWidth="1" />
-      <text x="120" y="219.5" textAnchor="middle" fontFamily="inherit" fontSize="15" fontWeight="900" letterSpacing="1.6" fill="#3B2300">
-        WELL DONE
-      </text>
-    </svg>
+    <Image
+      src={trophyArt}
+      alt=""
+      priority
+      sizes="304px"
+      className="relative mx-auto h-full w-auto animate-win-trophy object-contain drop-shadow-[0_18px_28px_rgba(0,0,0,.55)] motion-reduce:animate-none"
+    />
   );
 }
 

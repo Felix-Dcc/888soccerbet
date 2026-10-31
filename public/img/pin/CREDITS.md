@@ -27,3 +27,4 @@ re-encoded; metadata stripped.
 | basketball-court-night.jpg | https://www.pinterest.com/pin/1122029694650390097/ | https://i.pinimg.com/originals/d9/37/b8/d937b8ac7b63386a7123783338eaab7f.jpg | Account banner |
 | basketball-ball-wet-court.jpg | https://www.pinterest.com/pin/633952085090933446/ | https://i.pinimg.com/originals/20/f3/11/20f3113ecf1506cd6ea56c245850e418.jpg | admin console banner |
 
+| trophy-congratulations.png | https://www.pinterest.com/pin/726346246193302438/ | https://i.pinimg.com/originals/7a/38/4c/7a384c970ba6120119719ca8714c95f3.jpg | "You won" pop-up trophy (black backdrop removed; the artwork's cropped handle and base edges faded out) |
