@@ -200,8 +200,8 @@ export function Betslip({ bare = false }: { bare?: boolean } = {}) {
                 <div className="flex items-start gap-3">
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
-                      {pick.tag && <span className="grid h-5 min-w-5 shrink-0 place-items-center rounded bg-lime/15 px-1 text-[11px] font-extrabold text-lime">{pick.tag}</span>}
-                      <span className="truncate text-sm font-bold text-white">{pick.name}</span>
+                      {pick.tag && <span className="grid h-5 min-w-5 shrink-0 place-items-center rounded bg-lime/15 px-1.5 text-[11px] font-extrabold text-lime">{pick.tag}</span>}
+                      {pick.name && <span className="truncate text-sm font-bold text-white">{pick.name}</span>}
                     </div>
                     <div className="mt-1 truncate text-xs text-fog">{p.marketName}</div>
                     <div className="mt-0.5 truncate text-xs text-fog-muted">{p.fixtureName}</div>
@@ -334,13 +334,13 @@ export function Betslip({ bare = false }: { bare?: boolean } = {}) {
   );
 }
 
-/** "Home"/"Away" on a match result read as the team's name, tagged 1/2; "Draw" is X. Other markets keep their own wording. */
+/** "Home"/"Away" on a match result read as the team's name, tagged Home/Away; a draw is just the Draw tag. Other markets keep their own wording. */
 function pickLabel(p: Pick): { name: string; tag: string | null } {
   const teams = p.fixtureName.split(" v ");
   if (teams.length === 2) {
-    if (p.selectionName === "Home") return { name: teams[0]!, tag: "1" };
-    if (p.selectionName === "Away") return { name: teams[1]!, tag: "2" };
-    if (p.selectionName === "Draw") return { name: "Draw", tag: "X" };
+    if (p.selectionName === "Home") return { name: teams[0]!, tag: "Home" };
+    if (p.selectionName === "Away") return { name: teams[1]!, tag: "Away" };
+    if (p.selectionName === "Draw") return { name: "", tag: "Draw" };
   }
   return { name: p.selectionName, tag: null };
 }
