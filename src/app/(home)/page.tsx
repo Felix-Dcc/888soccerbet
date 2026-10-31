@@ -11,6 +11,9 @@ import { Crest } from "@/components/Crest";
 import banner1 from "../../../public/img/banners/banner-1.jpg";
 import banner2 from "../../../public/img/banners/banner-2.jpg";
 import banner3 from "../../../public/img/banners/banner-3.jpg";
+import banner4 from "../../../public/img/banners/banner-4.jpg";
+import banner5 from "../../../public/img/banners/banner-5.jpg";
+import banner6 from "../../../public/img/banners/banner-6.jpg";
 
 export const dynamic = "force-dynamic";
 
@@ -19,6 +22,10 @@ const BANNERS: { src: StaticImageData; label: string; href?: string }[] = [
   { src: banner1, label: "888SoccerBet: play bigger, bet smarter, win more" },
   { src: banner2, label: "Win GHS 15,000: register now", href: "/register" },
   { src: banner3, label: "Keep winning with 888SoccerBet: register now", href: "/register" },
+  // "Bet now" banners jump to the match list further down this page.
+  { src: banner4, label: "Bigger odds, bigger wins: bet now", href: "/#all-matches" },
+  { src: banner5, label: "Global football, bigger opportunities: bet now", href: "/#all-matches" },
+  { src: banner6, label: "Bet bigger, win bigger: bet now", href: "/#all-matches" },
 ];
 
 const hasMainMarket = (f: UiFixture) => f.markets.some((m) => (m.type === "MATCH_RESULT" || m.type === "MONEYLINE") && m.status === "OPEN");
@@ -73,8 +80,9 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
       {!q && <CompetitionStrip competitions={competitions} active={comp} />}
 
       <section aria-labelledby="all-matches" className="space-y-3">
+        {/* scroll-mt: "Bet now" banners land here below the sticky header, not under it. */}
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-          <h2 id="all-matches" className="section-title">
+          <h2 id="all-matches" className="section-title scroll-mt-20">
             {hours ? `Starting in ${hours}h` : "All matches"}
           </h2>
           {!q && <StartFilter hours={hours} sport={sport} comp={comp} />}
@@ -87,7 +95,10 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
 
 /** One home banner: the whole picture, edge to edge; clickable when it carries a call to action. */
 function BannerSlide({ src, label, href, priority }: { src: StaticImageData; label: string; href?: string; priority: boolean }) {
-  const img = <Image src={src} alt={label} fill priority={priority} placeholder="blur" sizes="(min-width: 1280px) 900px, 100vw" className="object-cover" draggable={false} />;
+  // Later slides load eagerly too: they sit off-screen sideways, so lazy loading would show a blur on first slide-in.
+  const img = (
+    <Image src={src} alt={label} fill priority={priority} loading={priority ? undefined : "eager"} placeholder="blur" sizes="(min-width: 1280px) 900px, 100vw" className="object-cover" draggable={false} />
+  );
   return href ? (
     <Link href={href} className="relative block h-full">
       {img}
