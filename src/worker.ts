@@ -3,7 +3,7 @@
  * Run alongside the app:  npm run worker
  * (Jobs could also be driven by POSTing /api/cron from an external scheduler.)
  */
-import { syncFixtures, syncEventMarkets, autoSettleFinished, goLiveManualFixtures, updateLiveScores, syncLiveOdds } from "./lib/sync";
+import { syncFixtures, syncEventMarkets, autoSettleFinished, goLiveManualFixtures, updateLiveScores, syncLiveOdds, retireOrphanedFeedFixtures } from "./lib/sync";
 import { enrichCompetitions, enrichTeams } from "./lib/assets";
 import { advanceScriptedMatches } from "./lib/scriptedMatches";
 import { oddsProvider } from "./lib/providers/odds";
@@ -81,6 +81,9 @@ async function main() {
   console.log(`[worker] starting · provider=${p.name} · sync every ${SYNC_MS / 3_600_000}h · settle every ${SETTLE_MS / 3_600_000}h`);
   if (p.name === "theoddsapi")
     console.log("[worker] NOTE: The Odds API free tier is 500 credits/month (~27/sync). Defaults (48h sync, 96h settle) fit; going faster needs fewer leagues or use a premium key for more frequent updates.");
+  // A feed switch always restarts the worker, so retiring the old feed's matches once here is enough.
+  // It runs first so settle never asks the new feed about matches it doesn't know. No credits used.
+  await safe("retire", retireOrphanedFeedFixtures);
   await safe("sync", sync);
   await safe("settle", autoSettleFinished);
   await safe("artwork", enrich);

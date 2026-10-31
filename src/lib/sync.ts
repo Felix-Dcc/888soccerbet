@@ -288,6 +288,28 @@ async function settleIfOpen(fixtureId: string, home: number, away: number): Prom
   }
 }
 
+/** Match-id prefixes of the feeds that label their matches: TheSportsDB, the sandbox. The Odds API's ids carry none. */
+const OTHER_FEED_PREFIXES = ["sdb-", "sbx-"];
+
+/**
+ * Retire matches a previous feed left behind. After switching to The Odds API, matches imported
+ * from TheSportsDB or the sandbox are never updated or settled again: they'd stay open forever,
+ * list their league a second time beside the new feed's, and trip the "waiting for results"
+ * alert. Only matches nobody has bet on are closed (CANCELLED, as for a called-off game); one
+ * with bets is left for an admin to settle or void. Checks the feed actually in use, not the
+ * setting: with the key missing it falls back to TheSportsDB, and then this does nothing.
+ */
+export async function retireOrphanedFeedFixtures(): Promise<{ retired: number; kept: number }> {
+  if (oddsProvider().name !== "theoddsapi") return { retired: 0, kept: 0 };
+  const orphaned = {
+    status: { in: ["SCHEDULED", "LIVE"] as ("SCHEDULED" | "LIVE")[] },
+    OR: OTHER_FEED_PREFIXES.map((p) => ({ providerRef: { startsWith: p } })),
+  };
+  const { count: retired } = await prisma.fixture.updateMany({ where: { ...orphaned, betSelections: { none: {} } }, data: { status: "CANCELLED" } });
+  const kept = await prisma.fixture.count({ where: orphaned });
+  return { retired, kept };
+}
+
 /** Settle any fixture the provider reports finished that we haven't settled yet. */
 export async function autoSettleFinished(): Promise<{ settled: number }> {
   const provider = oddsProvider();

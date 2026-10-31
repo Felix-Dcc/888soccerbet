@@ -41,7 +41,7 @@ import { adminComparison, parseRange, scopeMetrics } from "../src/lib/adminAnaly
 import { adjustAdminBalance, adjustBalance, canViewPlayer } from "../src/lib/playerAdmin";
 import { audit, verifyAuditChain } from "../src/lib/audit";
 import { listFixtures, listResults, dataVersion } from "../src/lib/queries";
-import { applyMarkets, goLiveManualFixtures, syncFixtures, syncLiveOdds, updateLiveScores } from "../src/lib/sync";
+import { applyMarkets, goLiveManualFixtures, retireOrphanedFeedFixtures, syncFixtures, syncLiveOdds, updateLiveScores } from "../src/lib/sync";
 import { createManualFixture, rescheduleManualFixture } from "../src/lib/manualFixtures";
 import { isTestAccount, planDemoCleanup, runDemoCleanup } from "../src/lib/demoCleanup";
 import { manualFixtureSchema } from "../src/lib/validation";
@@ -959,6 +959,44 @@ describe("feed refresh retires picks it stopped quoting", () => {
 
     await applyMarkets(fixture.id, cs(["1-0", "5-0", "OTHER"]), ["CORRECT_SCORE"]);
     expect(await status("5-0")).toBe("OPEN");
+  });
+});
+
+describe("feed switch", () => {
+  it("retires the old feed's unbet matches, keeps bet ones and the new feed's, and does nothing on the fallback feed", async () => {
+    const user = await fundedUser(50);
+    const oldUnbet = (await makeMatch({ home: 2.0, away: 2.0 })).fixture;
+    const oldBet = await makeMatch({ home: 2.0, away: 2.0 });
+    const current = (await makeMatch({ home: 2.0, away: 2.0 })).fixture;
+    const sandboxUnbet = (await makeMatch({ home: 2.0, away: 2.0 })).fixture;
+    await prisma.fixture.update({ where: { id: oldUnbet.id }, data: { providerRef: `sdb-${randomUUID()}`, status: "LIVE" } });
+    await prisma.fixture.update({ where: { id: oldBet.fixture.id }, data: { providerRef: `sdb-${randomUUID()}` } });
+    await prisma.fixture.update({ where: { id: sandboxUnbet.id }, data: { providerRef: `sbx-${randomUUID()}` } });
+    await placeBet(user.id, { idempotencyKey: randomUUID(), stakeGhs: 5, acceptOddsChange: false, selections: [{ selectionId: oldBet.home.id, expectedMilliOdds: 2000 }] });
+    const status = async (id: string) => (await prisma.fixture.findUniqueOrThrow({ where: { id } })).status;
+
+    // Fallback (key missing): TheSportsDB is the feed in use, so nothing may be touched.
+    feed.override = { name: "thesportsdb" } as unknown as OddsProvider;
+    try {
+      expect(await retireOrphanedFeedFixtures()).toEqual({ retired: 0, kept: 0 });
+    } finally {
+      feed.override = null;
+    }
+    expect(await status(oldUnbet.id)).toBe("LIVE");
+
+    feed.override = { name: "theoddsapi" } as unknown as OddsProvider;
+    try {
+      const r = await retireOrphanedFeedFixtures();
+      expect(r.retired).toBeGreaterThanOrEqual(2);
+      expect(r.kept).toBeGreaterThanOrEqual(1);
+    } finally {
+      feed.override = null;
+    }
+    expect(await status(oldUnbet.id)).toBe("CANCELLED");
+    expect(await status(sandboxUnbet.id)).toBe("CANCELLED");
+    expect(await status(oldBet.fixture.id)).toBe("SCHEDULED"); // has a bet: left for an admin
+    expect(await status(current.id)).toBe("SCHEDULED"); // the live feed's own match
+    expect(await ledgerIsBalanced()).toBe(true);
   });
 });
 
