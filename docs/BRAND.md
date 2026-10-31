@@ -41,9 +41,12 @@ A restrained **dark** identity. One accent carries actions; colour is never deco
   `#3B5BDB` light) with a remembered light/dark toggle, so staff tools never read as the
   player site.
 - Typography: **Sora** (display) + **Manrope** (body), tabular figures for money and odds.
-- Logo: a dark rounded tile holding a **gold crown over a football**, beside a
-  `888SOCCER` + green `BET` wordmark. Inline SVG in `src/components/Logo.tsx` and
-  `src/app/icon.svg` — no raster asset copied from anywhere.
+- Logo: the supplied 888SoccerBet artwork (`public/img/brand/888soccerbet-logo.png`), used in
+  the site header and the admin sidebar. A small inline-SVG mark (`BrandMark` in
+  `src/components/Logo.tsx`) stands in where only a square icon fits.
+- Icons: the browser-tab favicon (`src/app/icon.png`, `src/app/favicon.ico`) is the logo's own
+  football and green swoosh on a dark rounded tile; the phone home-screen icon
+  (`src/app/apple-icon.png`) is the full logo on a dark square.
 
 > **Open point:** the supplied logo uses a vivid green (`#3CDC3C`) while the product UI
 > runs on amber. The logo currently keeps its own green; switching the site accent to

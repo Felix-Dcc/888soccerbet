@@ -7,7 +7,7 @@ const GREEN = "#3CDC3C";
 
 /**
  * Square mark — the crown over a football on a dark tile — for places that need an icon
- * (collapsed admin rail). The same drawing is the favicon (src/app/icon.svg).
+ * (collapsed admin rail). The browser-tab favicon is the logo's own football (src/app/icon.png).
  */
 export function BrandMark({ size = 30, className = "" }: { size?: number; className?: string }) {
   const id = useId().replace(/:/g, "");
