@@ -133,18 +133,13 @@ export function Betslip({ bare = false }: { bare?: boolean } = {}) {
     setStatus({ k: "ok", refs });
   }
 
+  // Quick stakes start at the minimum the engine accepts, so every chip is a valid stake.
+  const quickStakes = [minStake, minStake * 2, minStake * 4, minStake * 8];
+
   return (
     <div className={bare ? "" : "card overflow-hidden"}>
       <>
-        {bare ? (
-          picks.length > 0 && (
-            <div className="flex justify-end border-b border-line px-4 py-2">
-              <button onClick={clear} className="text-sm font-semibold text-fog hover:text-white">
-                Remove all
-              </button>
-            </div>
-          )
-        ) : (
+        {!bare && (
           <div className="theme-dark flex items-center justify-between border-b border-line bg-ink-800 px-4 py-3">
             <span className="flex items-center gap-2 font-display font-bold text-white">
               Betslip
@@ -154,66 +149,86 @@ export function Betslip({ bare = false }: { bare?: boolean } = {}) {
                 </span>
               )}
             </span>
-            {picks.length > 0 && (
-              <button onClick={clear} className="text-sm font-semibold text-white/70 hover:text-white">
-                Remove all
-              </button>
-            )}
-          </div>
-        )}
-
-        {picks.length > 1 && (
-          <div role="tablist" aria-label="Bet type" className="grid grid-cols-2 border-b border-line text-sm font-semibold">
-            {(["single", "multiple"] as const).map((m) => (
-              <button
-                key={m}
-                role="tab"
-                aria-selected={mode === m}
-                onClick={() => {
-                  setMode(m);
-                  setStatus({ k: "idle" });
-                }}
-                className={`relative py-2.5 capitalize transition ${mode === m ? "text-lime" : "text-fog hover:text-white"}`}
-              >
-                {m === "single" ? "Singles" : "Multiple"}
-                {mode === m && <span className="absolute inset-x-6 bottom-0 h-0.5 rounded-full bg-lime" />}
-              </button>
-            ))}
           </div>
         )}
 
         {status.k === "ok" && (
-          <Link href="/bets" className="m-4 flex justify-between gap-3 rounded-lg border border-win/40 bg-win/10 p-3 text-sm font-semibold text-win">
-            <span>{status.refs.length > 1 ? `${status.refs.length} bets placed` : "Bet placed"}</span>
+          <Link href="/bets" className="m-3 flex items-center justify-between gap-3 rounded-xl border border-win/40 bg-win/10 p-3 text-sm font-semibold text-win">
+            <span className="flex items-center gap-2">
+              <svg viewBox="0 0 24 24" className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                <path d="M5 12l5 5L20 7" />
+              </svg>
+              {status.refs.length > 1 ? `${status.refs.length} bets placed` : "Bet placed"}
+            </span>
             <span className="truncate font-mono">{status.refs.join(", ")} →</span>
           </Link>
         )}
 
-        <ul className="divide-y divide-line">
-          {picks.map((p) => (
-            <li key={p.selectionId} className="flex animate-fade-in items-start gap-3 px-4 py-3">
-              <button
-                onClick={() => remove(p.selectionId)}
-                aria-label={`Remove ${p.selectionName}, ${p.fixtureName}`}
-                className="mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-full bg-ink-500 text-[10px] text-fog hover:bg-danger/20 hover:text-danger"
-              >
-                ✕
-              </button>
-              <div className="min-w-0 flex-1">
-                <div className="truncate text-sm font-bold text-white">{p.selectionName}</div>
-                <div className="truncate text-xs text-fog">{p.marketName}</div>
-                <div className="truncate text-xs text-fog-muted">{p.fixtureName}</div>
+        {picks.length > 0 && (
+          <div className="flex items-center gap-2 px-3 pt-3">
+            {picks.length > 1 ? (
+              <div role="tablist" aria-label="Bet type" className="grid flex-1 grid-cols-2 rounded-lg bg-ink-800 p-1 text-sm font-semibold">
+                {(["single", "multiple"] as const).map((m) => (
+                  <button
+                    key={m}
+                    role="tab"
+                    aria-selected={mode === m}
+                    onClick={() => {
+                      setMode(m);
+                      setStatus({ k: "idle" });
+                    }}
+                    className={`rounded-md py-1.5 transition ${mode === m ? "bg-lime text-lime-ink shadow-card" : "text-fog hover:text-white"}`}
+                  >
+                    {m === "single" ? "Singles" : `Multiple (${picks.length})`}
+                  </button>
+                ))}
               </div>
-              <span className="rounded-md bg-gold/10 px-2 py-1 text-sm font-bold tabular-nums text-gold">{formatMilliOdds(p.milliOdds)}</span>
-            </li>
-          ))}
+            ) : (
+              <span className="flex-1 text-sm font-semibold text-white">Single</span>
+            )}
+            <button onClick={clear} className="shrink-0 rounded-lg px-2 py-1.5 text-xs font-semibold text-fog transition-colors hover:bg-danger/10 hover:text-danger">
+              Clear all
+            </button>
+          </div>
+        )}
+
+        <ul className="space-y-2 p-3">
+          {picks.map((p) => {
+            const pick = pickLabel(p);
+            return (
+              <li key={p.selectionId} className="relative animate-fade-in rounded-xl border border-line bg-ink-800 p-3 pr-2.5">
+                <div className="flex items-start gap-3">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      {pick.tag && <span className="grid h-5 min-w-5 shrink-0 place-items-center rounded bg-lime/15 px-1 text-[11px] font-extrabold text-lime">{pick.tag}</span>}
+                      <span className="truncate text-sm font-bold text-white">{pick.name}</span>
+                    </div>
+                    <div className="mt-1 truncate text-xs text-fog">{p.marketName}</div>
+                    <div className="mt-0.5 truncate text-xs text-fog-muted">{p.fixtureName}</div>
+                  </div>
+                  <div className="flex shrink-0 flex-col items-end gap-2">
+                    <button
+                      onClick={() => remove(p.selectionId)}
+                      aria-label={`Remove ${p.selectionName}, ${p.fixtureName}`}
+                      className="-mr-1 -mt-1 grid h-7 w-7 place-items-center rounded-full text-fog transition-colors hover:bg-danger/15 hover:text-danger"
+                    >
+                      <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" aria-hidden>
+                        <path d="M6 6l12 12M18 6 6 18" />
+                      </svg>
+                    </button>
+                    <span className="rounded-lg bg-gold/15 px-2.5 py-1 text-sm font-extrabold tabular-nums text-gold">{formatMilliOdds(p.milliOdds)}</span>
+                  </div>
+                </div>
+              </li>
+            );
+          })}
         </ul>
 
         {picks.length > 0 && (
-          <div className="border-t border-line p-4">
+          <div className="space-y-3 border-t border-line p-3">
             {status.k === "oddschanged" && (
-              <div role="status" className="mb-3 rounded-lg border border-warn/40 bg-warn/10 p-2.5 text-sm font-semibold text-warn">
-                Odds changed
+              <div role="status" className="rounded-xl border border-warn/40 bg-warn/10 p-2.5 text-sm font-semibold text-warn">
+                Odds changed — check the new price{status.placed?.length ? "s" : ""} above
                 {!!status.placed?.length && (
                   <span className="font-normal">
                     {" "}
@@ -223,31 +238,52 @@ export function Betslip({ bare = false }: { bare?: boolean } = {}) {
               </div>
             )}
             {status.k === "error" && (
-              <div role="alert" className="mb-3 rounded-lg border border-danger/40 bg-danger/10 p-2.5 text-sm text-danger">
+              <div role="alert" className="rounded-xl border border-danger/40 bg-danger/10 p-2.5 text-sm text-danger">
                 {status.msg}
               </div>
             )}
 
-            <label className="label" htmlFor={stakeId}>
-              {singles ? "Stake per bet (GHS)" : "Stake (GHS)"}
-            </label>
-            <input
-              id={stakeId}
-              type="number"
-              min={minStake}
-              inputMode="decimal"
-              aria-describedby={tooLow ? `${stakeId}-min` : undefined}
-              value={stake || ""} // cleared to 0 shows an empty box, not a stray "0" to delete around
-              onChange={(e) => setStake(Number(e.target.value))}
-              className="input text-right font-bold"
-            />
-            {tooLow && (
-              <p id={`${stakeId}-min`} role="status" className="mt-2 text-xs font-semibold text-warn">
-                Minimum stake is GHS {minStake}{singles ? " per bet" : ""}. Top up GHS {Math.max(0, Math.round((minStake - (Number(stake) || 0)) * 100) / 100)} to place the bet.
-              </p>
-            )}
+            <div>
+              <label className="mb-1.5 flex items-center justify-between text-xs font-semibold text-fog" htmlFor={stakeId}>
+                {singles ? "Stake per bet" : "Stake"}
+                <span className="font-normal text-fog-muted">Min GHS {minStake}</span>
+              </label>
+              <div className="relative">
+                <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm font-bold text-fog">GHS</span>
+                <input
+                  id={stakeId}
+                  type="number"
+                  min={minStake}
+                  inputMode="decimal"
+                  aria-describedby={tooLow ? `${stakeId}-min` : undefined}
+                  value={stake || ""} // cleared to 0 shows an empty box, not a stray "0" to delete around
+                  onChange={(e) => setStake(Number(e.target.value))}
+                  className="input pl-12 text-right text-lg font-extrabold tabular-nums"
+                />
+              </div>
+              <div className="mt-2 grid grid-cols-4 gap-1.5">
+                {quickStakes.map((s) => (
+                  <button
+                    key={s}
+                    type="button"
+                    onClick={() => setStake(s)}
+                    aria-pressed={Number(stake) === s}
+                    className={`rounded-lg border py-1.5 text-xs font-bold tabular-nums transition-colors ${
+                      Number(stake) === s ? "border-lime bg-lime/15 text-lime" : "border-line bg-ink-800 text-fog hover:border-ink-400 hover:text-white"
+                    }`}
+                  >
+                    {s.toLocaleString("en-GB")}
+                  </button>
+                ))}
+              </div>
+              {tooLow && (
+                <p id={`${stakeId}-min`} role="status" className="mt-2 text-xs font-semibold text-warn">
+                  Minimum stake is GHS {minStake}{singles ? " per bet" : ""}. Top up GHS {Math.max(0, Math.round((minStake - (Number(stake) || 0)) * 100) / 100)} to place the bet.
+                </p>
+              )}
+            </div>
 
-            <dl className="mt-4 space-y-1.5 text-sm">
+            <dl className="space-y-1.5 rounded-xl bg-ink-800 p-3 text-sm">
               {singles ? (
                 <div className="flex justify-between text-fog">
                   <dt>Total stake ({picks.length} bets)</dt>
@@ -262,24 +298,24 @@ export function Betslip({ bare = false }: { bare?: boolean } = {}) {
               {maxBonus > 0n && (
                 <div className="flex justify-between text-fog">
                   <dt>Max bonus</dt>
-                  <dd className="font-semibold tabular-nums text-gold">GHS {formatPesewas(maxBonus)}</dd>
+                  <dd className="font-semibold tabular-nums text-gold">+ GHS {formatPesewas(maxBonus)}</dd>
                 </div>
               )}
-              <div className="flex justify-between border-t border-line pt-2 text-base font-bold text-white">
-                <dt>{singles ? "Max return" : "Return"}</dt>
-                <dd className="tabular-nums text-gold">GHS {formatPesewas(payout + maxBonus)}</dd>
+              <div className="flex items-end justify-between border-t border-line pt-2">
+                <dt className="text-sm font-semibold text-white">{singles ? "Max potential win" : "Potential win"}</dt>
+                <dd className="font-display text-xl font-extrabold tabular-nums text-gold">GHS {formatPesewas(payout + maxBonus)}</dd>
               </div>
             </dl>
 
             {status.k === "needlogin" ? (
-              <Link href="/login" className="btn-lime mt-4 w-full py-3">
+              <Link href="/login" className="btn-lime w-full py-3.5 text-base">
                 Log in to bet
               </Link>
             ) : (
               <button
                 onClick={() => (singles ? placeSingles : place)(status.k === "oddschanged")}
                 disabled={status.k === "placing" || tooLow}
-                className="btn-lime mt-4 w-full py-3"
+                className="btn-lime w-full py-3.5 text-base"
               >
                 {status.k === "placing" ? "Placing…" : status.k === "oddschanged" ? "Accept & place" : singles ? `Place ${picks.length} bets` : "Place bet"}
               </button>
@@ -296,6 +332,17 @@ export function Betslip({ bare = false }: { bare?: boolean } = {}) {
       />
     </div>
   );
+}
+
+/** "Home"/"Away" on a match result read as the team's name, tagged 1/2; "Draw" is X. Other markets keep their own wording. */
+function pickLabel(p: Pick): { name: string; tag: string | null } {
+  const teams = p.fixtureName.split(" v ");
+  if (teams.length === 2) {
+    if (p.selectionName === "Home") return { name: teams[0]!, tag: "1" };
+    if (p.selectionName === "Away") return { name: teams[1]!, tag: "2" };
+    if (p.selectionName === "Draw") return { name: "Draw", tag: "X" };
+  }
+  return { name: p.selectionName, tag: null };
 }
 
 type Booked = { code: string; image: File | null; at: Date };
@@ -383,18 +430,19 @@ function Booking({ picks, onLoad }: { picks: Pick[]; onLoad: (picks: Pick[]) => 
 
   if (picks.length > 0)
     return (
-      <div className="space-y-2 px-4 pb-4">
-        <div className="flex items-center justify-between text-sm font-semibold">
-          {booked ? (
-            <button onClick={() => setOpen(true)} className="text-lime hover:underline">
-              Booked: <span className="font-mono tracking-wider">{booked.code}</span>
-            </button>
-          ) : (
-            <button onClick={book} disabled={state.k === "busy"} className="text-lime hover:underline disabled:opacity-50">
-              {state.k === "busy" ? "Booking…" : "Book Bet"}
-            </button>
-          )}
-        </div>
+      <div className="space-y-2 px-3 pb-3">
+        {booked ? (
+          <button onClick={() => setOpen(true)} className="btn-ghost w-full py-2.5 text-sm">
+            Booked: <span className="font-mono tracking-wider text-white">{booked.code}</span>
+          </button>
+        ) : (
+          <button onClick={book} disabled={state.k === "busy"} className="btn-ghost w-full py-2.5 text-sm">
+            <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+              <path d="M6 3h12v18l-6-4-6 4z" />
+            </svg>
+            {state.k === "busy" ? "Booking…" : "Book bet · share code"}
+          </button>
+        )}
         {messages}
         {open && booked && createPortal(<BookingDialog booked={booked} picks={picks} onClose={() => setOpen(false)} />, document.body)}
       </div>
