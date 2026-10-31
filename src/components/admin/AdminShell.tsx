@@ -22,15 +22,17 @@ import {
   Bell,
   Search,
   ChevronDown,
+  CalendarPlus,
   type LucideIcon,
 } from "lucide-react";
 import { Avatar } from "./kit";
-import { BrandMark } from "@/components/Logo";
+import { BrandMark, Logo } from "@/components/Logo";
 
 /** Lucide icon per nav item (keys set in the admin layout). 20px, 1.75 stroke throughout. */
 const ICONS: Record<string, LucideIcon> = {
   dashboard: LayoutDashboard,
   operations: Ticket,
+  games: CalendarPlus,
   referrals: Megaphone,
   players: Users,
   team: UserCog,
@@ -108,11 +110,11 @@ export function AdminShell({
   const current = sections.flatMap((s) => s.items).find((i) => active(i.href));
 
   return (
-    <div data-admin-theme={theme} className="admin-shell flex min-h-[calc(100vh-56px)] bg-ink-900 text-white">
+    <div data-admin-theme={theme} className="admin-shell flex min-h-screen bg-ink-900 text-white">
       {/* ---- Desktop rail ---- */}
       <aside
-        className={`sticky top-[56px] hidden h-[calc(100vh-56px)] shrink-0 flex-col border-r border-line bg-ink-800 transition-[width] duration-200 lg:flex ${
-          collapsed ? "w-16" : "w-[15rem]"
+        className={`sticky top-0 hidden h-screen shrink-0 flex-col border-r border-line bg-ink-800 transition-[width] duration-200 lg:flex ${
+          collapsed ? "w-[4.5rem]" : "w-[16.5rem]"
         }`}
       >
         <RailHeader collapsed={collapsed} roleBadge={roleBadge} />
@@ -122,12 +124,12 @@ export function AdminShell({
 
       {/* ---- Content column ---- */}
       <div className="flex min-w-0 flex-1 flex-col">
-        {/* Top bar: menu (mobile) / collapse (desktop), breadcrumb, theme toggle. */}
-        <header className="sticky top-[56px] z-30 flex h-14 items-center gap-3 border-b border-line bg-ink-800/95 px-4 backdrop-blur lg:px-6">
+        {/* Top bar: menu (mobile) / collapse (desktop), breadcrumb, search, alerts, theme, profile. */}
+        <header className="sticky top-0 z-30 flex h-16 items-center gap-2 border-b border-line bg-ink-900/80 px-4 backdrop-blur-xl sm:gap-3 lg:px-8">
           <button
             onClick={() => setDrawer(true)}
             aria-label="Open menu"
-            className="grid h-11 w-11 shrink-0 place-items-center rounded-lg text-fog hover:bg-ink-500 hover:text-white lg:hidden"
+            className="grid h-10 w-10 shrink-0 place-items-center rounded-lg text-fog hover:bg-ink-500 hover:text-white lg:hidden"
           >
             <Menu size={20} strokeWidth={1.75} />
           </button>
@@ -136,13 +138,14 @@ export function AdminShell({
             aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
             className="hidden h-9 w-9 shrink-0 place-items-center rounded-lg text-fog hover:bg-ink-500 hover:text-white lg:grid"
           >
-            {collapsed ? <PanelLeftOpen size={20} strokeWidth={1.75} /> : <PanelLeftClose size={20} strokeWidth={1.75} />}
+            {collapsed ? <PanelLeftOpen size={18} strokeWidth={1.75} /> : <PanelLeftClose size={18} strokeWidth={1.75} />}
           </button>
+          <span aria-hidden className="hidden h-5 w-px bg-line lg:block" />
           <nav aria-label="Breadcrumb" className="min-w-0 flex-1 truncate text-sm">
             <span className="text-fog">Console</span>
             {current && (
               <>
-                <span className="px-1.5 text-fog/60">/</span>
+                <span className="px-2 text-fog-muted">/</span>
                 <span className="font-semibold text-white">{current.label}</span>
               </>
             )}
@@ -150,74 +153,78 @@ export function AdminShell({
 
           {/* Global search — submits to the Players page, which already filters on `q`
               (email, phone, player ID, referral code). No new endpoint. */}
-          <form action="/admin/users" method="get" role="search" className="relative hidden w-56 shrink-0 md:block lg:w-72">
+          <form action="/admin/users" method="get" role="search" className="relative hidden w-60 shrink-0 md:block lg:w-80">
             <label htmlFor="admin-q" className="sr-only">
-              Search players by email, phone, ID or referral code
+              Search users by email, phone, ID or referral code
             </label>
-            <Search size={16} strokeWidth={1.75} aria-hidden className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-fog" />
+            <Search size={16} strokeWidth={1.75} aria-hidden className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-fog" />
             <input
               id="admin-q"
               name="q"
               type="search"
-              placeholder="Search players, IDs, codes"
+              placeholder="Search users, IDs, codes…"
               maxLength={80}
-              className="h-9 w-full rounded-lg border border-line bg-ink-700 pl-8 pr-3 text-sm text-white outline-none transition placeholder:text-fog/70 focus:border-lime focus:ring-2 focus:ring-lime/25"
+              className="h-10 w-full rounded-xl border border-line bg-ink-700 pl-9 pr-3 text-sm text-white shadow-card outline-none transition placeholder:text-fog-muted focus:border-lime/60 focus:ring-4 focus:ring-lime/15"
             />
           </form>
 
           <Link
             href="/admin/system"
             aria-label="System alerts"
-            className="grid h-9 w-9 shrink-0 place-items-center rounded-lg text-fog transition-colors duration-150 hover:bg-ink-500 hover:text-white"
+            className="grid h-10 w-10 shrink-0 place-items-center rounded-xl text-fog transition-colors duration-150 hover:bg-ink-500 hover:text-white"
           >
-            <Bell size={20} strokeWidth={1.75} />
+            <Bell size={18} strokeWidth={1.75} />
           </Link>
 
           <button
             onClick={toggleTheme}
             aria-label={theme === "dark" ? "Switch to light theme" : "Switch to dark theme"}
-            className="grid h-9 w-9 shrink-0 place-items-center rounded-lg text-fog transition-colors duration-150 hover:bg-ink-500 hover:text-white"
+            className="grid h-10 w-10 shrink-0 place-items-center rounded-xl text-fog transition-colors duration-150 hover:bg-ink-500 hover:text-white"
           >
-            {theme === "dark" ? <Sun size={20} strokeWidth={1.75} /> : <Moon size={20} strokeWidth={1.75} />}
+            {theme === "dark" ? <Sun size={18} strokeWidth={1.75} /> : <Moon size={18} strokeWidth={1.75} />}
           </button>
 
           {/* Profile menu — same <details> pattern the console already uses for Export. */}
           <details className="relative shrink-0">
-            <summary className="flex h-9 cursor-pointer list-none items-center gap-1 rounded-lg px-1 transition-colors duration-150 hover:bg-ink-500 [&::-webkit-details-marker]:hidden">
-              <Avatar name={user} size="h-7 w-7 text-[10px]" />
-              <ChevronDown size={16} strokeWidth={1.75} aria-hidden className="text-fog" />
+            <summary className="flex h-10 cursor-pointer list-none items-center gap-2 rounded-xl border border-line bg-ink-700 py-1 pl-1 pr-2 shadow-card transition-colors duration-150 hover:bg-ink-500 [&::-webkit-details-marker]:hidden">
+              <Avatar name={user} size="h-8 w-8 text-[11px]" />
+              <span className="hidden max-w-[9rem] truncate text-sm font-medium text-white xl:block">{user}</span>
+              <ChevronDown size={14} strokeWidth={2} aria-hidden className="text-fog" />
               <span className="sr-only">Account menu</span>
             </summary>
-            <div className="absolute right-0 z-40 mt-1 w-56 rounded-lg border border-line bg-ink-700 p-1 shadow-lift">
-              <div className="border-b border-line px-3 py-2">
-                <div className="truncate text-sm font-semibold text-white">{user}</div>
-                <div className="truncate text-xs text-fog">{roleLabel}</div>
+            <div className="absolute right-0 z-40 mt-2 w-64 overflow-hidden rounded-xl border border-line bg-ink-700 p-1.5 shadow-lift">
+              <div className="flex items-center gap-3 px-2.5 py-2.5">
+                <Avatar name={user} size="h-9 w-9 text-xs" />
+                <div className="min-w-0">
+                  <div className="truncate text-sm font-semibold text-white">{user}</div>
+                  <div className="truncate text-xs text-fog">{roleLabel}</div>
+                </div>
               </div>
-              <Link href="/account" className="block rounded px-3 py-2 text-sm text-white hover:bg-ink-500">
+              <div className="my-1 h-px bg-line" />
+              <Link href="/account" className="block rounded-lg px-2.5 py-2 text-sm text-white hover:bg-ink-500">
                 Account
               </Link>
-              <Link href="/" className="block rounded px-3 py-2 text-sm text-white hover:bg-ink-500">
+              <Link href="/" className="block rounded-lg px-2.5 py-2 text-sm text-white hover:bg-ink-500">
                 Back to site
               </Link>
-              <button onClick={logout} className="block w-full rounded px-3 py-2 text-left text-sm font-medium text-danger/90 hover:bg-danger/10">
+              <button onClick={logout} className="block w-full rounded-lg px-2.5 py-2 text-left text-sm font-medium text-danger hover:bg-danger/10">
                 Log out
               </button>
             </div>
           </details>
         </header>
 
-        <main className="min-w-0 flex-1 space-y-5 px-4 pb-16 pt-5 lg:px-8 lg:pt-7">{children}</main>
+        <main className="mx-auto w-full min-w-0 max-w-[1480px] flex-1 space-y-6 px-4 pb-16 pt-6 sm:px-6 lg:px-10 lg:pt-8">{children}</main>
       </div>
 
       {/* ---- Mobile drawer ---- */}
       {drawer && (
         <div className="fixed inset-0 z-50 lg:hidden">
-          {/* Dim overlay (no blur, per spec). */}
-          <div className="absolute inset-0 bg-black/50" onClick={() => setDrawer(false)} aria-hidden />
-          <div role="dialog" aria-modal="true" aria-label="Admin menu" className="absolute inset-y-0 left-0 flex w-[17rem] max-w-[85vw] flex-col border-r border-line bg-ink-800 shadow-lift">
-            <div className="flex items-center justify-between border-b border-line px-4 py-3">
-              <RailHeader collapsed={false} roleBadge={roleBadge} inline />
-              <button onClick={() => setDrawer(false)} aria-label="Close menu" className="grid h-11 w-11 place-items-center rounded-lg text-fog hover:bg-ink-500 hover:text-white">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setDrawer(false)} aria-hidden />
+          <div role="dialog" aria-modal="true" aria-label="Admin menu" className="absolute inset-y-0 left-0 flex w-[17.5rem] max-w-[85vw] flex-col border-r border-line bg-ink-800 shadow-lift">
+            <div className="flex items-center justify-between pr-2">
+              <RailHeader collapsed={false} roleBadge={roleBadge} />
+              <button onClick={() => setDrawer(false)} aria-label="Close menu" className="grid h-10 w-10 place-items-center rounded-lg text-fog hover:bg-ink-500 hover:text-white">
                 <X size={20} strokeWidth={1.75} />
               </button>
             </div>
@@ -230,28 +237,38 @@ export function AdminShell({
   );
 }
 
-function RailHeader({ collapsed, roleBadge, inline = false }: { collapsed: boolean; roleBadge: string; inline?: boolean }) {
+function RailHeader({ collapsed, roleBadge }: { collapsed: boolean; roleBadge: string }) {
+  if (collapsed) {
+    return (
+      <div className="flex h-16 shrink-0 items-center justify-center">
+        <BrandMark size={32} />
+      </div>
+    );
+  }
   return (
-    <div className={inline ? "flex items-center gap-2" : "flex h-14 items-center gap-2 border-b border-line px-4"}>
-      <BrandMark size={24} />
-      {!collapsed && (
-        <>
-          <span className="font-display text-sm font-bold tracking-wide text-white">Console</span>
-          {/* Quiet role badge — tinted text, no competing box. */}
-          <span className="ml-1 rounded bg-lime/12 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-lime">{roleBadge}</span>
-        </>
-      )}
+    <div className="flex h-16 shrink-0 items-center gap-2.5 px-5">
+      {/* The logo is white lettering: in the light theme it sits on a dark plate so it stays legible. */}
+      <Link href="/admin" aria-label="Console home" className="rounded-lg [[data-admin-theme=light]_&]:bg-[#0D1016] [[data-admin-theme=light]_&]:px-2 [[data-admin-theme=light]_&]:py-1">
+        <Logo className="h-9" />
+      </Link>
+      <span title={roleBadge} className="rounded-md bg-lime/10 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-lime ring-1 ring-inset ring-lime/20">
+        Admin
+      </span>
     </div>
   );
 }
 
 function NavList({ sections, collapsed, active }: { sections: NavSection[]; collapsed: boolean; active: (href: string) => boolean }) {
   return (
-    <nav aria-label="Admin" className="min-h-0 flex-1 space-y-5 overflow-y-auto px-2.5 py-4 [scrollbar-width:thin]">
+    <nav aria-label="Admin" className="min-h-0 flex-1 space-y-6 overflow-y-auto px-3 py-4 [scrollbar-width:thin]">
       {sections.map((section) => (
         <div key={section.label}>
-          {!collapsed && <div className="px-2.5 pb-1.5 text-[11px] font-semibold uppercase tracking-[0.1em] text-fog/80">{section.label}</div>}
-          <ul className="space-y-0.5">
+          {collapsed ? (
+            <div aria-hidden className="mx-auto mb-2 h-px w-6 bg-line" />
+          ) : (
+            <div className="px-3 pb-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-fog-muted">{section.label}</div>
+          )}
+          <ul className="space-y-1">
             {section.items.map((item) => {
               const Ico = ICONS[item.icon] ?? LayoutDashboard;
               const on = active(item.href);
@@ -261,13 +278,11 @@ function NavList({ sections, collapsed, active }: { sections: NavSection[]; coll
                     href={item.href}
                     aria-current={on ? "page" : undefined}
                     title={collapsed ? item.label : undefined}
-                    className={`group relative flex min-h-11 items-center gap-3 rounded-lg px-2.5 text-sm font-medium transition-colors duration-150 ${
-                      collapsed ? "justify-center" : ""
-                    } ${on ? "bg-lime/10 text-lime" : "text-fog hover:bg-ink-500 hover:text-white"}`}
+                    className={`group flex h-10 items-center gap-3 rounded-xl text-sm font-medium transition-colors duration-150 ${collapsed ? "justify-center" : "px-3"} ${
+                      on ? "bg-lime/10 text-white ring-1 ring-inset ring-lime/20" : "text-fog hover:bg-ink-500 hover:text-white"
+                    }`}
                   >
-                    {/* 3px accent bar on the active item's left edge (no solid pill). */}
-                    {on && <span className="absolute inset-y-1.5 left-0 w-[3px] rounded-full bg-lime" aria-hidden />}
-                    <Ico size={20} strokeWidth={1.75} className="shrink-0" aria-hidden />
+                    <Ico size={18} strokeWidth={1.75} className={`shrink-0 ${on ? "text-lime" : "text-fog group-hover:text-white"}`} aria-hidden />
                     {!collapsed && <span className="truncate">{item.label}</span>}
                   </Link>
                 </li>
@@ -293,33 +308,36 @@ function useLogout() {
 
 function RailFooter({ collapsed, user, roleLabel }: { collapsed: boolean; user: string; roleLabel: string }) {
   const logout = useLogout();
+  if (collapsed) {
+    return (
+      <div className="flex shrink-0 flex-col items-center gap-1 border-t border-line py-3">
+        <Link href="/" title="Back to site" className="grid h-10 w-10 place-items-center rounded-xl text-fog hover:bg-ink-500 hover:text-white">
+          <ArrowLeft size={18} strokeWidth={1.75} aria-hidden />
+          <span className="sr-only">Back to site</span>
+        </Link>
+        <button onClick={logout} title="Log out" className="grid h-10 w-10 place-items-center rounded-xl text-fog hover:bg-danger/10 hover:text-danger">
+          <LogOut size={18} strokeWidth={1.75} aria-hidden />
+          <span className="sr-only">Log out</span>
+        </button>
+      </div>
+    );
+  }
   return (
-    <div className="shrink-0 border-t border-line px-2.5 py-3">
-      {!collapsed && (
-        <div className="flex items-center gap-2.5 px-1.5 pb-2">
-          <Avatar name={user} size="h-8 w-8 text-xs" />
-          <div className="min-w-0">
-            <div className="truncate text-sm font-semibold text-white">{user}</div>
-            <div className="truncate text-xs text-fog">{roleLabel}</div>
-          </div>
-        </div>
-      )}
-      <Link
-        href="/"
-        title={collapsed ? "Back to site" : undefined}
-        className={`flex min-h-11 items-center gap-3 rounded-lg px-2.5 text-sm font-medium text-fog transition-colors duration-150 hover:bg-ink-500 hover:text-white ${collapsed ? "justify-center" : ""}`}
-      >
-        <ArrowLeft size={20} strokeWidth={1.75} className="shrink-0" aria-hidden />
-        {!collapsed && "Back to site"}
+    <div className="shrink-0 space-y-1 border-t border-line p-3">
+      <Link href="/" className="flex h-10 items-center gap-3 rounded-xl px-3 text-sm font-medium text-fog transition-colors duration-150 hover:bg-ink-500 hover:text-white">
+        <ArrowLeft size={18} strokeWidth={1.75} className="shrink-0" aria-hidden />
+        Back to site
       </Link>
-      <button
-        onClick={logout}
-        title={collapsed ? "Log out" : undefined}
-        className={`flex min-h-11 w-full items-center gap-3 rounded-lg px-2.5 text-sm font-medium text-danger/80 transition-colors duration-150 hover:bg-danger/10 hover:text-danger ${collapsed ? "justify-center" : ""}`}
-      >
-        <LogOut size={20} strokeWidth={1.75} className="shrink-0" aria-hidden />
-        {!collapsed && "Log out"}
-      </button>
+      <div className="flex items-center gap-3 rounded-xl border border-line bg-ink-700 p-2.5 shadow-card">
+        <Avatar name={user} size="h-9 w-9 text-xs" />
+        <div className="min-w-0 flex-1">
+          <div className="truncate text-sm font-semibold text-white">{user}</div>
+          <div className="truncate text-xs text-fog">{roleLabel}</div>
+        </div>
+        <button onClick={logout} aria-label="Log out" title="Log out" className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-fog hover:bg-danger/10 hover:text-danger">
+          <LogOut size={16} strokeWidth={1.75} aria-hidden />
+        </button>
+      </div>
     </div>
   );
 }

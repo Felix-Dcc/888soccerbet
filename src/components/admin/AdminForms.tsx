@@ -259,7 +259,7 @@ export function AdminActions({ adminId, email, status }: { adminId: string; emai
         message={
           suspending ? (
             <>
-              <b className="text-white">{email}</b> is signed out everywhere and can&apos;t sign in. Players they referred stay attributed to them.
+              <b className="text-white">{email}</b> is signed out everywhere and can&apos;t sign in. Users they referred stay attributed to them.
             </>
           ) : (
             <>
@@ -394,7 +394,7 @@ export function PlayerActions({
     <div className="space-y-4">
       {canSuspend && (
         <button type="button" onClick={() => { setReason(""); setAction("status"); }} className={`btn px-4 py-2 text-sm ${suspending ? "border border-danger/50 text-danger hover:bg-danger/10" : "btn-lime"}`}>
-          {suspending ? "Suspend player" : "Reactivate player"}
+          {suspending ? "Suspend user" : "Reactivate user"}
         </button>
       )}
       {canVerify && !verified && (
@@ -433,7 +433,7 @@ export function PlayerActions({
       <ConfirmDialog
         open={action === "status"}
         danger={suspending}
-        title={suspending ? "Suspend player" : "Reactivate player"}
+        title={suspending ? "Suspend user" : "Reactivate user"}
         message={
           <div className="space-y-2">
             <p>
@@ -449,7 +449,7 @@ export function PlayerActions({
           const { error } = await send(`/api/admin/players/${playerId}`, "POST", { action: "status", status: suspending ? "SUSPENDED" : "ACTIVE", reason, password });
           if (error) return error;
           setAction(null);
-          setDone(suspending ? "Player suspended" : "Player reactivated");
+          setDone(suspending ? "User suspended" : "User reactivated");
           router.refresh();
           return null;
         }}

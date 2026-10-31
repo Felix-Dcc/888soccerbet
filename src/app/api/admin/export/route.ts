@@ -71,7 +71,7 @@ export async function GET(req: Request) {
       if (!can(actor, "admins.view")) throw new HttpError(403, "forbidden");
       const rows = await adminComparison(range);
       body = csv(
-        ["email", "username", "role", "status", "referral_code", "referred_players", "new_in_range", "verified", "deposits_ghs", "withdrawals_ghs", "stakes_ghs", "ggr_ghs", "last_login"],
+        ["email", "username", "role", "status", "referral_code", "referred_players", "new_in_range", "verified", "deposits_ghs", "withdrawals_ghs", "stakes_ghs", "gross_revenue_ghs", "last_login"],
         rows.map((a) => [a.email, a.adminUsername, a.role, a.status, a.referralCode, a.metrics.players.total, a.metrics.players.newInRange, a.metrics.players.verified, a.metrics.money.deposits.total, a.metrics.money.withdrawals.total, a.metrics.betting.placed.stakes, a.metrics.revenue.ggr, a.lastLoginAt]),
       );
     } else throw new HttpError(400, "Unknown export");

@@ -14,7 +14,7 @@ export function VerifyForm({ defaultValue = "" }: { defaultValue?: string }) {
         autoCapitalize="characters"
         autoComplete="off"
         spellCheck={false}
-        placeholder="e.g. KB7QH3MZ2C9XPA4D"
+        placeholder="e.g. SB7QH3MZ2C9XPA4D"
         className="input min-w-0 flex-1 font-mono uppercase tracking-wider"
       />
       <button className="btn-lime px-4 text-sm">Verify</button>

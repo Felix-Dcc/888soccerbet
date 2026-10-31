@@ -22,7 +22,7 @@ export default async function PlayersPage({ searchParams }: { searchParams: Prom
   if (!scope)
     return (
       <Panel>
-        <EmptyState icon="lock" title="No player access" />
+        <EmptyState icon="lock" title="No user access" />
       </Panel>
     );
   const q = sp.q?.trim().slice(0, 80) ?? "";
@@ -64,7 +64,7 @@ export default async function PlayersPage({ searchParams }: { searchParams: Prom
 
   return (
     <>
-      <Head title="Players">
+      <Head title="Users">
         {can(u, "reports.export") && (
           <a href="/api/admin/export?kind=players&range=all" className={btnGhost}>
             <Icon name="download" />
@@ -88,7 +88,7 @@ export default async function PlayersPage({ searchParams }: { searchParams: Prom
             <label htmlFor="pq" className="mb-1 block text-xs font-semibold text-fog">
               Search
             </label>
-            <input id="pq" name="q" defaultValue={q} placeholder="Email, phone, player ID, referral code" className={`${field} w-full`} />
+            <input id="pq" name="q" defaultValue={q} placeholder="Email, phone, user ID, referral code" className={`${field} w-full`} />
           </div>
           <div>
             <label htmlFor="pk" className="mb-1 block text-xs font-semibold text-fog">
@@ -118,11 +118,11 @@ export default async function PlayersPage({ searchParams }: { searchParams: Prom
           </button>
         </form>
         {players.length === 0 ? (
-          <EmptyState icon="search" title="No players match">
+          <EmptyState icon="search" title="No users match">
             Try a different search or filter.
           </EmptyState>
         ) : (
-          <Grid head={["Player", "Joined", "Status", "Verification", "Balance", "Bets", "Last bet", "Referred by"]} right={[4, 5]} minWidth="60rem">
+          <Grid head={["User", "Joined", "Status", "Verification", "Balance", "Bets", "Last bet", "Referred by"]} right={[4, 5]} minWidth="60rem">
             {players.map((p) => {
               const b = betStats.get(p.id);
               return (

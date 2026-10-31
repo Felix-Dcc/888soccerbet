@@ -1456,7 +1456,7 @@ describe("ticket verification codes", () => {
     const { fixture, home } = await makeMatch({ home: 2.0, draw: 3.0, away: 4.0 });
     const [a, b] = [await place(user.id, home.id), await place(user.id, home.id)];
     const rows = await prisma.bet.findMany({ where: { ref: { in: [a.ref, b.ref] } }, select: { ref: true, verifyCode: true } });
-    for (const r of rows) expect(r.verifyCode).toMatch(/^KB[ACDEFGHJKLMNPQRSTUVWXYZ2345679]{14}$/);
+    for (const r of rows) expect(r.verifyCode).toMatch(/^SB[ACDEFGHJKLMNPQRSTUVWXYZ2345679]{14}$/);
     expect(rows[0]!.verifyCode).not.toBe(rows[1]!.verifyCode);
 
     const code = rows[0]!.verifyCode!;
@@ -1464,7 +1464,7 @@ describe("ticket verification codes", () => {
     expect(await ticketByVerifyCode(code)).toBeNull(); // still running: nothing to verify yet
     await settleFixture(fixture.id, 1, 0);
     expect((await ticketByVerifyCode(typed))?.ref).toBe(rows[0]!.ref);
-    expect(await ticketByVerifyCode("KBNOTAREALCODE00")).toBeNull();
+    expect(await ticketByVerifyCode("SBNOTAREALCODE00")).toBeNull();
     expect(await ticketByVerifyCode("   ")).toBeNull();
   });
 
@@ -1637,7 +1637,7 @@ describe("responsible gambling on deposits", () => {
     await prisma.user.update({ where: { id: user.id }, data: { selfExcludedUntil: new Date(Date.now() + 86_400_000) } });
     await expect(deposit(user.id, 50)).rejects.toMatchObject({ code: "SELF_EXCLUDED" });
     await prisma.bet.create({
-      data: { ref: `KB-T${Date.now()}`, userId: user.id, type: "SINGLE", stake: 1n, combinedMilliOdds: 2000000, potentialPayout: toPesewas(2000), status: "WON", idempotencyKey: randomUUID() },
+      data: { ref: `SB-T${Date.now()}`, userId: user.id, type: "SINGLE", stake: 1n, combinedMilliOdds: 2000000, potentialPayout: toPesewas(2000), status: "WON", idempotencyKey: randomUUID() },
     }); // a big win, so verification applies
     await expect(initiateVerificationPayment(user.id, "0241234567", randomUUID())).rejects.toMatchObject({ code: "SELF_EXCLUDED" });
   });

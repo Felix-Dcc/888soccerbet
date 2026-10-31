@@ -7,16 +7,16 @@ import { manualPayoutQueue, verificationQueue } from "@/lib/wallet";
 import { formatPesewas } from "@/lib/money";
 import { kickoffDay, kickoffTime } from "@/lib/time";
 import { Crest } from "@/components/Crest";
-import { SyncButton, SettleForm, ManualGameForm, GenerateMatchForm, VerificationReview } from "@/components/AdminTools";
+import { SyncButton, SettleForm, VerificationReview } from "@/components/AdminTools";
 import { readScript } from "@/lib/scriptedMatches";
 import { PayoutActions } from "@/components/admin/PayoutActions";
-import { BarList, EmptyState, Figure, Head, Icon, Panel, Pill, Strip, Tabs, ago, ghs, ghsShort } from "@/components/admin/kit";
+import { BarList, EmptyState, Figure, Head, Panel, Pill, Strip, Tabs, ago, ghs, ghsShort } from "@/components/admin/kit";
 
 export const dynamic = "force-dynamic";
 
-/** Trading desk: results to enter, withdrawals to pay by hand, verifications to review, open exposure, manual games, the odds sync. Each part needs its own permission. */
+/** Trading desk: results to enter, withdrawals to pay by hand, verifications to review, open exposure, the odds sync. Each part needs its own permission. Creating games is on /admin/games. */
 export default async function OperationsPage({ searchParams }: { searchParams: Promise<{ queue?: string }> }) {
-  const gate = await adminPage(["settlement.manage", "fixtures.manage", "verification.review", "odds.sync", "bets.view", "payments.payout"]);
+  const gate = await adminPage(["settlement.manage", "verification.review", "odds.sync", "bets.view", "payments.payout"]);
   if (!gate.ok) return gate.deny;
   const u = gate.user;
   const want = (await searchParams).queue;
@@ -27,7 +27,7 @@ export default async function OperationsPage({ searchParams }: { searchParams: P
     status: { in: ["SCHEDULED", "LIVE"] },
     OR: queue === "manual" ? [{ providerRef: null }] : queue === "started" ? [{ startsAt: { lte: now } }] : [{ providerRef: null }, { startsAt: { lte: now } }],
   };
-  const [toSettle, counts, competitions, verifications, exposure, lastSync, payouts] = await Promise.all([
+  const [toSettle, counts, verifications, exposure, lastSync, payouts] = await Promise.all([
     can(u, "settlement.manage")
       ? prisma.fixture.findMany({
           where: settleWhere,
@@ -43,7 +43,6 @@ export default async function OperationsPage({ searchParams }: { searchParams: P
           prisma.fixture.count({ where: { status: { in: ["SCHEDULED", "LIVE"] }, providerRef: null } }),
         ])
       : null,
-    can(u, "fixtures.manage") ? prisma.competition.findMany({ select: { sportKey: true, name: true }, orderBy: { name: "asc" } }) : [],
     can(u, "verification.review") ? verificationQueue() : null,
     can(u, "bets.view") ? openExposure() : null,
     prisma.fixture.aggregate({ where: { providerRef: { not: null } }, _max: { lastSyncedAt: true } }),
@@ -131,25 +130,6 @@ export default async function OperationsPage({ searchParams }: { searchParams: P
                 </ul>
               )}
             </Panel>
-          )}
-          {can(u, "fixtures.manage") && (
-            <Panel title="Generate a match" icon="plus">
-              <GenerateMatchForm />
-            </Panel>
-          )}
-          {can(u, "fixtures.manage") && (
-            <details className="group rounded-md border border-line bg-ink-700">
-              <summary className="flex cursor-pointer list-none items-center justify-between px-4 py-3 text-[13px] font-semibold uppercase tracking-[0.08em] text-fog [&::-webkit-details-marker]:hidden">
-                <span className="flex items-center gap-2">
-                  <Icon name="plus" className="h-4 w-4 text-lime" />
-                  Add a manual game
-                </span>
-                <Icon name="chevron" className="h-4 w-4 transition group-open:rotate-90" />
-              </summary>
-              <div className="border-t border-line p-4">
-                <ManualGameForm competitions={competitions} />
-              </div>
-            </details>
           )}
         </div>
 

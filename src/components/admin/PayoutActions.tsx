@@ -15,10 +15,10 @@ export function PayoutActions({ refCode, amount, msisdn, network, accountName }:
   return (
     <>
       <div className="flex gap-2">
-        <button type="button" onClick={() => setOpen("PAID")} className="inline-flex h-8 items-center rounded-md bg-lime px-3 text-xs font-bold text-lime-ink hover:bg-lime-600">
+        <button type="button" onClick={() => setOpen("PAID")} className="inline-flex h-8 items-center rounded-xl bg-lime px-3 text-xs font-bold text-lime-ink hover:bg-lime-600">
           Paid
         </button>
-        <button type="button" onClick={() => setOpen("FAILED")} className="inline-flex h-8 items-center rounded-md border border-danger/50 px-3 text-xs font-semibold text-danger hover:bg-danger/10">
+        <button type="button" onClick={() => setOpen("FAILED")} className="inline-flex h-8 items-center rounded-xl border border-danger/50 px-3 text-xs font-semibold text-danger hover:bg-danger/10">
           Failed
         </button>
       </div>
@@ -35,7 +35,7 @@ export function PayoutActions({ refCode, amount, msisdn, network, accountName }:
             </>
           ) : (
             <>
-              <strong>GHS {amount}</strong> goes back to the player&apos;s balance. Only if the money was <strong>not</strong> sent.
+              <strong>GHS {amount}</strong> goes back to the user&apos;s balance. Only if the money was <strong>not</strong> sent.
             </>
           )
         }

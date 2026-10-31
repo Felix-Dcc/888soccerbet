@@ -23,7 +23,7 @@ export default async function SystemPage() {
         </span>
       </Head>
 
-      <div className="grid gap-px overflow-hidden rounded-md border border-line bg-ink-500 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {h.alerts.map((a) => {
           const body = (
             <>
@@ -35,7 +35,7 @@ export default async function SystemPage() {
               <span className="mt-1 block text-xs text-fog">{a.detail}</span>
             </>
           );
-          const tile = `block h-full px-4 py-3 ${a.level === "critical" ? "bg-danger/10" : a.level === "warn" ? "bg-warn/10" : "bg-ink-700"}`;
+          const tile = `block h-full rounded-2xl border px-5 py-4 shadow-card ${a.level === "critical" ? "border-danger/30 bg-danger/10" : a.level === "warn" ? "border-warn/30 bg-warn/10" : "border-line bg-ink-700"}`;
           return a.href && a.level !== "ok" ? (
             <Link key={a.title} href={a.href} className={`${tile} hover:brightness-125`}>
               {body}

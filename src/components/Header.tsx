@@ -56,7 +56,7 @@ export function Header() {
   return (
     <>
       {/* Only this top bar stays pinned; the tab row and sports row scroll away beneath it. */}
-      <header className="theme-dark sticky top-0 z-40 border-b border-line bg-ink-800">
+      <header className="site-header theme-dark sticky top-0 z-40 border-b border-line bg-ink-800">
         <div className="mx-auto flex h-14 max-w-[1280px] items-center gap-2 px-3 max-[390px]:gap-1.5 sm:gap-3 sm:px-4 lg:h-[60px] lg:gap-6">
           <Link href="/" aria-label="888SoccerBet home" className="shrink-0">
             {/* Slightly smaller wordmark on narrow phones, so search, the balance eye, balance and menu fit beside it. */}

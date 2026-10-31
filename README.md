@@ -36,7 +36,7 @@ npm run worker                  # (separate shell) keeps odds fresh & settles fi
 ```
 
 Seed logins (phone or email): `admin@888soccerbet.com` / `0240000002` / `Admin123!` ·
-`demo@888soccerbet.com` / `0240000001` / `Demo1234!`. Demo referral link: `/register?ref=DEMOKING`.
+`demo@888soccerbet.com` / `0240000001` / `Demo1234!`. Demo referral link: `/register?ref=DEMO888`.
 
 ### Accounts, matches and booking codes
 

@@ -36,7 +36,7 @@ async function main() {
       kycStatus: "VERIFIED",
       dateOfBirth: new Date("1995-06-15"),
       phone: "0240000001",
-      referralCode: "DEMOKING",
+      referralCode: "DEMO888",
     },
     update: { phone: "0240000001" },
   });
@@ -54,7 +54,7 @@ async function main() {
 
   const sync = await syncFixtures();
   console.log("Seeded:", { admin: admin.email, demo: demo.email, ...sync });
-  console.log("Logins -> admin@888soccerbet.com or 0240000002 / Admin123!   demo@888soccerbet.com or 0240000001 / Demo1234!   demo referral: /register?ref=DEMOKING");
+  console.log("Logins -> admin@888soccerbet.com or 0240000002 / Admin123!   demo@888soccerbet.com or 0240000001 / Demo1234!   demo referral: /register?ref=DEMO888");
 }
 
 main()

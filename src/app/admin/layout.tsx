@@ -9,13 +9,14 @@ export const dynamic = "force-dynamic";
 /** Group the permitted sections into labelled blocks, and give each a Lucide icon key. */
 const GROUPS: { label: string; hrefs: string[] }[] = [
   { label: "Overview", hrefs: ["/admin"] },
-  { label: "Operations", hrefs: ["/admin/operations"] },
+  { label: "Operations", hrefs: ["/admin/operations", "/admin/games"] },
   { label: "Growth & Content", hrefs: ["/admin/referrals"] },
   { label: "Administration", hrefs: ["/admin/users", "/admin/admins", "/admin/roles", "/admin/audit", "/admin/system"] },
 ];
 const ICON_KEY: Record<string, string> = {
   "/admin": "dashboard",
   "/admin/operations": "operations",
+  "/admin/games": "games",
   "/admin/referrals": "referrals",
   "/admin/users": "players",
   "/admin/admins": "team",

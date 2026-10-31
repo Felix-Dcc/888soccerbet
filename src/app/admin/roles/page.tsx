@@ -96,7 +96,7 @@ function Cell({ on }: { on?: boolean }) {
       <span className="sr-only">yes</span>
     </span>
   ) : (
-    <span className="inline-block h-1 w-1 rounded-full bg-white/15">
+    <span className="inline-block h-1 w-1 rounded-full bg-fog/30">
       <span className="sr-only">no</span>
     </span>
   );

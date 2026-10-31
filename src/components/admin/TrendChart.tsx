@@ -12,8 +12,8 @@ export interface TrendPoint {
 
 const VIEWS = {
   money: { label: "Deposits & withdrawals", series: [{ key: "deposits", name: "Deposits", color: "rgb(var(--lime))" }, { key: "withdrawals", name: "Withdrawals", color: "rgb(var(--warn))" }], money: true },
-  betting: { label: "Stakes & GGR", series: [{ key: "stakes", name: "Stakes placed", color: "rgb(var(--lime))" }, { key: "ggr", name: "GGR", color: "rgb(var(--teal))" }], money: true },
-  players: { label: "Registrations", series: [{ key: "registrations", name: "New players", color: "rgb(var(--lime))" }], money: false },
+  betting: { label: "Stakes & revenue", series: [{ key: "stakes", name: "Stakes placed", color: "rgb(var(--lime))" }, { key: "ggr", name: "Gross revenue", color: "rgb(var(--teal))" }], money: true },
+  players: { label: "Registrations", series: [{ key: "registrations", name: "New users", color: "rgb(var(--lime))" }], money: false },
 } as const;
 type View = keyof typeof VIEWS;
 
@@ -60,7 +60,7 @@ export function TrendChart({ points }: { points: TrendPoint[] }) {
               type="button"
               aria-selected={view === k}
               onClick={() => setView(k)}
-              className={`rounded-md px-3 py-1.5 text-xs font-bold ${view === k ? "bg-ink-700 text-white shadow-card" : "text-fog hover:text-white"}`}
+              className={`rounded-xl px-3 py-1.5 text-xs font-bold ${view === k ? "bg-ink-700 text-white shadow-card" : "text-fog hover:text-white"}`}
             >
               {VIEWS[k].label}
             </button>
