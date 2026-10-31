@@ -66,21 +66,6 @@ export function Footer() {
         <span className="inline-grid h-8 w-8 shrink-0 place-items-center rounded-full border-2 border-danger text-[11px] font-extrabold text-white">18+</span>
         <p className="text-xs text-fog">Age 18 and above only. Play responsibly — betting is addictive and can be psychologically harmful.</p>
       </div>
-
-      <div className="mx-auto mt-4 flex max-w-[1280px] flex-col gap-2 px-4 text-[11px] text-fog-muted sm:flex-row sm:justify-between">
-        {/* Compliance notice, not a tagline: keep while unlicensed. */}
-        <p>Sandbox · not licensed · no real-money wagers</p>
-        <p>
-          Photos:{" "}
-          <a href="https://unsplash.com/license" target="_blank" rel="noreferrer" className="underline hover:text-white">
-            Unsplash
-          </a>{" "}
-          and other sources · Team badges &amp; league artwork:{" "}
-          <a href="https://www.thesportsdb.com" target="_blank" rel="noreferrer" className="underline hover:text-white">
-            TheSportsDB
-          </a>
-        </p>
-      </div>
     </footer>
   );
 }
