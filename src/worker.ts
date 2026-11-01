@@ -3,7 +3,7 @@
  * Run alongside the app:  npm run worker
  * (Jobs could also be driven by POSTing /api/cron from an external scheduler.)
  */
-import { syncFixtures, syncEventMarkets, autoSettleFinished, goLiveManualFixtures, updateLiveScores, syncLiveOdds, retireOrphanedFeedFixtures } from "./lib/sync";
+import { syncFixtures, syncEventMarkets, autoSettleFinished, settleRecentlyFinished, goLiveManualFixtures, updateLiveScores, syncLiveOdds, retireOrphanedFeedFixtures } from "./lib/sync";
 import { enrichCompetitions, enrichTeams } from "./lib/assets";
 import { advanceScriptedMatches } from "./lib/scriptedMatches";
 import { oddsProvider } from "./lib/providers/odds";
@@ -18,6 +18,10 @@ import { liveBettingLeagues } from "./lib/markets";
 const H = 60 * 60 * 1000;
 const SYNC_MS = Number(process.env.SYNC_INTERVAL_MS ?? 48 * H);
 const SETTLE_MS = Number(process.env.SETTLE_INTERVAL_MS ?? 96 * H);
+// Results soon after full time: free unless a match is at one of its check ages (lib/resultChecks),
+// then 2 credits per league. Runs even while live scores sit at their credit reserve, so bets settle
+// within hours, not at the next full settle run (whose 3-day results window it could miss).
+const RESULT_CHECK_MS = Number(process.env.RESULT_CHECK_INTERVAL_MS ?? 30 * 60 * 1000);
 // Live scores: free (DB-only) when nothing is in play; otherwise 1 credit per live league per run.
 // Pauses at LIVE_SCORES_RESERVE credits left so the odds sync keeps running all month. Leagues that
 // take live bets are polled every minute (their scores drive goal suspensions); the rest every 5
@@ -66,6 +70,16 @@ async function quiet(label: string, fn: () => Promise<{ live: number; skipped?: 
   }
 }
 
+/** Results soon after full time: log only the runs that checked something. */
+async function recent() {
+  try {
+    const r = await settleRecentlyFinished(RESULT_CHECK_MS);
+    if (r.checked) console.log("[worker] results", r);
+  } catch (e) {
+    console.error("[worker] results failed:", e instanceof Error ? e.message : e);
+  }
+}
+
 /** Generated matches: log only the ticks that changed something. */
 async function scripted() {
   try {
@@ -89,6 +103,7 @@ async function main() {
   await safe("artwork", enrich);
   setInterval(() => void safe("sync", sync), SYNC_MS);
   setInterval(() => void safe("settle", autoSettleFinished), SETTLE_MS);
+  setInterval(() => void recent(), RESULT_CHECK_MS);
   setInterval(() => void safe("artwork", enrich), ENRICH_MS);
   setInterval(() => void quiet("live", () => updateLiveScores((l) => !isLiveBettingLeague(l))), LIVE_MS);
   setInterval(() => void quiet("golive", goLiveManualFixtures), LIVE_MS);

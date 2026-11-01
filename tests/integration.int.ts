@@ -41,7 +41,7 @@ import { adminComparison, parseRange, scopeMetrics } from "../src/lib/adminAnaly
 import { adjustAdminBalance, adjustBalance, canViewPlayer } from "../src/lib/playerAdmin";
 import { audit, verifyAuditChain } from "../src/lib/audit";
 import { listFixtures, listResults, dataVersion } from "../src/lib/queries";
-import { applyMarkets, goLiveManualFixtures, retireOrphanedFeedFixtures, syncFixtures, syncLiveOdds, updateLiveScores } from "../src/lib/sync";
+import { applyMarkets, goLiveManualFixtures, retireOrphanedFeedFixtures, settleRecentlyFinished, syncFixtures, syncLiveOdds, updateLiveScores } from "../src/lib/sync";
 import { createManualFixture, rescheduleManualFixture } from "../src/lib/manualFixtures";
 import { isTestAccount, planDemoCleanup, runDemoCleanup } from "../src/lib/demoCleanup";
 import { manualFixtureSchema } from "../src/lib/validation";
@@ -1021,6 +1021,36 @@ describe("live scores", () => {
       feed.override = null;
     }
     expect(await prisma.fixture.findUniqueOrThrow({ where: { id: fixture.id } })).toMatchObject({ status: "FINISHED", homeScore: 2, awayScore: 1 });
+    expect(await userCashBalance(prisma, user.id)).toBe(toPesewas(110)); // home win paid
+    expect(await ledgerIsBalanced()).toBe(true);
+  });
+
+  it("settles soon after full time even while live scores sit at their credit reserve", async () => {
+    const user = await fundedUser(100);
+    const { fixture, home } = await makeMatch({ home: 2.0, draw: 3.0, away: 4.0 });
+    const early = await makeMatch({ home: 2.0, draw: 3.0, away: 4.0 });
+    await placeBet(user.id, { idempotencyKey: randomUUID(), stakeGhs: 10, acceptOddsChange: false, selections: [{ selectionId: home.id, expectedMilliOdds: 2000 }] });
+    const comp = await prisma.competition.create({ data: { sportKey: "football", name: `Results League ${randomUUID()}`, providerRef: "soccer_results_test" } });
+    // One kicked off 2h05m ago (first result check is due), one 1h40m ago (too early to check).
+    await prisma.fixture.update({ where: { id: fixture.id }, data: { competitionId: comp.id, status: "LIVE", startsAt: new Date(Date.now() - 125 * 60_000) } });
+    await prisma.fixture.update({ where: { id: early.fixture.id }, data: { competitionId: comp.id, status: "LIVE", startsAt: new Date(Date.now() - 100 * 60_000) } });
+
+    const asked: string[] = [];
+    const result = { providerRef: fixture.providerRef!, homeScore: 1, awayScore: 0, finished: true };
+    feed.override = {
+      fetchLiveScores: async () => [],
+      fetchResults: async (refs: string[]) => (asked.push(...refs), refs.includes(result.providerRef) ? [result] : []),
+      creditsRemaining: 10, // below LIVE_SCORES_RESERVE: live scores are paused
+    } as unknown as OddsProvider;
+    try {
+      expect(await updateLiveScores()).toMatchObject({ settled: 0, skipped: expect.stringContaining("credit reserve") });
+      expect(await settleRecentlyFinished(30 * 60_000)).toEqual({ checked: 1, settled: 1 });
+    } finally {
+      feed.override = null;
+    }
+    expect(asked).toEqual([fixture.providerRef]); // the too-early match cost nothing
+    expect(await prisma.fixture.findUniqueOrThrow({ where: { id: fixture.id } })).toMatchObject({ status: "FINISHED", homeScore: 1, awayScore: 0 });
+    expect((await prisma.fixture.findUniqueOrThrow({ where: { id: early.fixture.id } })).status).toBe("LIVE");
     expect(await userCashBalance(prisma, user.id)).toBe(toPesewas(110)); // home win paid
     expect(await ledgerIsBalanced()).toBe(true);
   });
