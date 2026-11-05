@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { normName, pickTeam, type SdbTeam } from "../src/lib/assets";
+import { matchTeam, normName, pickTeam, teamRequests, type SdbTeam } from "../src/lib/assets";
 import { sized } from "../src/lib/images";
 
 const team = (over: Partial<SdbTeam>): SdbTeam => ({ idTeam: "1", strTeam: "X", strSport: "Soccer", strBadge: "b", ...over });
@@ -27,6 +27,22 @@ describe("pickTeam", () => {
   });
   it("rejects unknown sports", () => {
     expect(pickTeam([team({ strTeam: "Lions", strSport: "Rugby" })], "Lions", "rugby")).toBeNull();
+  });
+});
+
+describe("hand-checked team lookups", () => {
+  it("sends a listed football club to its lookup, and everyone else to the name search", () => {
+    expect(teamRequests("Nottingham Forest", "football")).toEqual(["lookupteam.php?id=133720"]);
+    expect(teamRequests("Lille", "football")).toEqual(["searchteams.php?t=Lille%20OSC"]);
+    expect(teamRequests("Arsenal", "football")).toEqual(["searchteams.php?t=Arsenal", "searchteams.php?t=Arsenal%20FC"]);
+    expect(teamRequests("Lille", "basketball")).toEqual(["searchteams.php?t=Lille"]);
+  });
+  it("accepts a listed club under its other name, but never the wrong sport", () => {
+    expect(matchTeam([team({ strTeam: "Slavia Prague" })], "Slavia Praha", "football")?.strTeam).toBe("Slavia Prague");
+    expect(matchTeam([team({ strTeam: "Lille", strSport: "Field Hockey" })], "Lille", "football")).toBeNull();
+  });
+  it("keeps the strict name match for everyone else", () => {
+    expect(matchTeam([team({ strTeam: "Manchester City Women" })], "Manchester City", "football")).toBeNull();
   });
 });
 

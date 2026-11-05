@@ -40,12 +40,12 @@ const sync = async () => ({ fixtures: await syncFixtures(), extras: await syncEv
 
 let enriching = false;
 async function enrich() {
-  if (enriching) return; // a run can take ~1-2 min at the free tier's request spacing
+  if (enriching) return; // a run can take several minutes at the free tier's request spacing
   enriching = true;
   try {
     // League lookups can hit the rate limit too; don't let that block team enrichment.
     const leagues = await enrichCompetitions().catch((e: Error) => `deferred: ${e.message}`);
-    return { leagues, teams: await enrichTeams(15) };
+    return { leagues, teams: await enrichTeams(40) };
   } finally {
     enriching = false;
   }
