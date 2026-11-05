@@ -8,7 +8,7 @@ interface ApiSelection {
   status: string;
   fixtureName: string;
   selectionName: string;
-  fixture: { startsAt: string } | null;
+  fixture: { startsAt: string; status: string; homeScore: number | null; awayScore: number | null } | null;
 }
 interface ApiBet {
   id: string;
@@ -124,6 +124,15 @@ export function MyBets() {
                   </span>
                   <span className="shrink-0 text-[11px] font-bold tabular-nums text-gold">{formatMilliOdds(b.combinedMilliOdds)}</span>
                 </div>
+                {b.selections.filter((s) => inPlay(s, now)).map((s, i) => (
+                  <div key={i} className="mt-1 flex items-center gap-2 text-[11px]">
+                    <span className="h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-danger" aria-hidden />
+                    <span className="min-w-0 flex-1 truncate text-fog">{s.fixtureName}</span>
+                    <span className="shrink-0 font-extrabold tabular-nums text-lime">
+                      {s.fixture!.homeScore ?? 0} : {s.fixture!.awayScore ?? 0}
+                    </span>
+                  </div>
+                ))}
                 <div className="mt-1 flex items-baseline justify-between gap-2 text-[11px] text-fog-muted">
                   <span className="tabular-nums">Stake GHS {formatPesewas(BigInt(b.stake))}</span>
                   <span className="tabular-nums">Returns GHS {formatPesewas(BigInt(b.potentialPayout))}</span>
@@ -136,6 +145,10 @@ export function MyBets() {
     </div>
   );
 }
+
+/** A leg whose match has kicked off, isn't over, and has a score to show. */
+const inPlay = (s: ApiSelection, now: number) =>
+  !!s.fixture && new Date(s.fixture.startsAt).getTime() <= now && s.fixture.status !== "FINISHED" && s.fixture.status !== "CANCELLED" && (s.fixture.homeScore !== null || s.fixture.awayScore !== null);
 
 function Empty({ text, children }: { text: string; children?: React.ReactNode }) {
   return (

@@ -29,8 +29,8 @@ export async function GET() {
       where: { userId: user.id },
       orderBy: { placedAt: "desc" },
       take: 50,
-      // startsAt lets the rail tell an in-play bet from one still waiting to kick off.
-      include: { selections: { include: { fixture: { select: { startsAt: true } } } } },
+      // startsAt lets the rail tell an in-play bet from one still waiting to kick off; the scores show on it.
+      include: { selections: { include: { fixture: { select: { startsAt: true, status: true, homeScore: true, awayScore: true } } } } },
     });
     // Which pending bets can be cashed out right now — the same helper the My bets page uses.
     const quotes = await quotesFor(bets.filter((b) => b.status === "PENDING").map((b) => b.id));

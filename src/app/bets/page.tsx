@@ -41,7 +41,9 @@ export default async function BetsPage({ searchParams }: { searchParams: Promise
       where: { userId: user.id, ...(tab === "settled" ? { status: { not: "PENDING" } } : tab === "unsettled" ? { status: "PENDING" } : {}) },
       orderBy: { placedAt: "desc" },
       take: 50,
-      include: { selections: { select: { fixtureName: true } }, cashouts: { select: { amount: true, stakePortion: true, full: true } } },
+      include: {
+        selections: { select: { fixtureName: true, fixture: { select: { startsAt: true, status: true, homeScore: true, awayScore: true } } } },
+        cashouts: { select: { amount: true, stakePortion: true, full: true } } },
     }),
     prisma.bet.groupBy({ by: ["status"], where: { userId: user.id }, _count: { _all: true }, _sum: { stake: true } }),
   ]);
@@ -100,6 +102,7 @@ export default async function BetsPage({ searchParams }: { searchParams: Promise
         <ul className="space-y-3">
           {bets.map((b) => {
             const matches = b.selections.map((s) => s.fixtureName);
+            const legs = b.selections.map((s) => ({ name: s.fixtureName, score: liveScore(s.fixture) }));
             const { ret, placedStake } = ticketTotals(b);
             const q = quotes.get(b.id);
             const cashedOut = b.status === "WON" && b.cashouts.some((c) => c.full); // a full cash out settles as WON
@@ -130,10 +133,15 @@ export default async function BetsPage({ searchParams }: { searchParams: Promise
                   </div>
 
                   <ul className="mt-3 space-y-1 text-sm text-fog">
-                    {matches.slice(0, 3).map((m, i) => (
+                    {legs.slice(0, 3).map((m, i) => (
                       <li key={i} className="flex items-center gap-2">
-                        <span className="h-1 w-1 shrink-0 rounded-full bg-fog-muted" aria-hidden />
-                        <span className="truncate">{m}</span>
+                        <span className={`shrink-0 rounded-full ${m.score ? "h-1.5 w-1.5 animate-pulse bg-danger" : "h-1 w-1 bg-fog-muted"}`} aria-hidden />
+                        <span className="min-w-0 truncate">{m.name}</span>
+                        {m.score && (
+                          <span className="ml-auto shrink-0 rounded bg-ink-600 px-1.5 text-xs font-extrabold tabular-nums text-lime" aria-label={`Live score ${m.score}`}>
+                            {m.score}
+                          </span>
+                        )}
                       </li>
                     ))}
                     {matches.length > 3 && (
@@ -173,12 +181,18 @@ export default async function BetsPage({ searchParams }: { searchParams: Promise
   );
 }
 
+/** "2 : 1" for a match in play (kicked off, not over, scored), otherwise null. */
+function liveScore(f: { startsAt: Date; status: string; homeScore: number | null; awayScore: number | null }): string | null {
+  const inPlay = f.startsAt <= new Date() && f.status !== "FINISHED" && f.status !== "CANCELLED";
+  return inPlay && (f.homeScore !== null || f.awayScore !== null) ? `${f.homeScore ?? 0} : ${f.awayScore ?? 0}` : null;
+}
+
 function Summary({ label, value, sub, tone = "text-white" }: { label: string; value: string; sub: string; tone?: string }) {
   return (
     <div className="card p-4">
       <div className="text-xs font-medium text-fog-muted">{label}</div>
       <div className={`mt-1 font-display text-2xl font-extrabold tabular-nums ${tone}`}>{value}</div>
-      <div className="mt-0.5 truncate text-[11px] text-fog-muted">{sub}</div>
+      <div className="mt-0.5 text-[11px] leading-snug text-fog-muted">{sub}</div>
     </div>
   );
 }
