@@ -1,11 +1,15 @@
 import { useId } from "react";
+import Image from "next/image";
+import logoArt from "../../public/img/brand/888soccerbet-logo.png";
+
+/** Brand colours are fixed assets, not theme tokens: they must hold in any palette or email client. */
+const GREEN = "#3CDC3C";
 
 /**
- * Kingz Bet crown mark: a gold three-point crown with jewelled tips (centre jewel in the
- * brand lime) on a dark tile with a fine gold edge. Original brand asset; the same drawing
- * is used for the favicon (src/app/icon.svg).
+ * Square mark — the crown over a football on a dark tile — for places that need an icon
+ * (collapsed admin rail). The browser-tab favicon is the logo's own football (src/app/icon.png).
  */
-export function CrownMark({ size = 30, className = "" }: { size?: number; className?: string }) {
+export function BrandMark({ size = 30, className = "" }: { size?: number; className?: string }) {
   const id = useId().replace(/:/g, "");
   return (
     <svg width={size} height={size} viewBox="0 0 32 32" aria-hidden="true" className={`shrink-0 ${className}`}>
@@ -21,50 +25,33 @@ export function CrownMark({ size = 30, className = "" }: { size?: number; classN
         </linearGradient>
       </defs>
       <rect width="32" height="32" rx="9" fill={`url(#${id}t)`} />
-      <rect x=".5" y=".5" width="31" height="31" rx="8.5" fill="none" stroke="#F5C451" strokeOpacity=".45" />
-      {/* crown body and band */}
-      <path d="M7.5 21.2 6 11.2l5.6 4.3L16 7.8l4.4 7.7 5.6-4.3-1.5 10Z" fill={`url(#${id}g)`} />
-      <rect x="7.5" y="22.2" width="17" height="3" rx="1.2" fill={`url(#${id}g)`} />
-      {/* facet highlight */}
-      <path d="M16 7.8 11.6 15.5 7.5 12.4" fill="none" stroke="#FFF4CF" strokeOpacity=".55" strokeWidth=".7" strokeLinejoin="round" />
-      {/* jewels */}
-      <circle cx="6" cy="10.6" r="1.5" fill={`url(#${id}g)`} />
-      <circle cx="26" cy="10.6" r="1.5" fill={`url(#${id}g)`} />
-      <circle cx="16" cy="6.9" r="1.8" fill="#C6F24E" />
-      <circle cx="12" cy="23.7" r=".75" fill="#0B0F14" />
-      <circle cx="16" cy="23.7" r=".95" fill="#C6F24E" />
-      <circle cx="20" cy="23.7" r=".75" fill="#0B0F14" />
+      <rect x=".5" y=".5" width="31" height="31" rx="8.5" fill="none" stroke={GREEN} strokeOpacity=".45" />
+      <g fill={`url(#${id}g)`}>
+        <path d="M10.4 11.4 9.3 6.2l3.3 2.4L16 4.3l3.4 4.3 3.3-2.4-1.1 5.2Z" />
+        <rect x="10.3" y="12" width="11.4" height="1.9" rx=".8" />
+      </g>
+      <circle cx="9.3" cy="5.3" r="1.05" fill={`url(#${id}g)`} />
+      <circle cx="22.7" cy="5.3" r="1.05" fill={`url(#${id}g)`} />
+      <circle cx="16" cy="3.4" r="1.15" fill={`url(#${id}g)`} />
+      <circle cx="16" cy="21.2" r="6.8" fill="#FFFFFF" stroke="#0B0F14" strokeWidth=".9" />
+      <path d="M16 17.1l3.2 2.3-1.2 3.8h-4l-1.2-3.8z" fill="#0B0F14" />
+      <g stroke="#0B0F14" strokeWidth=".85" strokeLinecap="round">
+        <path d="M16 17.1v-2.6M12.8 19.4l-2.4-.8M19.2 19.4l2.4-.8M14 23.2l-1.5 2.2M18 23.2l1.5 2.2" />
+      </g>
     </svg>
   );
 }
 
-/**
- * "Kingz Bet" wordmark with a small gold crown sitting on the "z". The crown is sized in em,
- * so it scales with whatever font size the wordmark is set in.
- */
+/** "888SOCCERBET" wordmark — caps, with BET in the brand green, as in the lockup. */
 export function Wordmark() {
   return (
-    <span className="whitespace-nowrap">
-      King
-      <span className="relative inline-block">
-        z
-        <svg viewBox="0 0 24 16" aria-hidden className="pointer-events-none absolute -top-[0.34em] left-1/2 h-[0.42em] w-[0.6em] -translate-x-1/2 drop-shadow-[0_1px_1px_rgba(0,0,0,.35)]">
-          <path d="M2 14 1 4l6 4.5L12 1l5 7.5L23 4l-1 10Z" fill="#F5C451" stroke="#B9831A" strokeWidth="1" strokeLinejoin="round" />
-          <circle cx="12" cy="1.8" r="1.6" fill="#FFE7A3" />
-        </svg>
-      </span>
-      <span className="text-lime"> Bet</span>
+    <span className="whitespace-nowrap tracking-tight">
+      888SOCCER<span style={{ color: GREEN }}>BET</span>
     </span>
   );
 }
 
-export function Logo({ className = "" }: { className?: string }) {
-  return (
-    <span className={`inline-flex items-center gap-2 font-display font-extrabold tracking-tight ${className}`}>
-      <CrownMark />
-      <span className="text-[1.15rem] leading-none text-white">
-        <Wordmark />
-      </span>
-    </span>
-  );
+/** The supplied logo, cut out of its stadium artwork so it sits on any dark surface. */
+export function Logo({ className = "h-11" }: { className?: string }) {
+  return <Image src={logoArt} alt="888SoccerBet" width={168} height={90} className={`w-auto ${className}`} />;
 }

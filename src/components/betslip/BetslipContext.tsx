@@ -13,7 +13,7 @@ export interface Pick {
 }
 
 /** Window event that opens the betslip (drawer on mobile, focus on desktop). */
-export const OPEN_SLIP_EVENT = "kingzbet:open-slip";
+export const OPEN_SLIP_EVENT = "888soccerbet:open-slip";
 
 interface BetslipState {
   picks: Pick[];
@@ -33,7 +33,7 @@ interface BetslipState {
 }
 
 const Ctx = createContext<BetslipState | null>(null);
-const KEY = "stakra.betslip.v1";
+const KEY = "sb.betslip.v1";
 
 export function BetslipProvider({ minStake, bonus, children }: { minStake: number; bonus: BonusRules; children: React.ReactNode }) {
   const [picks, setPicks] = useState<Pick[]>([]);

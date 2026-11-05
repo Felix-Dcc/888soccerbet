@@ -5,7 +5,7 @@ import { PspError } from "../src/lib/providers/payments/types";
 
 const NOW = 1_800_000_000;
 const SECRET = "whsec_test123";
-const sp = () => new ShinobiPayProvider("sk_test_abc", SECRET, "https://api.shinobi.test", "https://kingzbet.live", () => NOW);
+const sp = () => new ShinobiPayProvider("sk_test_abc", SECRET, "https://api.shinobi.test", "https://888soccerbet.com", () => NOW);
 const reply = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status });
 function stubFetch(...replies: Response[]) {
   const f = vi.fn(async (..._args: unknown[]) => replies.shift() ?? reply({}, 500));

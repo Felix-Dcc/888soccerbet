@@ -54,7 +54,7 @@ export default async function PlayerPage({ params, searchParams }: { params: Pro
   const signals: { level: Level; text: string }[] = [
     p.status !== "ACTIVE" && { level: "critical" as Level, text: `Account ${p.status.toLowerCase()}` },
     p.selfExcludedUntil && p.selfExcludedUntil > now && { level: "warn" as Level, text: `Self-excluded until ${when(p.selfExcludedUntil)}` },
-    houseResult < 0n && { level: "warn" as Level, text: `Player is up ${ghs(-houseResult)} against the house` },
+    houseResult < 0n && { level: "warn" as Level, text: `User is up ${ghs(-houseResult)} against the house` },
     life.money.failed.count > 0 && { level: "warn" as Level, text: `${life.money.failed.count} failed payment${life.money.failed.count === 1 ? "" : "s"}` },
     life.money.withdrawals.total > life.money.deposits.total && { level: "idle" as Level, text: "Withdrawn more than deposited" },
     p.kycStatus === "PENDING" && { level: "idle" as Level, text: "Withdrawal verification awaiting review" },
@@ -63,7 +63,7 @@ export default async function PlayerPage({ params, searchParams }: { params: Pro
 
   return (
     <>
-      <header className="flex flex-wrap items-center gap-4 border-b border-white/[0.06] pb-4">
+      <header className="flex flex-wrap items-center gap-4 border-b border-line pb-4">
         <Avatar name={p.email} size="h-12 w-12 text-sm" />
         <div className="min-w-0 flex-1">
           <h1 className="truncate font-display text-[22px] font-bold text-white">{p.email}</h1>
@@ -82,7 +82,7 @@ export default async function PlayerPage({ params, searchParams }: { params: Pro
         <Figure label="Deposited" value={ghs(life.money.deposits.total)} note={`${life.money.deposits.count} payments`} />
         <Figure label="Withdrawn" value={ghs(life.money.withdrawals.total)} note={`${life.money.withdrawals.count} payments`} />
         <Figure label="Bets" value={life.betting.placed.count} note={settled ? `${Math.round((life.betting.won.count / settled) * 100)}% won` : "none settled"} />
-        <Figure label="House result" value={ghs(houseResult)} tone={houseResult < 0n ? "bad" : undefined} title="GGR from this player's bets (ledger)" />
+        <Figure label="House result" value={ghs(houseResult)} tone={houseResult < 0n ? "bad" : undefined} title="Gross revenue from this user's bets: what the house kept after paying their winnings (ledger)" />
       </Strip>
 
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_22rem]">
@@ -132,7 +132,7 @@ export default async function PlayerPage({ params, searchParams }: { params: Pro
                 ))}
               {history &&
                 (history.length === 0 ? (
-                  <EmptyState icon="audit" title="No staff actions on this player" />
+                  <EmptyState icon="audit" title="No staff actions on this user" />
                 ) : (
                   <Grid head={["When", "By", "Action", "Change"]} minWidth="40rem">
                     {history.map((h) => (
@@ -163,7 +163,7 @@ export default async function PlayerPage({ params, searchParams }: { params: Pro
                 <Light level="ok" /> Nothing unusual on record
               </p>
             ) : (
-              <ul className="divide-y divide-white/[0.05]">
+              <ul className="divide-y divide-line">
                 {signals.map((s) => (
                   <li key={s.text} className="flex items-start gap-3 px-4 py-2.5 text-sm text-white">
                     <span className="mt-1.5">

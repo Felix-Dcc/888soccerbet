@@ -2,9 +2,9 @@
 
 The reference (a Ghana-facing sportsbook) was inspected for **functionality only**. Its
 name, artwork, copy and page composition were not reused. Observed capabilities and how
-Kingz Bet implements each:
+888SoccerBet implements each:
 
-| Reference capability | Kingz Bet implementation | Status |
+| Reference capability | 888SoccerBet implementation | Status |
 |---|---|---|
 | Sports navigation (Soccer, etc.) | Sport catalogue (`Sport`), nav + filter chips | ✅ football, basketball |
 | Competition / fixture discovery | `Competition`, `Fixture`, home + live pages | ✅ |

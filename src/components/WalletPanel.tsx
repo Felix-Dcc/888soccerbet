@@ -5,6 +5,9 @@ import { useRouter } from "next/navigation";
 import { newId } from "@/lib/clientId";
 import { formatPesewas } from "@/lib/money";
 import { FLASH_KEY } from "@/components/FlashNotice";
+import { CopyButton } from "@/components/CopyButton";
+import { BrandMark, Logo } from "@/components/Logo";
+import { formatStamp } from "@/lib/time";
 import { NETWORKS, guessNetwork, type Network } from "@/lib/providers/payments/types";
 
 const NETWORK_LABEL: Record<Network, string> = { MTN: "MTN MoMo", TELECEL: "Telecel Cash", AIRTELTIGO: "AirtelTigo Money" };
@@ -54,7 +57,7 @@ export function WalletPanel({ minDepositGhs, isAdmin = false, verification }: { 
         : { ok: true, text: "Payment submitted. Your balance updates as soon as it's confirmed." },
     );
     window.history.replaceState(null, "", window.location.pathname);
-    window.dispatchEvent(new Event("stakra:refresh"));
+    window.dispatchEvent(new Event("sb:refresh"));
   }, []);
 
   const onNumber = (v: string) => {
@@ -81,7 +84,7 @@ export function WalletPanel({ minDepositGhs, isAdmin = false, verification }: { 
       const d = await res.json().catch(() => ({}));
       if (!res.ok) return setApproveNote(d.error ?? "Couldn't check right now. Try again in a moment.");
       if (d.status === "SUCCEEDED") {
-        window.dispatchEvent(new Event("stakra:refresh"));
+        window.dispatchEvent(new Event("sb:refresh"));
         if (d.purpose === "VERIFICATION") {
           // Held for review, not spendable: stay on the wallet and show the updated verification bar.
           setApproving(null);
@@ -129,7 +132,7 @@ export function WalletPanel({ minDepositGhs, isAdmin = false, verification }: { 
         setReview(false);
         setMsisdn("");
         setAccountName("");
-        window.dispatchEvent(new Event("stakra:refresh"));
+        window.dispatchEvent(new Event("sb:refresh"));
         router.refresh();
       }
     } else {
@@ -165,7 +168,7 @@ export function WalletPanel({ minDepositGhs, isAdmin = false, verification }: { 
     if (res.ok && d.webhook?.result === "processed") {
       setMsg({ ok: outcome === "SUCCEEDED", text: outcome === "SUCCEEDED" ? "Payment confirmed" : "Payment declined" });
       setPending(null);
-      window.dispatchEvent(new Event("stakra:refresh"));
+      window.dispatchEvent(new Event("sb:refresh"));
       router.refresh();
     } else {
       setMsg({ ok: false, text: "Already processed" });
@@ -223,7 +226,7 @@ export function WalletPanel({ minDepositGhs, isAdmin = false, verification }: { 
               "Checking with your network. This takes a few seconds."
             ) : (
               <>
-                GHS {approving.amount} to Kingz Bet. Enter your MoMo PIN on the prompt.
+                GHS {approving.amount} to 888SoccerBet. Enter your MoMo PIN on the prompt.
                 {approving.ussd && <> No prompt? Dial {approving.ussd}.</>}
               </>
             )}
@@ -386,10 +389,10 @@ function WithdrawalBanner({ info }: { info: { ref: string; amount: string } }) {
   return createPortal(
     <div className={`fixed inset-x-0 top-0 z-[80] flex justify-center px-3 pt-3 transition-transform duration-500 ease-out ${show ? "translate-y-0" : "-translate-y-[150%]"}`}>
       <div className="flex w-full max-w-sm items-start gap-3 rounded-2xl border border-line bg-ink-700/95 p-3 shadow-lift backdrop-blur">
-        <div className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-lime font-display text-lg font-bold text-lime-ink">K</div>
+        <BrandMark size={36} className="rounded-lg" />
         <div className="min-w-0 flex-1">
           <div className="flex items-baseline justify-between gap-2 text-xs">
-            <span className="font-bold text-white">Kingz Bet</span>
+            <span className="font-bold text-white">888SoccerBet</span>
             <span className="text-fog">now</span>
           </div>
           <p className="mt-0.5 text-sm leading-snug text-white">Withdrawal of GHS {info.amount} processed · Ref {info.ref}</p>
@@ -401,10 +404,12 @@ function WithdrawalBanner({ info }: { info: { ref: string; amount: string } }) {
 }
 
 /**
- * Withdrawal confirmation: the request went through and the money left the player's balance.
- * Payouts are sent by hand, so the copy says it is on the way, never that it has already landed.
+ * Withdrawal confirmation, laid out as a receipt: the logo on the brand header, a check badge,
+ * the amount, then where the payout stands and its details. Payouts are sent by hand, so the copy
+ * says it is on the way, never that it has already landed.
  */
 function WithdrawalSuccess({ info, onClose }: { info: { ref: string; amount: string; network: Network; msisdn: string }; onClose: () => void }) {
+  const [at] = useState(() => new Date());
   useEffect(() => {
     const prev = document.body.style.overflow;
     document.body.style.overflow = "hidden";
@@ -420,42 +425,108 @@ function WithdrawalSuccess({ info, onClose }: { info: { ref: string; amount: str
     };
   }, [onClose]);
 
+  const steps = [
+    { label: "Requested", done: true },
+    { label: "Balance debited", done: true },
+    { label: "Paid to MoMo", done: false },
+  ];
+
   return createPortal(
-    <div role="dialog" aria-modal="true" aria-labelledby="wdr-ok-title" className="fixed inset-0 z-[70] flex items-end justify-center sm:items-center">
-      <div className="fixed inset-0 animate-fade-in bg-[#04060A]/55 backdrop-blur-[4px]" onClick={onClose} />
-      <div className="relative z-10 w-full max-w-md animate-win-pop rounded-t-3xl border border-line bg-ink-700 p-6 pb-8 text-center text-white shadow-lift sm:rounded-3xl sm:p-8 motion-reduce:animate-none">
-        <button
-          onClick={onClose}
-          aria-label="Close"
-          className="absolute right-4 top-4 grid h-9 w-9 place-items-center rounded-full border border-line text-lg text-fog transition hover:bg-ink-600 hover:text-white"
-        >
-          ✕
-        </button>
-
-        <div className="mx-auto grid h-20 w-20 place-items-center rounded-full bg-lime/15">
-          <svg viewBox="0 0 24 24" className="h-10 w-10 text-lime" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-            <circle cx="12" cy="12" r="10" strokeWidth="1.5" />
-            <path d="M7.5 12.5l3 3 6-6.5" />
+    <div role="dialog" aria-modal="true" aria-labelledby="wdr-ok-title" className="fixed inset-0 z-[70] flex items-end justify-center sm:items-center sm:p-4">
+      <div className="fixed inset-0 animate-fade-in bg-[#04060A]/60 backdrop-blur-[4px]" onClick={onClose} />
+      <div className="relative z-10 max-h-[94vh] w-full max-w-md animate-win-pop overflow-y-auto rounded-t-3xl border border-line bg-ink-700 text-white shadow-lift sm:rounded-3xl motion-reduce:animate-none">
+        {/* receipt head: the logo on the night-pitch body, with its speed swoosh */}
+        <div className="theme-dark relative isolate flex h-32 items-start justify-center overflow-hidden bg-[linear-gradient(135deg,#17291F_0%,#0C130F_60%,#132219_100%)] pt-5">
+          <svg aria-hidden className="absolute inset-0 -z-10 h-full w-full" viewBox="0 0 400 128" preserveAspectRatio="none">
+            <path d="M90 128 Q230 30 420 10 Q262 66 150 128 Z" fill="#3CDC3C" opacity=".15" />
           </svg>
+          <Logo className="h-12" />
+          <button
+            onClick={onClose}
+            aria-label="Close"
+            className="absolute right-3 top-3 grid h-9 w-9 place-items-center rounded-full text-lg text-white/70 transition hover:bg-white/10 hover:text-white"
+          >
+            ✕
+          </button>
         </div>
 
-        <h2 id="wdr-ok-title" className="mt-5 font-display text-2xl font-bold">
-          Withdrawal successful
-        </h2>
-
-        <div className="mt-5 rounded-2xl border border-lime/30 bg-lime/[0.06] px-4 py-5">
-          <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-fog">Withdrawal amount</p>
-          <p className="mt-1 font-display text-4xl font-extrabold tabular-nums text-lime">GHS {info.amount}</p>
+        {/* check badge, overlapping the head */}
+        <div className="relative -mt-10 flex justify-center">
+          <span className="grid h-20 w-20 place-items-center rounded-full bg-lime text-lime-ink shadow-lift ring-[6px] ring-ink-700">
+            <svg viewBox="0 0 24 24" className="h-10 w-10" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+              <path d="M5 12.5l4.5 4.5L19 7.5" strokeDasharray="24" className="animate-draw motion-reduce:animate-none" />
+            </svg>
+          </span>
         </div>
 
-        <p className="mt-4 text-sm leading-relaxed text-fog">
-          On its way to your {NETWORK_LABEL[info.network]} number <span className="font-semibold text-white">{info.msisdn}</span>. It reaches your mobile money shortly.
-        </p>
-        <p className="mt-1 text-xs text-fog-muted">Reference {info.ref}</p>
+        <div className="px-6 pb-5 pt-4 text-center">
+          <h2 id="wdr-ok-title" className="font-display text-2xl font-extrabold tracking-tight">
+            Withdrawal successful
+          </h2>
+          <p className="mt-1 text-sm text-fog">Your request is in and the money is on its way.</p>
 
-        <button onClick={onClose} className="btn-lime mt-6 w-full py-3.5 text-base">
-          Done
-        </button>
+          <p className="mt-5 text-[11px] font-bold uppercase tracking-[0.2em] text-fog-muted">Amount</p>
+          <p className="mt-1 font-display text-[40px] font-extrabold leading-none tabular-nums text-gold">
+            <span className="mr-1.5 text-lg font-bold text-gold/80">GHS</span>
+            {info.amount}
+          </p>
+          <span className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-gold/15 px-3 py-1 text-xs font-bold text-gold">
+            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-gold motion-reduce:animate-none" aria-hidden />
+            Processing
+          </span>
+        </div>
+
+        {/* where the payout stands */}
+        <ol aria-label="Payout progress" className="mx-6 grid grid-cols-3 rounded-xl bg-ink-600 px-2 py-3">
+          {steps.map((s, i) => (
+            <li key={s.label} className="relative flex flex-col items-center gap-1.5 text-center">
+              {i > 0 && <span aria-hidden className={`absolute right-1/2 top-2.5 h-0.5 w-full ${s.done ? "bg-lime" : "bg-ink-400"}`} />}
+              <span className={`relative z-10 grid h-5 w-5 place-items-center rounded-full ${s.done ? "bg-lime text-lime-ink" : "border-2 border-gold bg-ink-600"}`}>
+                {s.done ? (
+                  <svg viewBox="0 0 24 24" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                    <path d="M5 12.5l4.5 4.5L19 7.5" />
+                  </svg>
+                ) : (
+                  <span className="h-1.5 w-1.5 rounded-full bg-gold" aria-hidden />
+                )}
+              </span>
+              <span className={`text-[11px] font-semibold leading-tight ${s.done ? "text-white" : "text-fog"}`}>
+                {s.label}
+                <span className="sr-only">{s.done ? " (done)" : " (in progress)"}</span>
+              </span>
+            </li>
+          ))}
+        </ol>
+
+        {/* tear line */}
+        <div aria-hidden className="mx-6 mt-5 border-t-2 border-dashed border-line" />
+
+        <dl className="divide-y divide-line px-6 py-2 text-sm">
+          <div className="flex items-center justify-between gap-4 py-2.5">
+            <dt className="shrink-0 text-fog-muted">Sent to</dt>
+            <dd className="min-w-0 truncate text-right font-semibold">
+              {NETWORK_LABEL[info.network]} · <span className="tabular-nums">{info.msisdn}</span>
+            </dd>
+          </div>
+          <div className="flex items-center justify-between gap-4 py-2.5">
+            <dt className="shrink-0 text-fog-muted">Reference</dt>
+            <dd className="flex min-w-0 items-center gap-2">
+              <span className="truncate font-mono font-semibold tracking-wide">{info.ref}</span>
+              <CopyButton text={info.ref} />
+            </dd>
+          </div>
+          <div className="flex items-center justify-between gap-4 py-2.5">
+            <dt className="shrink-0 text-fog-muted">Date</dt>
+            <dd className="font-semibold tabular-nums">{formatStamp(at)}</dd>
+          </div>
+        </dl>
+
+        <div className="px-6 pb-7 pt-2">
+          <button onClick={onClose} className="btn-lime w-full py-3.5 text-base">
+            Done
+          </button>
+          <p className="mt-3 text-center text-xs text-fog-muted">Keep the reference in case you need to contact support.</p>
+        </div>
       </div>
     </div>,
     document.body,

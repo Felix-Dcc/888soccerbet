@@ -37,7 +37,7 @@ export function OddsButton({ pick, label, className = "", idleClassName = "" }: 
       {label && <span className="max-w-full truncate px-1 text-[10px] font-semibold uppercase tracking-wide opacity-80">{label}</span>}
       <span className="odd-price text-sm font-bold tabular-nums">{formatMilliOdds(pick.milliOdds)}</span>
       {move && (
-        <span aria-hidden className={`absolute right-1 top-0.5 text-[9px] leading-none ${move === "up" ? "text-[#E9FFB8]" : "text-[#FFC2C2]"}`}>
+        <span aria-hidden className={`absolute right-1 top-0.5 text-[9px] leading-none ${move === "up" ? "text-teal" : "text-danger"}`}>
           {move === "up" ? "▲" : "▼"}
         </span>
       )}

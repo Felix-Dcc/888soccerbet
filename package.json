@@ -1,8 +1,8 @@
 {
-  "name": "kingzbet",
+  "name": "888soccerbet",
   "version": "0.1.0",
   "private": true,
-  "description": "Kingz Bet \u2014 sandbox sportsbook platform (not licensed for real-money operation)",
+  "description": "888SoccerBet — sandbox sportsbook platform (not licensed for real-money operation)",
   "scripts": {
     "dev": "next dev",
     "build": "prisma generate && next build",
@@ -23,6 +23,7 @@
   },
   "dependencies": {
     "@prisma/client": "6.3.1",
+    "lucide-react": "^1.64.0",
     "next": "15.1.11",
     "prisma": "6.3.1",
     "react": "19.0.0",

@@ -41,7 +41,7 @@ import { adminComparison, parseRange, scopeMetrics } from "../src/lib/adminAnaly
 import { adjustAdminBalance, adjustBalance, canViewPlayer } from "../src/lib/playerAdmin";
 import { audit, verifyAuditChain } from "../src/lib/audit";
 import { listFixtures, listResults, dataVersion } from "../src/lib/queries";
-import { applyMarkets, goLiveManualFixtures, syncFixtures, syncLiveOdds, updateLiveScores } from "../src/lib/sync";
+import { applyMarkets, goLiveManualFixtures, retireOrphanedFeedFixtures, settleRecentlyFinished, syncFixtures, syncLiveOdds, updateLiveScores } from "../src/lib/sync";
 import { createManualFixture, rescheduleManualFixture } from "../src/lib/manualFixtures";
 import { isTestAccount, planDemoCleanup, runDemoCleanup } from "../src/lib/demoCleanup";
 import { manualFixtureSchema } from "../src/lib/validation";
@@ -962,6 +962,44 @@ describe("feed refresh retires picks it stopped quoting", () => {
   });
 });
 
+describe("feed switch", () => {
+  it("retires the old feed's unbet matches, keeps bet ones and the new feed's, and does nothing on the fallback feed", async () => {
+    const user = await fundedUser(50);
+    const oldUnbet = (await makeMatch({ home: 2.0, away: 2.0 })).fixture;
+    const oldBet = await makeMatch({ home: 2.0, away: 2.0 });
+    const current = (await makeMatch({ home: 2.0, away: 2.0 })).fixture;
+    const sandboxUnbet = (await makeMatch({ home: 2.0, away: 2.0 })).fixture;
+    await prisma.fixture.update({ where: { id: oldUnbet.id }, data: { providerRef: `sdb-${randomUUID()}`, status: "LIVE" } });
+    await prisma.fixture.update({ where: { id: oldBet.fixture.id }, data: { providerRef: `sdb-${randomUUID()}` } });
+    await prisma.fixture.update({ where: { id: sandboxUnbet.id }, data: { providerRef: `sbx-${randomUUID()}` } });
+    await placeBet(user.id, { idempotencyKey: randomUUID(), stakeGhs: 5, acceptOddsChange: false, selections: [{ selectionId: oldBet.home.id, expectedMilliOdds: 2000 }] });
+    const status = async (id: string) => (await prisma.fixture.findUniqueOrThrow({ where: { id } })).status;
+
+    // Fallback (key missing): TheSportsDB is the feed in use, so nothing may be touched.
+    feed.override = { name: "thesportsdb" } as unknown as OddsProvider;
+    try {
+      expect(await retireOrphanedFeedFixtures()).toEqual({ retired: 0, kept: 0 });
+    } finally {
+      feed.override = null;
+    }
+    expect(await status(oldUnbet.id)).toBe("LIVE");
+
+    feed.override = { name: "theoddsapi" } as unknown as OddsProvider;
+    try {
+      const r = await retireOrphanedFeedFixtures();
+      expect(r.retired).toBeGreaterThanOrEqual(2);
+      expect(r.kept).toBeGreaterThanOrEqual(1);
+    } finally {
+      feed.override = null;
+    }
+    expect(await status(oldUnbet.id)).toBe("CANCELLED");
+    expect(await status(sandboxUnbet.id)).toBe("CANCELLED");
+    expect(await status(oldBet.fixture.id)).toBe("SCHEDULED"); // has a bet: left for an admin
+    expect(await status(current.id)).toBe("SCHEDULED"); // the live feed's own match
+    expect(await ledgerIsBalanced()).toBe(true);
+  });
+});
+
 describe("live scores", () => {
   it("settles a match that finished and dropped out of the in-play feed", async () => {
     const user = await fundedUser(100);
@@ -983,6 +1021,36 @@ describe("live scores", () => {
       feed.override = null;
     }
     expect(await prisma.fixture.findUniqueOrThrow({ where: { id: fixture.id } })).toMatchObject({ status: "FINISHED", homeScore: 2, awayScore: 1 });
+    expect(await userCashBalance(prisma, user.id)).toBe(toPesewas(110)); // home win paid
+    expect(await ledgerIsBalanced()).toBe(true);
+  });
+
+  it("settles soon after full time even while live scores sit at their credit reserve", async () => {
+    const user = await fundedUser(100);
+    const { fixture, home } = await makeMatch({ home: 2.0, draw: 3.0, away: 4.0 });
+    const early = await makeMatch({ home: 2.0, draw: 3.0, away: 4.0 });
+    await placeBet(user.id, { idempotencyKey: randomUUID(), stakeGhs: 10, acceptOddsChange: false, selections: [{ selectionId: home.id, expectedMilliOdds: 2000 }] });
+    const comp = await prisma.competition.create({ data: { sportKey: "football", name: `Results League ${randomUUID()}`, providerRef: "soccer_results_test" } });
+    // One kicked off 2h05m ago (first result check is due), one 1h40m ago (too early to check).
+    await prisma.fixture.update({ where: { id: fixture.id }, data: { competitionId: comp.id, status: "LIVE", startsAt: new Date(Date.now() - 125 * 60_000) } });
+    await prisma.fixture.update({ where: { id: early.fixture.id }, data: { competitionId: comp.id, status: "LIVE", startsAt: new Date(Date.now() - 100 * 60_000) } });
+
+    const asked: string[] = [];
+    const result = { providerRef: fixture.providerRef!, homeScore: 1, awayScore: 0, finished: true };
+    feed.override = {
+      fetchLiveScores: async () => [],
+      fetchResults: async (refs: string[]) => (asked.push(...refs), refs.includes(result.providerRef) ? [result] : []),
+      creditsRemaining: 10, // below LIVE_SCORES_RESERVE: live scores are paused
+    } as unknown as OddsProvider;
+    try {
+      expect(await updateLiveScores()).toMatchObject({ settled: 0, skipped: expect.stringContaining("credit reserve") });
+      expect(await settleRecentlyFinished(30 * 60_000)).toEqual({ checked: 1, settled: 1 });
+    } finally {
+      feed.override = null;
+    }
+    expect(asked).toEqual([fixture.providerRef]); // the too-early match cost nothing
+    expect(await prisma.fixture.findUniqueOrThrow({ where: { id: fixture.id } })).toMatchObject({ status: "FINISHED", homeScore: 1, awayScore: 0 });
+    expect((await prisma.fixture.findUniqueOrThrow({ where: { id: early.fixture.id } })).status).toBe("LIVE");
     expect(await userCashBalance(prisma, user.id)).toBe(toPesewas(110)); // home win paid
     expect(await ledgerIsBalanced()).toBe(true);
   });
@@ -1456,7 +1524,7 @@ describe("ticket verification codes", () => {
     const { fixture, home } = await makeMatch({ home: 2.0, draw: 3.0, away: 4.0 });
     const [a, b] = [await place(user.id, home.id), await place(user.id, home.id)];
     const rows = await prisma.bet.findMany({ where: { ref: { in: [a.ref, b.ref] } }, select: { ref: true, verifyCode: true } });
-    for (const r of rows) expect(r.verifyCode).toMatch(/^KB[ACDEFGHJKLMNPQRSTUVWXYZ2345679]{14}$/);
+    for (const r of rows) expect(r.verifyCode).toMatch(/^SB[ACDEFGHJKLMNPQRSTUVWXYZ2345679]{14}$/);
     expect(rows[0]!.verifyCode).not.toBe(rows[1]!.verifyCode);
 
     const code = rows[0]!.verifyCode!;
@@ -1464,7 +1532,7 @@ describe("ticket verification codes", () => {
     expect(await ticketByVerifyCode(code)).toBeNull(); // still running: nothing to verify yet
     await settleFixture(fixture.id, 1, 0);
     expect((await ticketByVerifyCode(typed))?.ref).toBe(rows[0]!.ref);
-    expect(await ticketByVerifyCode("KBNOTAREALCODE00")).toBeNull();
+    expect(await ticketByVerifyCode("SBNOTAREALCODE00")).toBeNull();
     expect(await ticketByVerifyCode("   ")).toBeNull();
   });
 
@@ -1637,7 +1705,7 @@ describe("responsible gambling on deposits", () => {
     await prisma.user.update({ where: { id: user.id }, data: { selfExcludedUntil: new Date(Date.now() + 86_400_000) } });
     await expect(deposit(user.id, 50)).rejects.toMatchObject({ code: "SELF_EXCLUDED" });
     await prisma.bet.create({
-      data: { ref: `KB-T${Date.now()}`, userId: user.id, type: "SINGLE", stake: 1n, combinedMilliOdds: 2000000, potentialPayout: toPesewas(2000), status: "WON", idempotencyKey: randomUUID() },
+      data: { ref: `SB-T${Date.now()}`, userId: user.id, type: "SINGLE", stake: 1n, combinedMilliOdds: 2000000, potentialPayout: toPesewas(2000), status: "WON", idempotencyKey: randomUUID() },
     }); // a big win, so verification applies
     await expect(initiateVerificationPayment(user.id, "0241234567", randomUUID())).rejects.toMatchObject({ code: "SELF_EXCLUDED" });
   });
@@ -1857,7 +1925,7 @@ describe("email", () => {
     const m = await makeMatch({ home: 2.0, draw: 3.0, away: 4.0 });
     await placeBet(p.id, { idempotencyKey: randomUUID(), stakeGhs: 10, acceptOddsChange: false, selections: [{ selectionId: m.home.id, expectedMilliOdds: 2000 }] });
     await settleFixture(m.fixture.id, 2, 0);
-    await vi.waitFor(() => expect(lastTo(p.email)?.subject).toBe("You won GHS 20.00 on Kingz Bet"));
+    await vi.waitFor(() => expect(lastTo(p.email)?.subject).toBe("You won GHS 20.00 on 888SoccerBet"));
     const intent = await initiateDeposit(p.id, 30, "0241234567", randomUUID());
     await processPaymentEvent("sandbox", { providerEventId: `evt_${randomUUID()}`, ourRef: intent.ref, status: "SUCCEEDED", amountPesewas: intent.amount });
     await vi.waitFor(() => expect(lastTo(p.email)?.subject).toBe("Deposit received: GHS 30.00"));

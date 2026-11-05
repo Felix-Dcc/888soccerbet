@@ -8,7 +8,7 @@ export function LogoutButton() {
     <button
       onClick={async () => {
         await fetch("/api/auth/logout", { method: "POST" });
-        window.dispatchEvent(new Event("stakra:refresh"));
+        window.dispatchEvent(new Event("sb:refresh"));
         router.push("/");
         router.refresh();
       }}

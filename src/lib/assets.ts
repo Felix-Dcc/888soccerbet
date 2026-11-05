@@ -28,9 +28,25 @@ const LEAGUE_IDS: Record<string, string> = {
   NBA: "4387",
 };
 
+/**
+ * Football clubs the name search can't find as the odds feed spells them, each checked by hand
+ * (right sport, country and league). Nottingham Forest only searches to the netball club, so it
+ * goes by id; the rest are the name TheSportsDB answers to.
+ */
+const TEAM_LOOKUPS: Record<string, string> = {
+  "Nottingham Forest": "lookupteam.php?id=133720",
+  Alavés: "searchteams.php?t=Deportivo%20Alaves",
+  "Deportivo La Coruña": "searchteams.php?t=Deportivo%20de%20A%20Coruna",
+  "Bodø/Glimt": "searchteams.php?t=Bodo%20Glimt",
+  "Sabah FK": "searchteams.php?t=Sabah%20Baku",
+  "Slavia Praha": "searchteams.php?t=Slavia%20Prague",
+  "Viking FK": "searchteams.php?t=Viking",
+  Lille: "searchteams.php?t=Lille%20OSC",
+};
+
 const MISS_RETRY_MS = 7 * 24 * 3600_000;
 const LEAGUE_RECHECK_MS = 30 * 24 * 3600_000;
-const SPACING_MS = 3000; // stays well under the free tier's per-minute limit (it answers 429 when exceeded)
+const SPACING_MS = 6000; // measured: 116 requests at this pace drew no 429s; 3s was refused after a handful
 
 /** The provider refused or failed: retry later. Never recorded as "team has no badge". */
 export class ProviderUnavailable extends Error {}
@@ -67,6 +83,21 @@ export function pickTeam(candidates: SdbTeam[], name: string, sportKey: string):
     return names.some((n) => normName(n) === want);
   });
   return hits.length === 1 ? hits[0]! : null;
+}
+
+const fixedLookup = (name: string, sportKey: string) => (sportKey === "football" ? TEAM_LOOKUPS[name] : undefined);
+
+/** The API paths to try for a team, in order. Second try with "FC" for football: the bare name sometimes hits another sport first. */
+export function teamRequests(name: string, sportKey: string): string[] {
+  const fixed = fixedLookup(name, sportKey);
+  if (fixed) return [fixed];
+  return (sportKey === "football" ? [name, `${name} FC`] : [name]).map((q) => `searchteams.php?t=${encodeURIComponent(q)}`);
+}
+
+/** pickTeam, except a hand-checked lookup needs only the right sport: its name differs by design. */
+export function matchTeam(candidates: SdbTeam[], name: string, sportKey: string): SdbTeam | null {
+  if (!fixedLookup(name, sportKey)) return pickTeam(candidates, name, sportKey);
+  return candidates.find((t) => t.strSport === SDB_SPORT[sportKey]) ?? null;
 }
 
 /** A parsed JSON answer, or ProviderUnavailable for 429s, timeouts, network errors and text notices. */
@@ -144,7 +175,8 @@ export async function enrichTeams(budget = 25): Promise<{ looked: number; found:
 
   const known = await prisma.teamAsset.findMany();
   const fresh = new Set(
-    known.filter((a) => a.status === "FOUND" || a.checkedAt > new Date(Date.now() - MISS_RETRY_MS)).map((a) => `${a.sportKey}|${a.name}`),
+    // A hand-checked club skips the weekly wait, so one recorded as a miss before it was added resolves now.
+    known.filter((a) => a.status === "FOUND" || (a.checkedAt > new Date(Date.now() - MISS_RETRY_MS) && !fixedLookup(a.name, a.sportKey))).map((a) => `${a.sportKey}|${a.name}`),
   );
   const todo = [...teams.entries()].filter(([k]) => !fresh.has(k)).map(([, v]) => v);
 
@@ -154,14 +186,12 @@ export async function enrichTeams(budget = 25): Promise<{ looked: number; found:
   let stopped: string | undefined;
   for (const t of todo.slice(0, budget)) {
     let team: SdbTeam | null = null;
-    // Second try with "FC" for football: the bare name sometimes hits another sport first.
-    const queries = t.sportKey === "football" ? [t.name, `${t.name} FC`] : [t.name];
     try {
-      for (const q of queries) {
-        const res = await sdb<{ teams?: SdbTeam[] | null }>(`searchteams.php?t=${encodeURIComponent(q)}`);
+      for (const path of teamRequests(t.name, t.sportKey)) {
+        const res = await sdb<{ teams?: SdbTeam[] | null }>(path);
         looked++;
         await sleep(SPACING_MS);
-        team = pickTeam(res.teams ?? [], t.name, t.sportKey);
+        team = matchTeam(res.teams ?? [], t.name, t.sportKey);
         if (team) break;
       }
     } catch (e) {

@@ -1,7 +1,7 @@
 import type { Config } from "tailwindcss";
 
 /**
- * Kingz Bet tokens. Colours are CSS variables (src/app/globals.css) so one class works in
+ * 888SoccerBet tokens. Colours are CSS variables (src/app/globals.css) so one class works in
  * both palettes: the site is light, and `.theme-dark` re-scopes a block (photo heroes) to the
  * dark palette. `white` is the foreground token, so `text-white` = main text colour.
  */
@@ -18,7 +18,7 @@ const config: Config = {
         line: v("line"),
         fog: { DEFAULT: v("fog"), muted: v("fog-muted") },
         lime: { DEFAULT: v("lime"), 600: v("lime-600"), ink: v("lime-ink") },
-        gold: { DEFAULT: "#F5C451", 600: "#E0AE35" },
+        gold: { DEFAULT: v("gold"), 600: v("gold-600"), ink: v("gold-ink") }, // the crown gold: value (odds, balance, bonuses)
         teal: { DEFAULT: v("teal"), 600: v("teal") },
         danger: v("danger"),
         warn: v("warn"),
@@ -33,14 +33,13 @@ const config: Config = {
       boxShadow: {
         card: "var(--shadow-card)",
         lift: "var(--shadow-lift)",
-        lime: "0 8px 24px -8px rgb(var(--lime) / .45)",
-        glow: "0 0 0 1px rgb(var(--lime) / .5), 0 0 18px -4px rgb(var(--lime) / .45)",
       },
       keyframes: {
         shimmer: { "100%": { transform: "translateX(100%)" } },
         pop: { "0%": { transform: "scale(1)" }, "40%": { transform: "scale(1.08)" }, "100%": { transform: "scale(1)" } },
         "slide-up": { from: { transform: "translateY(100%)" }, to: { transform: "translateY(0)" } },
         "fade-in": { from: { opacity: "0", transform: "translateY(4px)" }, to: { opacity: "1", transform: "none" } },
+        draw: { from: { strokeDashoffset: "24" }, to: { strokeDashoffset: "0" } }, // a stroke drawing itself in
         ping2: { "75%,100%": { transform: "scale(2.2)", opacity: "0" } },
         "win-pop": { "0%": { transform: "scale(.6)", opacity: "0" }, "60%": { transform: "scale(1.04)", opacity: "1" }, "100%": { transform: "scale(1)" } },
         "win-trophy": { "0%": { transform: "translateY(24px) scale(.7)", opacity: "0" }, "55%": { transform: "translateY(-6px) scale(1.06)", opacity: "1" }, "100%": { transform: "none" } },
@@ -52,6 +51,7 @@ const config: Config = {
         pop: "pop .25s ease-out",
         "slide-up": "slide-up .28s cubic-bezier(.2,.8,.2,1)",
         "fade-in": "fade-in .35s ease-out both",
+        draw: "draw .45s .3s ease-out both",
         ping2: "ping2 1.4s cubic-bezier(0,0,.2,1) infinite",
         "win-pop": "win-pop .45s cubic-bezier(.2,.8,.2,1) both",
         "win-trophy": "win-trophy .7s .15s cubic-bezier(.2,.8,.2,1) both",

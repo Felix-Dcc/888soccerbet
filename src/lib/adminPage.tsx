@@ -33,8 +33,9 @@ export async function adminPage(anyOf: (Permission | SuperAction)[] = []): Promi
 export const NAV: { href: string; label: string; icon: IconName; anyOf: (Permission | SuperAction)[] }[] = [
   { href: "/admin", label: "Command", icon: "command", anyOf: [] },
   { href: "/admin/referrals", label: "My referrals", icon: "referral", anyOf: ["referrals.view"] },
-  { href: "/admin/users", label: "Players", icon: "players", anyOf: ["users.view", "referrals.view", "referrals.view_all"] },
-  { href: "/admin/operations", label: "Trading desk", icon: "desk", anyOf: ["settlement.manage", "fixtures.manage", "verification.review", "odds.sync", "bets.view", "payments.payout"] },
+  { href: "/admin/users", label: "Users", icon: "players", anyOf: ["users.view", "referrals.view", "referrals.view_all"] },
+  { href: "/admin/operations", label: "Trading desk", icon: "desk", anyOf: ["settlement.manage", "verification.review", "odds.sync", "bets.view", "payments.payout"] },
+  { href: "/admin/games", label: "Create games", icon: "plus", anyOf: ["fixtures.manage"] },
   { href: "/admin/admins", label: "Team", icon: "team", anyOf: ["admins.view"] },
   { href: "/admin/roles", label: "Permissions", icon: "roles", anyOf: ["roles.manage"] },
   { href: "/admin/audit", label: "Audit trail", icon: "audit", anyOf: ["audit_logs.view"] },

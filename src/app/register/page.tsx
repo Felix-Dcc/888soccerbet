@@ -71,7 +71,7 @@ function RegisterForm() {
       });
       if (res.ok) {
         const d = await res.json().catch(() => ({}));
-        window.dispatchEvent(new Event("stakra:refresh"));
+        window.dispatchEvent(new Event("sb:refresh"));
         router.push(d.verify ? "/verify-email" : "/");
         router.refresh();
         return;
@@ -89,29 +89,45 @@ function RegisterForm() {
   }
 
   return (
-    <AuthShell title="Create account">
-      <ol className="mb-5 flex items-center gap-3 text-xs font-semibold" aria-label="Steps">
-        <li className={step === 1 ? "text-lime" : "text-fog"} aria-current={step === 1 ? "step" : undefined}>
-          1 Account
-        </li>
-        <li aria-hidden className="h-px flex-1 bg-line" />
-        <li className={step === 2 ? "text-lime" : "text-fog-muted"} aria-current={step === 2 ? "step" : undefined}>
-          2 Profile
-        </li>
-      </ol>
+    <AuthShell
+      title="Create your account"
+      subtitle="It takes about a minute. You must be 18 or older."
+      footer={
+        <>
+          Already have an account?{" "}
+          <Link href="/login" className="font-semibold text-lime hover:underline">
+            Log in
+          </Link>
+        </>
+      }
+    >
+      <div className="mb-6">
+        <div className="flex items-baseline justify-between text-xs">
+          <span className="font-semibold text-white">{step === 1 ? "Account details" : "Your profile"}</span>
+          <span className="text-fog-muted">Step {step} of 2</span>
+        </div>
+        <ol className="mt-2 grid grid-cols-2 gap-1.5" aria-label="Steps">
+          {[1, 2].map((n) => (
+            <li key={n} aria-current={step === n ? "step" : undefined} className={`h-1 rounded-full ${n <= step ? "bg-lime" : "bg-ink-600"}`}>
+              <span className="sr-only">Step {n}</span>
+            </li>
+          ))}
+        </ol>
+      </div>
 
-      <form onSubmit={step === 1 ? next : submit} className="space-y-4" noValidate>
+      <form onSubmit={step === 1 ? next : submit} className="space-y-5" noValidate>
         {err && <div role="alert" className="rounded-lg border border-danger/40 bg-danger/10 p-3 text-sm text-danger">{err}</div>}
 
         {step === 1 ? (
           <>
             <div>
               <label className="label" htmlFor="email">Email</label>
-              <input id="email" type="email" required autoComplete="email" className="input" value={form.email} onChange={onInput("email")} />
+              <input id="email" type="email" required autoComplete="email" placeholder="you@example.com" className="input" value={form.email} onChange={onInput("email")} />
             </div>
             <div>
               <label className="label" htmlFor="password">Password</label>
               <PasswordInput id="password" autoComplete="new-password" value={form.password} onChange={set("password")} />
+              <p className="mt-1.5 text-xs text-fog-muted">At least 8 characters.</p>
             </div>
             <div>
               <label className="label" htmlFor="confirmPassword">Confirm password</label>
@@ -127,7 +143,7 @@ function RegisterForm() {
             </div>
             <div>
               <label className="label" htmlFor="phone">Mobile number</label>
-              <input id="phone" type="tel" inputMode="tel" autoComplete="tel" required className="input" value={form.phone} onChange={onInput("phone")} />
+              <input id="phone" type="tel" inputMode="tel" autoComplete="tel" required placeholder="024 123 4567" className="input" value={form.phone} onChange={onInput("phone")} />
             </div>
             <div>
               <label className="label" htmlFor="dob">Date of birth</label>
@@ -168,10 +184,6 @@ function RegisterForm() {
             </div>
           </>
         )}
-
-        <Link href="/login" className="btn-ghost w-full py-3">
-          Log in
-        </Link>
       </form>
     </AuthShell>
   );

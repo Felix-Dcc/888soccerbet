@@ -26,7 +26,7 @@ export class ShinobiPayProvider implements PaymentProvider {
     private readonly secretKey: string,
     private readonly webhookSecret: string,
     private readonly apiUrl = (process.env.SHINOBI_API_URL || "https://akwapayapi.onrender.com").replace(/\/+$/, ""),
-    private readonly appUrl = (process.env.APP_URL || "https://kingzbet.live").replace(/\/+$/, ""),
+    private readonly appUrl = (process.env.APP_URL || "https://888soccerbet.com").replace(/\/+$/, ""),
     private readonly now = () => Math.floor(Date.now() / 1000),
   ) {
     this.isSandbox = secretKey.startsWith("sk_test_");
@@ -61,7 +61,7 @@ export class ShinobiPayProvider implements PaymentProvider {
         network: req.network, // MTN | TELECEL | AIRTELTIGO: the same codes as ours
         customer: { phone: req.msisdn, email: req.email },
         reference: req.ref,
-        description: "Kingz Bet deposit",
+        description: "888SoccerBet deposit",
         return_url: `${this.appUrl}/wallet`,
         metadata: { ref: req.ref },
       },

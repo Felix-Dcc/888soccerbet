@@ -40,7 +40,7 @@ export function Crest({ name, src, size = "sm" }: { name: string; src: string | 
       {showInitials && (
         <span
           aria-hidden
-          className={`${s.text} absolute inset-0 grid place-items-center rounded-full font-bold text-white/90 ring-1 ring-white/10`}
+          className={`${s.text} absolute inset-0 grid place-items-center rounded-full font-bold text-snow/90 ring-1 ring-black/10`}
           style={{ background: `linear-gradient(135deg, hsl(${hue(name)} 45% 32%), hsl(${(hue(name) + 40) % 360} 45% 20%))` }}
         >
           {initials(name)}

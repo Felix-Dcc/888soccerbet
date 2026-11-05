@@ -16,7 +16,7 @@ const legTime = new Intl.DateTimeFormat("en-GB", {
 });
 
 // Win green for indicators; the brand lime stays on buttons.
-const WIN = "text-[#33D17A]";
+const WIN = "text-teal";
 const STATUS: Record<string, { label: string; tone: string }> = {
   WON: { label: "Won", tone: WIN },
   LOST: { label: "Lost", tone: "text-[#FF6B6B]" },
@@ -63,7 +63,7 @@ function SettledTicket({ bet, verifyCode, owner }: { bet: Ticket; verifyCode: st
           </span>
         </div>
         <div className="mt-1 flex items-baseline justify-between gap-3">
-          <span className="text-sm text-fog">Total Kingz Bet Return</span>
+          <span className="text-sm text-fog">Total 888SoccerBet Return</span>
           <span className={`whitespace-nowrap font-display text-[28px] font-extrabold leading-tight tabular-nums ${won ? WIN : "text-white"}`}>
             <span className="mr-1 text-sm font-bold opacity-70">GHS</span>
             {amount}
@@ -138,7 +138,7 @@ function SettledTicket({ bet, verifyCode, owner }: { bet: Ticket; verifyCode: st
                   </div>
                 )}
                 <dl className="relative mt-3 grid grid-cols-[4.5rem_1fr] gap-x-3 gap-y-1 overflow-hidden rounded-md bg-white/[0.06] px-3 py-3 text-[15px]">
-                  {legWon && <Trophy className="pointer-events-none absolute right-3 top-1/2 h-14 w-14 -translate-y-1/2 text-[#33D17A]/15" />}
+                  {legWon && <Trophy className="pointer-events-none absolute right-3 top-1/2 h-14 w-14 -translate-y-1/2 text-teal/15" />}
                   <dt className="text-right text-fog">Pick</dt>
                   <dd className="flex min-w-0 items-center gap-1.5 font-semibold">
                     <span className="min-w-0">
@@ -183,7 +183,7 @@ function LegMark({ status }: { status: string }) {
   const base = "grid h-7 w-7 place-items-center rounded-full text-sm font-bold";
   if (status === "WON")
     return (
-      <span className={`${base} bg-[#33D17A] text-[#0B1A10]`} aria-label="Won">
+      <span className={`${base} bg-teal text-lime-ink`} aria-label="Won">
         ✓
       </span>
     );
@@ -222,7 +222,7 @@ function RunningTicket({ bet, cashout }: { bet: Ticket; cashout?: CashoutProps }
         </div>
         <div className="mt-3 flex items-center justify-between gap-3">
           <h2 className="font-display text-xl font-bold text-white">{bet.type === "ACCUMULATOR" ? "Multiple" : "Single"}</h2>
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-gold/15 px-2.5 py-1 text-xs font-bold uppercase tracking-wide text-[#8a6100]">
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-gold/15 px-2.5 py-1 text-xs font-bold uppercase tracking-wide text-gold">
             <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-gold" aria-hidden />
             Running
           </span>
@@ -291,7 +291,7 @@ function RunningTicket({ bet, cashout }: { bet: Ticket; cashout?: CashoutProps }
                 </Link>
                 <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
                   <span className="rounded-md bg-ink-600 px-2 py-0.5 font-semibold text-white">
-                    {leg.selectionName} <span className="tabular-nums text-lime">@{formatMilliOdds(leg.milliOddsAtPlacement)}</span>
+                    {leg.selectionName} <span className="tabular-nums text-gold">@{formatMilliOdds(leg.milliOddsAtPlacement)}</span>
                   </span>
                   <span className="text-fog">{leg.marketName}</span>
                 </div>
@@ -338,7 +338,7 @@ function RunningMark({ status, live }: { status: string; live: boolean }) {
   const base = "grid h-6 w-6 place-items-center rounded-full text-xs font-bold";
   if (status === "WON")
     return (
-      <span className={`${base} bg-lime text-lime-ink`} aria-label="Won">
+      <span className={`${base} bg-teal text-lime-ink`} aria-label="Won">
         ✓
       </span>
     );

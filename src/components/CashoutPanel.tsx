@@ -26,7 +26,7 @@ async function send(url: string, body?: object, method = "POST") {
   }
 }
 
-const gold = "btn h-11 w-full bg-gold text-sm font-bold text-black hover:bg-gold-600";
+const gold = "btn h-11 w-full bg-gold text-sm font-bold text-gold-ink hover:bg-gold-600";
 const ghost = "btn h-11 border border-line text-sm text-white hover:bg-ink-600";
 
 /**
@@ -74,7 +74,7 @@ export function CashoutPanel({
       key.current = newId();
       setMode("idle");
       setMsg({ ok: true, text: `Cashed out ${ghs(d.cashout.amount)}` });
-      window.dispatchEvent(new Event("stakra:refresh")); // header balance
+      window.dispatchEvent(new Event("sb:refresh")); // header balance
       router.refresh();
       return;
     }
@@ -115,7 +115,7 @@ export function CashoutPanel({
   }
 
   const note = msg && (
-    <p role="status" className={`mt-2 text-center text-sm font-medium ${msg.ok ? "text-lime" : "text-[#8a6100]"}`}>
+    <p role="status" className={`mt-2 text-center text-sm font-medium ${msg.ok ? "text-lime" : "text-warn"}`}>
       {msg.text}
     </p>
   );

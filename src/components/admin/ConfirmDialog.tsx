@@ -45,7 +45,9 @@ export function ConfirmDialog({
   if (!open) return null;
   // Portalled to <body>: callers render this inside their own <form>, and forms can't nest.
   return createPortal(
-    <div role="dialog" aria-modal="true" aria-labelledby="confirm-title" className="fixed inset-0 z-[80] grid place-items-center p-4">
+    // `admin-shell` re-applies the console's palette: this is portalled to <body>, outside the
+    // shell, so without it the dialog would inherit the player site's tokens and ignore the theme.
+    <div role="dialog" aria-modal="true" aria-labelledby="confirm-title" className="admin-shell fixed inset-0 z-[80] grid place-items-center p-4">
       <div className="absolute inset-0 bg-black/60" onClick={() => !busy && onClose()} />
       <form
         className="card relative w-full max-w-md space-y-4 p-5"

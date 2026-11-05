@@ -66,7 +66,7 @@ export default async function AdminDashboard({ searchParams }: { searchParams: P
 
   return (
     <>
-      <Head title="Command center">
+      <Head title="Command center" description="Users, money and betting across 888SoccerBet at a glance.">
         <Range path="/admin" current={range.key} />
         {can(u, "reports.export") && (
           <details className="relative">
@@ -74,10 +74,10 @@ export default async function AdminDashboard({ searchParams }: { searchParams: P
               <Icon name="download" />
               Export
             </summary>
-            <div className="absolute right-0 z-20 mt-1 w-44 rounded-md border border-white/[0.09] bg-[#121820] p-1 shadow-lift">
+            <div className="absolute right-0 z-20 mt-1 w-48 rounded-xl border border-line bg-ink-700 p-1.5 shadow-lift">
               {(["players", "bets", "payments", ...(can(u, "admins.view") ? ["admins"] : [])] as const).map((k) => (
-                <a key={k} href={`/api/admin/export?kind=${k}&range=${range.key}`} className="block rounded px-3 py-2 text-sm capitalize text-white hover:bg-white/[0.06]">
-                  {k} (CSV)
+                <a key={k} href={`/api/admin/export?kind=${k}&range=${range.key}`} className="block rounded-lg px-3 py-2 text-sm capitalize text-white hover:bg-ink-500">
+                  {k === "players" ? "users" : k} (CSV)
                 </a>
               ))}
             </div>
@@ -87,49 +87,8 @@ export default async function AdminDashboard({ searchParams }: { searchParams: P
 
       {health && <StatusRail alerts={health.alerts} lastSync={ago(health.lastSync)} />}
 
-      <div className="grid gap-5 xl:grid-cols-[minmax(0,1.45fr)_minmax(0,1fr)]">
-        <Panel title="House result" icon="coins">
-          <GgrBreakdown m={m} prev={prev} spark={series.map((p) => num(p.ggr))} />
-        </Panel>
-        <Panel title="Cash position" icon="coins">
-          <dl className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
-            <div>
-              <dt className="text-fog">Deposits</dt>
-              <dd className="font-display text-lg font-bold tabular-nums text-white">{ghs(m.money.deposits.total)}</dd>
-              <dd className="flex gap-2 text-xs text-fog">
-                <Delta cur={m.money.deposits.total} prev={prev?.money.deposits.total ?? null} /> {m.money.deposits.count} payments
-              </dd>
-            </div>
-            <div>
-              <dt className="text-fog">Withdrawals</dt>
-              <dd className="font-display text-lg font-bold tabular-nums text-white">{ghs(m.money.withdrawals.total)}</dd>
-              <dd className="flex gap-2 text-xs text-fog">
-                <Delta cur={m.money.withdrawals.total} prev={prev?.money.withdrawals.total ?? null} invert /> {m.money.withdrawals.count} payments
-              </dd>
-            </div>
-            <div className="col-span-2 flex items-baseline justify-between border-t border-white/[0.06] pt-3">
-              <dt className="text-fog">Net cash flow</dt>
-              <dd className={`font-display text-lg font-bold tabular-nums ${net < 0n ? "text-[#FF7A7A]" : "text-white"}`}>{ghs(net)}</dd>
-            </div>
-          </dl>
-          <div className="mt-4 border-t border-white/[0.06] pt-3">
-            <div className="mb-2 flex items-baseline justify-between text-sm">
-              <span className="text-fog">Owed to players now</span>
-              <span className="font-display font-bold tabular-nums text-white">{ghs(liab.total)}</span>
-            </div>
-            <Stack
-              parts={[
-                { label: "Balances", value: num(liab.cash), color: "#3B82F6", display: ghsShort(liab.cash) },
-                { label: "Open stakes", value: num(liab.escrow), color: "#F5C451", display: ghsShort(liab.escrow) },
-                { label: "Verification held", value: num(liab.held), color: "#8B95A5", display: ghsShort(liab.held) },
-              ]}
-            />
-          </div>
-        </Panel>
-      </div>
-
       <Strip>
-        <Figure label="New players" value={m.players.newInRange} delta={<Delta cur={m.players.newInRange} prev={prev?.players.newInRange ?? null} />} note={`${m.players.total} total`} />
+        <Figure label="New users" value={m.players.newInRange} delta={<Delta cur={m.players.newInRange} prev={prev?.players.newInRange ?? null} />} note={`${m.players.total} total`} />
         <Figure label="Active bettors" value={m.players.activeBettors} delta={<Delta cur={m.players.activeBettors} prev={prev?.players.activeBettors ?? null} />} />
         <Figure label="Depositors" value={m.players.depositors} delta={<Delta cur={m.players.depositors} prev={prev?.players.depositors ?? null} />} />
         <Figure label="Bets placed" value={m.betting.placed.count} delta={<Delta cur={m.betting.placed.count} prev={prev?.betting.placed.count ?? null} />} />
@@ -137,7 +96,48 @@ export default async function AdminDashboard({ searchParams }: { searchParams: P
         <Figure label="Open bets" value={m.betting.open.count} note={ghsShort(m.betting.open.stakes)} />
       </Strip>
 
-      <div className="grid gap-5 xl:grid-cols-[minmax(0,1.7fr)_minmax(0,1fr)]">
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1.45fr)_minmax(0,1fr)]">
+        <Panel title="House result" icon="coins">
+          <GgrBreakdown m={m} prev={prev} spark={series.map((p) => num(p.ggr))} />
+        </Panel>
+        <Panel title="Cash position" icon="coins">
+          <dl className="grid grid-cols-2 gap-x-4 gap-y-4 text-sm">
+            <div>
+              <dt className="text-fog">Deposits</dt>
+              <dd className="mt-1 font-display text-2xl font-bold tracking-tight tabular-nums text-white">{ghs(m.money.deposits.total)}</dd>
+              <dd className="mt-2 flex items-center gap-2 text-xs text-fog">
+                <Delta cur={m.money.deposits.total} prev={prev?.money.deposits.total ?? null} /> {m.money.deposits.count} payments
+              </dd>
+            </div>
+            <div>
+              <dt className="text-fog">Withdrawals</dt>
+              <dd className="mt-1 font-display text-2xl font-bold tracking-tight tabular-nums text-white">{ghs(m.money.withdrawals.total)}</dd>
+              <dd className="mt-2 flex items-center gap-2 text-xs text-fog">
+                <Delta cur={m.money.withdrawals.total} prev={prev?.money.withdrawals.total ?? null} invert /> {m.money.withdrawals.count} payments
+              </dd>
+            </div>
+            <div className="col-span-2 flex items-baseline justify-between border-t border-line pt-4">
+              <dt className="text-fog">Net cash flow</dt>
+              <dd className={`font-display text-lg font-bold tabular-nums ${net < 0n ? "text-danger" : "text-white"}`}>{ghs(net)}</dd>
+            </div>
+          </dl>
+          <div className="mt-4 border-t border-line pt-4">
+            <div className="mb-2 flex items-baseline justify-between text-sm">
+              <span className="text-fog">Owed to users now</span>
+              <span className="font-display font-bold tabular-nums text-white">{ghs(liab.total)}</span>
+            </div>
+            <Stack
+              parts={[
+                { label: "Balances", value: num(liab.cash), color: "rgb(var(--lime))", display: ghsShort(liab.cash) },
+                { label: "Open stakes", value: num(liab.escrow), color: "rgb(var(--warn))", display: ghsShort(liab.escrow) },
+                { label: "Verification held", value: num(liab.held), color: "rgb(var(--fog))", display: ghsShort(liab.held) },
+              ]}
+            />
+          </div>
+        </Panel>
+      </div>
+
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1.7fr)_minmax(0,1fr)]">
         <Panel title="Trend" icon="system">
           <TrendChart points={series.map((p) => ({ bucket: p.bucket, registrations: p.registrations, deposits: num(p.deposits), withdrawals: num(p.withdrawals), stakes: num(p.stakes), ggr: num(p.ggr) }))} />
         </Panel>
@@ -145,10 +145,10 @@ export default async function AdminDashboard({ searchParams }: { searchParams: P
           {attention.length === 0 ? (
             <EmptyState icon="check" title="Nothing waiting" />
           ) : (
-            <ul className="divide-y divide-white/[0.05]">
+            <ul className="divide-y divide-line">
               {attention.map((a) => (
                 <li key={a.key}>
-                  <Link href={a.href} className="flex items-start gap-3 px-4 py-3 text-sm hover:bg-white/[0.03]">
+                  <Link href={a.href} className="flex items-start gap-3 px-5 py-3.5 text-sm transition-colors hover:bg-ink-600">
                     <span className="mt-1.5">
                       <Light level={a.level} />
                     </span>
@@ -162,17 +162,17 @@ export default async function AdminDashboard({ searchParams }: { searchParams: P
         </Panel>
       </div>
 
-      <div className="grid gap-5 lg:grid-cols-3">
+      <div className="grid gap-6 lg:grid-cols-3">
         <Panel title="Settled bets" icon="ticket">
           <Stack
             parts={[
-              { label: "Won", value: m.betting.won.count, color: "#22C55E" },
-              { label: "Lost", value: m.betting.lost.count, color: "#FF5A5F" },
-              { label: "Void", value: m.betting.void.count, color: "#8B95A5" },
-              { label: "Cash outs", value: m.betting.cashouts.count, color: "#F5C451" },
+              { label: "Won", value: m.betting.won.count, color: "rgb(var(--teal))" },
+              { label: "Lost", value: m.betting.lost.count, color: "rgb(var(--danger))" },
+              { label: "Void", value: m.betting.void.count, color: "rgb(var(--fog))" },
+              { label: "Cash outs", value: m.betting.cashouts.count, color: "rgb(var(--warn))" },
             ]}
           />
-          <dl className="mt-4 space-y-1.5 border-t border-white/[0.06] pt-3 text-sm">
+          <dl className="mt-4 space-y-1.5 border-t border-line pt-3 text-sm">
             <div className="flex justify-between">
               <dt className="text-fog">Winnings paid</dt>
               <dd className="tabular-nums text-white">{ghs(m.betting.won.paid)}</dd>
@@ -187,7 +187,7 @@ export default async function AdminDashboard({ searchParams }: { searchParams: P
             </div>
           </dl>
         </Panel>
-        <Panel title="Where players bet" icon="ticket">
+        <Panel title="Where users bet" icon="ticket">
           <BarList rows={comps.map((c) => ({ key: c.id, label: c.name, value: c.legs, display: `${c.legs} sel · ${c.bets} bets` }))} empty="No bets in this range" />
         </Panel>
         {admins ? (
@@ -196,8 +196,8 @@ export default async function AdminDashboard({ searchParams }: { searchParams: P
               rows={[...admins]
                 .sort((a, b) => b.metrics.players.total - a.metrics.players.total)
                 .slice(0, 6)
-                .map((a) => ({ key: a.id, label: a.displayName ?? a.email, value: a.metrics.players.total, display: `${a.metrics.players.total} players · ${ghsShort(a.metrics.revenue.ggr)}`, href: `/admin/admins/${a.id}` }))}
-              color="#C6F24E"
+                .map((a) => ({ key: a.id, label: a.displayName ?? a.email, value: a.metrics.players.total, display: `${a.metrics.players.total} users · ${ghsShort(a.metrics.revenue.ggr)} revenue`, href: `/admin/admins/${a.id}` }))}
+              color="rgb(var(--lime))"
               empty="No administrators"
             />
           </Panel>
@@ -205,24 +205,24 @@ export default async function AdminDashboard({ searchParams }: { searchParams: P
           <Panel title="Payments" icon="coins">
             <Stack
               parts={[
-                { label: "Pending", value: m.money.pending.count, color: "#F5C451" },
-                { label: "Failed", value: m.money.failed.count, color: "#FF5A5F" },
+                { label: "Pending", value: m.money.pending.count, color: "rgb(var(--warn))" },
+                { label: "Failed", value: m.money.failed.count, color: "rgb(var(--danger))" },
               ]}
             />
           </Panel>
         )}
       </div>
 
-      <div className="grid gap-5 xl:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)]">
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)]">
         <Panel title="Live activity" icon="clock" flush>
           <ActivityFeed items={activity.map((a) => ({ at: a.at.toISOString(), kind: a.kind, text: a.text, href: a.href && can(u, a.kind === "admin" ? "audit_logs.view" : "users.view") ? a.href : undefined }))} />
         </Panel>
         {top && (
-          <Panel title="Top players by stake" icon="players" flush>
+          <Panel title="Top users by stake" icon="players" flush>
             {top.length === 0 ? (
               <EmptyState icon="players" title="No bets in this range" />
             ) : (
-              <Grid head={["Player", "Bets", "Staked"]} right={[1, 2]} minWidth="22rem">
+              <Grid head={["User", "Bets", "Staked"]} right={[1, 2]} minWidth="22rem">
                 {top.map((p, i) => (
                   <tr key={p.id}>
                     <td className={td}>

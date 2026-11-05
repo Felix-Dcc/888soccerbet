@@ -17,6 +17,14 @@ export function kickoffDay(iso: string, now: Date = new Date()): string {
 export const kickoffTime = (iso: string) => timeFmt.format(new Date(iso));
 export const kickoffLong = (iso: string) => longFmt.format(new Date(iso));
 
+const shortDate = new Intl.DateTimeFormat("en-GB", { timeZone: TZ, day: "2-digit", month: "2-digit" });
+/** "31/10" — the compact kick-off date under the time on a match card. */
+export const kickoffShortDate = (iso: string) => shortDate.format(new Date(iso));
+
+const monthYearFmt = new Intl.DateTimeFormat("en-GB", { timeZone: TZ, month: "2-digit", year: "2-digit" });
+/** "10/26" — month/year, as printed on a card. */
+export const monthYear = (d: Date) => monthYearFmt.format(d);
+
 const stampDate = new Intl.DateTimeFormat("en-GB", { timeZone: TZ, day: "2-digit", month: "2-digit", year: "numeric" });
 /** "24/10/2026 00:42" — when a slip was booked. */
 export const formatStamp = (d: Date) => `${stampDate.format(d)} ${timeFmt.format(d)}`;

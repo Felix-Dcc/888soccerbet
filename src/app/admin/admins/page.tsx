@@ -5,11 +5,11 @@ import { can, PERMISSIONS } from "@/lib/permissions";
 import { adminComparison, parseRange } from "@/lib/adminAnalytics";
 import { formatReferralCode } from "@/lib/admins";
 import { CreateAdminForm } from "@/components/admin/AdminForms";
-import { Avatar, Figure, Grid, Head, Icon, Light, Panel, Pill, Range, Strip, ago, btnGhost, ghs, ghsShort, td, tdNum } from "@/components/admin/kit";
+import { Avatar, Figure, Grid, Head, Icon, Light, Panel, Pill, Range, Strip, TERMS, ago, btnGhost, ghs, ghsShort, td, tdNum } from "@/components/admin/kit";
 
 export const dynamic = "force-dynamic";
 
-const SORTS = { players: "Players", ggr: "GGR", deposits: "Deposits", login: "Last login" } as const;
+const SORTS = { players: "Users", ggr: "Gross revenue", deposits: "Deposits", login: "Last login" } as const;
 type Sort = keyof typeof SORTS;
 
 /** The team: every administrator's access and referral performance; super admins add people here. */
@@ -46,13 +46,13 @@ export default async function TeamPage({ searchParams }: { searchParams: Promise
 
       <Strip cols="grid-cols-2 md:grid-cols-4">
         <Figure label="Administrators" value={rows.length} note={`${rows.filter((a) => a.status === "ACTIVE").length} active · ${rows.filter((a) => a.role === "SUPER_ADMIN").length} super`} />
-        <Figure label="Players via admins" value={referred} note={`of ${players} players`} />
-        <Figure label="Direct or player-referred" value={players - referred} title="Players not attributed to any administrator" />
-        <Figure label="GGR via admins" value={ghsShort(rows.reduce((n, a) => n + a.metrics.revenue.ggr, 0n))} note="selected range" />
+        <Figure label="Users via admins" value={referred} note={`of ${players} users`} />
+        <Figure label="Direct or user-referred" value={players - referred} title="Users not attributed to any administrator" />
+        <Figure label="Gross revenue via admins" title={TERMS.gross} value={ghsShort(rows.reduce((n, a) => n + a.metrics.revenue.ggr, 0n))} note="selected range" />
       </Strip>
 
       {can(u, "admins.manage") && (
-        <details className="group rounded-md border border-white/[0.07] bg-[#10151C]" open={sp.add === "1"}>
+        <details className="group rounded-2xl border border-line bg-ink-700 shadow-card" open={sp.add === "1"}>
           <summary className="flex cursor-pointer list-none items-center justify-between px-4 py-3 text-[13px] font-semibold uppercase tracking-[0.08em] text-fog [&::-webkit-details-marker]:hidden">
             <span className="flex items-center gap-2">
               <Icon name="plus" className="h-4 w-4 text-lime" />
@@ -60,7 +60,7 @@ export default async function TeamPage({ searchParams }: { searchParams: Promise
             </span>
             <Icon name="chevron" className="h-4 w-4 transition group-open:rotate-90" />
           </summary>
-          <div className="border-t border-white/[0.06] p-4">
+          <div className="border-t border-line p-4">
             <CreateAdminForm perms={Object.entries(PERMISSIONS).map(([key, label]) => ({ key, label }))} roles={roles} />
           </div>
         </details>
@@ -74,14 +74,14 @@ export default async function TeamPage({ searchParams }: { searchParams: Promise
           <nav aria-label="Sort" className="flex items-center gap-1 text-xs">
             <span className="text-fog">Sort</span>
             {(Object.keys(SORTS) as Sort[]).map((s) => (
-              <Link key={s} href={sortHref(s)} aria-current={s === sort ? "true" : undefined} className={`rounded px-2 py-1 font-semibold ${s === sort ? "bg-white/[0.09] text-white" : "text-fog hover:text-white"}`}>
+              <Link key={s} href={sortHref(s)} aria-current={s === sort ? "true" : undefined} className={`rounded px-2 py-1 font-semibold ${s === sort ? "bg-ink-500 text-white" : "text-fog hover:text-white"}`}>
                 {SORTS[s]}
               </Link>
             ))}
           </nav>
         }
       >
-        <Grid head={["Administrator", "Access", "Code", "Players", "New", "Deposits", "Stakes", "GGR", "Last login"]} right={[4, 5, 6, 7]} minWidth="68rem">
+        <Grid head={["Administrator", "Access", "Code", "Users", "New", "Deposits", "Stakes", "Gross revenue", "Last login"]} right={[4, 5, 6, 7]} minWidth="68rem">
           {sorted.map((a) => (
             <tr key={a.id}>
               <td className={td}>
@@ -100,7 +100,7 @@ export default async function TeamPage({ searchParams }: { searchParams: Promise
               <td className={`${td} font-mono text-xs text-fog`}>{formatReferralCode(a.referralCode, true)}</td>
               <td className={td}>
                 <div className="flex items-center gap-2">
-                  <span className="h-1.5 w-16 overflow-hidden rounded-full bg-white/[0.06]">
+                  <span className="h-1.5 w-16 overflow-hidden rounded-full bg-ink-500">
                     <span className="block h-full rounded-full bg-lime" style={{ width: `${(a.metrics.players.total / maxPlayers) * 100}%` }} />
                   </span>
                   <span className="tabular-nums text-white">{a.metrics.players.total}</span>
@@ -109,7 +109,7 @@ export default async function TeamPage({ searchParams }: { searchParams: Promise
               <td className={`${tdNum} text-fog`}>{a.metrics.players.newInRange}</td>
               <td className={`${tdNum} text-white`}>{ghs(a.metrics.money.deposits.total)}</td>
               <td className={`${tdNum} text-white`}>{ghs(a.metrics.betting.placed.stakes)}</td>
-              <td className={`${tdNum} ${a.metrics.revenue.ggr < 0n ? "text-[#FF7A7A]" : "text-white"}`}>{ghs(a.metrics.revenue.ggr)}</td>
+              <td className={`${tdNum} ${a.metrics.revenue.ggr < 0n ? "text-danger" : "text-white"}`}>{ghs(a.metrics.revenue.ggr)}</td>
               <td className={`${td} whitespace-nowrap text-fog`}>{ago(a.lastLoginAt)}</td>
             </tr>
           ))}

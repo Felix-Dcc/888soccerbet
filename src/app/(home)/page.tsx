@@ -1,19 +1,32 @@
+import Image, { type StaticImageData } from "next/image";
 import Link from "next/link";
 import { BallOrbit } from "@/components/BallOrbit";
-import { START_FILTERS, competitionRank, listCompetitions, listFixtures, listSports, parseStartFilter, type UiFixture } from "@/lib/queries";
-import { photos } from "@/lib/photos";
+import { START_FILTERS, competitionRank, listCompetitions, listFixtures, parseStartFilter, type UiFixture } from "@/lib/queries";
 import { MatchTable } from "@/components/MatchTable";
-import { FeaturedMatch } from "@/components/FeaturedMatch";
 import { CompetitionStrip } from "@/components/CompetitionStrip";
 import { HeroCarousel } from "@/components/HeroCarousel";
-import { PromoSlide, bannerCtaClass } from "@/components/PromoSlide";
-import { OpenSlipButton } from "@/components/OpenSlipButton";
-import { SportTiles } from "@/components/SportTiles";
 import { TopMatches } from "@/components/TopMatches";
 import { SportIcon } from "@/components/SportIcon";
 import { Crest } from "@/components/Crest";
+import banner1 from "../../../public/img/banners/banner-1.jpg";
+import banner2 from "../../../public/img/banners/banner-2.jpg";
+import banner3 from "../../../public/img/banners/banner-3.jpg";
+import banner4 from "../../../public/img/banners/banner-4.jpg";
+import banner5 from "../../../public/img/banners/banner-5.jpg";
+import banner6 from "../../../public/img/banners/banner-6.jpg";
 
 export const dynamic = "force-dynamic";
+
+/** Home banners, all exactly 3:1 (1560x520) so they fill the slider without cropping. */
+const BANNERS: { src: StaticImageData; label: string; href?: string }[] = [
+  { src: banner1, label: "888SoccerBet: play bigger, bet smarter, win more" },
+  { src: banner2, label: "Win GHS 15,000: register now", href: "/register" },
+  { src: banner3, label: "Keep winning with 888SoccerBet: register now", href: "/register" },
+  // "Bet now" banners jump to the match list further down this page.
+  { src: banner4, label: "Bigger odds, bigger wins: bet now", href: "/#all-matches" },
+  { src: banner5, label: "Global football, bigger opportunities: bet now", href: "/#all-matches" },
+  { src: banner6, label: "Bet bigger, win bigger: bet now", href: "/#all-matches" },
+];
 
 const hasMainMarket = (f: UiFixture) => f.markets.some((m) => (m.type === "MATCH_RESULT" || m.type === "MONEYLINE") && m.status === "OPEN");
 const upcoming = (f: UiFixture, now: number) => f.bettable && new Date(f.startsAt).getTime() > now && hasMainMarket(f);
@@ -26,55 +39,15 @@ const byPrestige = (a: UiFixture, b: UiFixture) =>
 export default async function HomePage({ searchParams }: { searchParams: Promise<{ sport?: string; comp?: string; q?: string; hours?: string }> }) {
   const { sport, comp, q, hours: rawHours } = await searchParams;
   const hours = parseStartFilter(rawHours);
-  const [sports, competitions, fixtures] = await Promise.all([
-    listSports(),
+  const [competitions, fixtures] = await Promise.all([
     listCompetitions(),
     listFixtures({ sportKey: sport, competitionId: comp, q, withinHours: hours }),
   ]);
   const now = Date.now();
   const rankOf = Object.fromEntries(competitions.map((c) => [c.name, competitionRank(c.name)]));
   const ranked = fixtures.filter((f) => upcoming(f, now)).sort(byPrestige);
-  const featured = q ? [] : ranked.slice(0, 3); // headline matches get hero banners
   const activeComp = competitions.find((c) => c.id === comp);
   const unfiltered = !q && !sport && !comp && !hours;
-
-  const perSport = new Map<string, number>();
-  for (const c of competitions) perSport.set(c.sportKey, (perSport.get(c.sportKey) ?? 0) + c.count);
-  const sportTiles = sports.map((s) => ({ key: s.key, name: s.name, count: perSport.get(s.key) ?? 0 })).filter((s) => s.count > 0);
-
-  // Every slide points at something real on the site, and only appears when it has data behind it.
-  const live = unfiltered ? fixtures.filter((f) => new Date(f.startsAt).getTime() <= now).length : 0;
-  const nba = unfiltered ? (perSport.get("basketball") ?? 0) : 0;
-  const slides: { label: string; node: React.ReactNode }[] = [];
-  featured.forEach((f, n) => slides.push({ label: `${f.homeTeam} v ${f.awayTeam}`, node: <FeaturedMatch f={f} priority={n === 0} /> }));
-  if (unfiltered) {
-    if (live > 0)
-      slides.push({
-        label: "Live now",
-        node: <PromoSlide photo={photos.footballStadiumCrowd} position="center 55%" title={`${live} ${live === 1 ? "match" : "matches"} in play`} cta="Go live" href="/live" />,
-      });
-    if (nba > 0)
-      slides.push({
-        label: "Basketball",
-        node: <PromoSlide photo={photos.basketballDribbleSilhouette} position="center 40%" title={`${nba} NBA ${nba === 1 ? "game" : "games"} open`} cta="Basketball odds" href="/?sport=basketball" />,
-      });
-    slides.push({
-      label: "Booking codes",
-      node: (
-        <PromoSlide
-          photo={photos.footballBallSpotlight}
-          position="center 65%"
-          title="Load a friend's betslip with one code"
-          cta="Load a code"
-          action={<OpenSlipButton className={bannerCtaClass}>Load a code</OpenSlipButton>}
-        />
-      ),
-    });
-    slides.push({
-      label: "Invite friends",
-      node: <PromoSlide photo={photos.footballStadiumDusk} position="center 60%" title="Invite friends with your own code" cta="Get your code" href="/account" />,
-    });
-  }
 
   return (
     <div className="flex flex-col gap-5">
@@ -95,28 +68,21 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
         <h1 className="sr-only">Sports betting</h1>
       )}
 
-      {slides.length > 0 && (
-        <HeroCarousel labels={slides.map((s) => s.label)}>
-          {slides.map((s) => (
-            <div key={s.label} className="h-full">
-              {s.node}
-            </div>
+      {unfiltered && (
+        <HeroCarousel labels={BANNERS.map((b) => b.label)} aspect="aspect-[3/1]">
+          {BANNERS.map((b, n) => (
+            <BannerSlide key={b.label} {...b} priority={n === 0} />
           ))}
         </HeroCarousel>
       )}
 
-      {/* Phones get picture tiles; larger screens already have the sports row and side menu. */}
-      {!q && !comp && (
-        <div className="lg:hidden">
-          <SportTiles sports={sportTiles} active={sport} />
-        </div>
-      )}
       {unfiltered && <TopMatches fixtures={ranked.slice(0, 10)} />}
       {!q && <CompetitionStrip competitions={competitions} active={comp} />}
 
       <section aria-labelledby="all-matches" className="space-y-3">
+        {/* scroll-mt: "Bet now" banners land here below the sticky header, not under it. */}
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-          <h2 id="all-matches" className="section-title">
+          <h2 id="all-matches" className="section-title scroll-mt-20">
             {hours ? `Starting in ${hours}h` : "All matches"}
           </h2>
           {!q && <StartFilter hours={hours} sport={sport} comp={comp} />}
@@ -124,6 +90,21 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
         {fixtures.length === 0 ? <Empty q={q} filtered={!!(sport || comp || hours)} sport={sport} /> : <MatchTable fixtures={fixtures} rankOf={rankOf} />}
       </section>
     </div>
+  );
+}
+
+/** One home banner: the whole picture, edge to edge; clickable when it carries a call to action. */
+function BannerSlide({ src, label, href, priority }: { src: StaticImageData; label: string; href?: string; priority: boolean }) {
+  // Later slides load eagerly too: they sit off-screen sideways, so lazy loading would show a blur on first slide-in.
+  const img = (
+    <Image src={src} alt={label} fill priority={priority} loading={priority ? undefined : "eager"} placeholder="blur" sizes="(min-width: 1280px) 900px, 100vw" className="object-cover" draggable={false} />
+  );
+  return href ? (
+    <Link href={href} className="relative block h-full">
+      {img}
+    </Link>
+  ) : (
+    <div className="relative h-full">{img}</div>
   );
 }
 
@@ -159,7 +140,7 @@ function Empty({ q, filtered, sport }: { q?: string; filtered: boolean; sport?: 
   return (
     <div className="card flex flex-col items-center gap-4 px-6 py-14 text-center">
       {q ? (
-        <span className="grid h-14 w-14 place-items-center rounded-full bg-white/[0.04] text-fog">
+        <span className="grid h-14 w-14 place-items-center rounded-full bg-ink-500 text-fog">
           <SportIcon sport="search" className="h-7 w-7" />
         </span>
       ) : (

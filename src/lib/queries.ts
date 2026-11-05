@@ -178,6 +178,51 @@ export interface UiCompetition {
 }
 
 /** Competitions that currently have open fixtures, in display order, for navigation. */
+export interface HotFixture {
+  id: string;
+  competition: string;
+  homeTeam: string;
+  awayTeam: string;
+  startsAt: string;
+  picks: number; // selections placed on this fixture inside the window
+}
+
+/**
+ * The fixtures punters have backed most in the last hour, ranked by how many selections were
+ * placed on them. Real counts only: a quiet hour returns fewer rows, or none.
+ */
+export async function hotFixtures(windowMinutes = 60, take = 10): Promise<HotFixture[]> {
+  const now = new Date();
+  const since = new Date(now.getTime() - windowMinutes * 60_000);
+  const grouped = await prisma.betSelection.groupBy({
+    by: ["fixtureId"],
+    where: { bet: { placedAt: { gte: since } }, fixture: openWindow(now) },
+    _count: { _all: true },
+    orderBy: { _count: { fixtureId: "desc" } },
+    take,
+  });
+  if (grouped.length === 0) return [];
+  const rows = await prisma.fixture.findMany({
+    where: { id: { in: grouped.map((g) => g.fixtureId) } },
+    select: { id: true, homeTeam: true, awayTeam: true, startsAt: true, competition: { select: { name: true, displayName: true } } },
+  });
+  const byId = new Map(rows.map((r) => [r.id, r]));
+  return grouped.flatMap((g) => {
+    const f = byId.get(g.fixtureId);
+    if (!f) return [];
+    return [
+      {
+        id: f.id,
+        competition: f.competition.displayName ?? f.competition.name,
+        homeTeam: f.homeTeam,
+        awayTeam: f.awayTeam,
+        startsAt: f.startsAt.toISOString(),
+        picks: g._count._all,
+      },
+    ];
+  });
+}
+
 export async function listCompetitions(): Promise<UiCompetition[]> {
   const now = new Date();
   const comps = await prisma.competition.findMany({
