@@ -481,10 +481,10 @@ describe("booking codes", () => {
     const a = await makeMatch({ home: 2.0, away: 4.0 });
     const b = await makeMatch({ home: 1.5, away: 3.0 });
     const code = await createBooking([a.home.id, b.away.id]);
-    expect(code).toMatch(/^[A-Z0-9]{8}$/);
+    expect(code).toMatch(/^[A-Z0-9]{6}$/);
 
     await prisma.selection.update({ where: { id: a.home.id }, data: { milliOdds: 2200 } }); // price moves after booking
-    const loaded = await loadBooking(code.toLowerCase().replace(/(....)/, "$1 ")); // typed loosely
+    const loaded = await loadBooking(code.toLowerCase().replace(/(...)/, "$1 ")); // typed loosely
     expect(loaded.unavailable).toBe(0);
     expect(loaded.picks.map((p) => p.selectionId)).toEqual([a.home.id, b.away.id]);
     expect(loaded.picks[0]!.milliOdds).toBe(2200);

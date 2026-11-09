@@ -460,7 +460,7 @@ function Booking({ picks, onLoad }: { picks: Pick[]; onLoad: (picks: Pick[]) => 
         onChange={(e) => setCode(e.target.value)}
         autoCapitalize="characters"
         autoComplete="off"
-        maxLength={20}
+        maxLength={6}
         placeholder="Booking Code"
         className="input py-2.5 font-mono uppercase placeholder:font-sans placeholder:normal-case"
       />
