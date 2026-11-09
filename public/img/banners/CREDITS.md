@@ -1,17 +1,16 @@
 # Home banners
 
-Supplied by the site owner on 2026-10-31, who states they hold the rights to use these images
-(banners 4-6 were sent as part of the same series, under the same statement),
-including the player likenesses and club and sponsor marks shown, and that the partnership and
-prize they advertise are real.
+Supplied by the site owner on 2026-11-09 for the Bet Zone brand. The owner has stated they hold
+the rights to the home banners they supply, including the player likenesses and club, league and
+sponsor marks shown.
 
 | File | Source | Changes |
 |---|---|---|
-| banner-1.jpg | owner's "Official betting partner in Africa" banner (1560x527) | trimmed to 1560x520 (3:1) |
-| banner-2.jpg | top half of the owner's combined banner (1672x941, cut above the white divider) | scaled to 1560 wide; blurred backdrop above and below to reach 1560x520 |
-| banner-3.jpg | bottom half of the same combined banner (cut below the divider) | scaled to 1560 wide; blurred backdrop above and below to reach 1560x520 |
-| banner-4.jpg | owner's "Bigger odds, bigger wins" banner (1559x527), supplied 2026-10-31 | scaled to 1560 wide, trimmed to 1560x520 |
-| banner-5.jpg | owner's "Global football, bigger opportunities" banner (1559x527), supplied 2026-10-31 | scaled to 1560 wide, trimmed to 1560x520 |
-| banner-6.jpg | owner's "Bet bigger, win bigger" banner (1560x527), supplied 2026-10-31 | trimmed to 1560x520 |
+| banner-1.jpg | "Every match. Every moment." (1752x897) | scaled to 1600 wide; blurred backdrop above and below to reach 1600x900 |
+| banner-2.jpg | "Bet smart. Win big." (1672x941) | scaled to 1600x900 |
+| banner-3.jpg | "Back your team." (1672x941) | scaled to 1600x900 |
+| banner-4.jpg | "Bet on all major sports" (1672x941) | scaled to 1600x900 |
+| banner-5.jpg | "Bet on the action." (1672x941) | scaled to 1600x900 |
 
-All six are exactly 3:1 so the home slider (aspect 3:1) shows them uncropped.
+All five are exactly 16:9 so the home slider (aspect 16:9) shows them uncropped. They replace the
+earlier 888SoccerBet banners.

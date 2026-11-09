@@ -13,19 +13,17 @@ import banner2 from "../../../public/img/banners/banner-2.jpg";
 import banner3 from "../../../public/img/banners/banner-3.jpg";
 import banner4 from "../../../public/img/banners/banner-4.jpg";
 import banner5 from "../../../public/img/banners/banner-5.jpg";
-import banner6 from "../../../public/img/banners/banner-6.jpg";
 
 export const dynamic = "force-dynamic";
 
-/** Home banners, all exactly 3:1 (1560x520) so they fill the slider without cropping. */
+/** Home banners, all exactly 16:9 (1600x900) so they fill the slider without cropping. */
 const BANNERS: { src: StaticImageData; label: string; href?: string }[] = [
-  { src: banner1, label: "Bet Zone: play bigger, bet smarter, win more" },
-  { src: banner2, label: "Win GHS 15,000: register now", href: "/register" },
-  { src: banner3, label: "Keep winning with Bet Zone: register now", href: "/register" },
-  // "Bet now" banners jump to the match list further down this page.
-  { src: banner4, label: "Bigger odds, bigger wins: bet now", href: "/#all-matches" },
-  { src: banner5, label: "Global football, bigger opportunities: bet now", href: "/#all-matches" },
-  { src: banner6, label: "Bet bigger, win bigger: bet now", href: "/#all-matches" },
+  // Every banner's "Bet now" jumps to the match list further down this page.
+  { src: banner1, label: "Every match. Every moment. Bet now", href: "/#all-matches" },
+  { src: banner2, label: "Bet smart. Win big. Bet now", href: "/#all-matches" },
+  { src: banner3, label: "Back your team. Bet now", href: "/#all-matches" },
+  { src: banner4, label: "Bet on all major sports. Bet now", href: "/#all-matches" },
+  { src: banner5, label: "Bet on the action", href: "/#all-matches" },
 ];
 
 const hasMainMarket = (f: UiFixture) => f.markets.some((m) => (m.type === "MATCH_RESULT" || m.type === "MONEYLINE") && m.status === "OPEN");
@@ -69,7 +67,7 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
       )}
 
       {unfiltered && (
-        <HeroCarousel labels={BANNERS.map((b) => b.label)} aspect="aspect-[3/1]">
+        <HeroCarousel labels={BANNERS.map((b) => b.label)} aspect="aspect-video">
           {BANNERS.map((b, n) => (
             <BannerSlide key={b.label} {...b} priority={n === 0} />
           ))}
