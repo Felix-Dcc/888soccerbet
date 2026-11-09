@@ -7,22 +7,22 @@
 import { combineMilliOdds, formatMilliOdds, formatPesewas, potentialPayout } from "@/lib/money";
 import { formatStamp } from "@/lib/time";
 import type { Pick } from "./BetslipContext";
-import logoArt from "../../../public/img/brand/888soccerbet-logo.png";
+import logoArt from "../../../public/img/brand/betzone-logo.png";
 
 const W = 1080;
 const PAD = 48; // dark margin around the white card
 const IN = 48; // text inset inside the white card
 const C = {
-  brand: "#17211B",
-  brandDark: "#0A0F0C",
+  brand: "#0A2815",
+  brandDark: "#03140A",
   panel: "#111814",
-  code: "#3CDC3C",
+  code: "#58F800",
   ink: "#0A0F0C",
   fog: "#4E5D53",
   line: "#E1E8E3",
   band: "#E5F6E5",
   bandText: "#167516",
-  gold: "#F5C451",
+  gold: "#B6FF7A",
 };
 const EXAMPLE_STAKE = 10_000n; // GHS 100 in pesewas
 
@@ -93,7 +93,7 @@ export async function drawSlipImage(code: string, picks: Pick[], bookedAt: Date 
   grad.addColorStop(1, C.brandDark);
   ctx.fillStyle = grad;
   ctx.fillRect(0, 0, W, BAR);
-  ctx.fillStyle = "rgba(60,220,60,.14)";
+  ctx.fillStyle = "rgba(88,248,0,.14)";
   ctx.beginPath();
   ctx.moveTo(W * 0.35, BAR);
   ctx.quadraticCurveTo(W * 0.62, BAR * 0.2, W + 20, BAR * 0.05);
@@ -108,9 +108,9 @@ export async function drawSlipImage(code: string, picks: Pick[], bookedAt: Date 
   } else {
     ctx.fillStyle = "#FFFFFF";
     ctx.font = `800 46px ${f.display}`;
-    ctx.fillText("888SOCCER", PAD, BAR / 2);
+    ctx.fillText("BET ", PAD, BAR / 2);
     ctx.fillStyle = C.code;
-    ctx.fillText("BET", PAD + ctx.measureText("888SOCCER").width, BAR / 2);
+    ctx.fillText("ZONE", PAD + ctx.measureText("BET ").width, BAR / 2);
   }
   ctx.textAlign = "right";
   ctx.fillStyle = "#FFFFFF";
@@ -210,7 +210,7 @@ export async function drawSlipImage(code: string, picks: Pick[], bookedAt: Date 
   ctx.textAlign = "left";
   ctx.fillStyle = "#FFFFFF";
   ctx.font = `800 30px ${f.display}`;
-  ctx.fillText("888soccerbet.com", PAD, fy);
+  ctx.fillText(location.host, PAD, fy); // the address the slip was booked on
   ctx.textAlign = "right";
   ctx.fillStyle = "rgba(255,255,255,.6)";
   ctx.font = `600 26px ${f.body}`;

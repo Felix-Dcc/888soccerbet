@@ -61,7 +61,7 @@ export class ShinobiPayProvider implements PaymentProvider {
         network: req.network, // MTN | TELECEL | AIRTELTIGO: the same codes as ours
         customer: { phone: req.msisdn, email: req.email },
         reference: req.ref,
-        description: "888SoccerBet deposit",
+        description: "Bet Zone deposit",
         return_url: `${this.appUrl}/wallet`,
         metadata: { ref: req.ref },
       },

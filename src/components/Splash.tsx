@@ -1,16 +1,16 @@
-const DIGITS = ["8", "8", "8"];
+const LETTERS = ["B", "E", "T"];
 
 /**
  * Brand loading screen shown when the site is opened (once per browser tab session).
  * "Kick-off", ~2s: the centre circle and halfway line draw in -> the ball rolls in, spinning,
- * behind a green speed trail -> the three 8s rise in turn -> SOCCER and BET slide in -> the
- * crown drops onto the first 8. Plain server-rendered SVG + CSS, so it paints in the first bytes;
+ * behind a green speed trail -> B, E, T rise in turn -> ZONE slides in -> the crown drops onto
+ * the B. Plain server-rendered SVG + CSS, so it paints in the first bytes;
  * SPLASH_SCRIPT (in <head>) decides whether to show it and when to fade it out. Every element's
  * resting style is its final frame, so reduced-motion users see the finished logo.
  */
 export function Splash() {
   return (
-    <div id="kb-splash" className="theme-dark" role="status" aria-live="polite" aria-label="Loading 888SoccerBet">
+    <div id="kb-splash" className="theme-dark" role="status" aria-live="polite" aria-label="Loading Bet Zone">
       <svg className="sb-pitch" viewBox="0 0 400 400" aria-hidden>
         <circle cx="200" cy="200" r="150" pathLength={1} />
         <path d="M-200 200H600" pathLength={1} />
@@ -34,10 +34,10 @@ export function Splash() {
       <p className="sb-word font-display font-extrabold tracking-tight" aria-hidden>
         <span className="sb-888">
           <svg className="sb-crown" viewBox="5 6 22 17">
-            <path d="M7.5 21.2 6 11.2l5.6 4.3L16 7.8l4.4 7.7 5.6-4.3-1.5 10Z" fill="#F5C451" />
-            <path d="M7.5 22.2h17v1.6h-17Z" fill="#C98A1B" />
+            <path d="M7.5 21.2 6 11.2l5.6 4.3L16 7.8l4.4 7.7 5.6-4.3-1.5 10Z" fill="#58F800" />
+            <path d="M7.5 22.2h17v1.6h-17Z" fill="#2E9E00" />
           </svg>
-          {DIGITS.map((d, i) => (
+          {LETTERS.map((d, i) => (
             <span key={i} className="sb-mask">
               <span className="sb-digit" style={{ animationDelay: `${0.85 + i * 0.1}s` }}>
                 {d}
@@ -46,10 +46,7 @@ export function Splash() {
           ))}
         </span>
         <span className="sb-mask">
-          <span className="sb-soccer">SOCCER</span>
-        </span>
-        <span className="sb-mask">
-          <span className="sb-bet">BET</span>
+          <span className="sb-bet">ZONE</span>
         </span>
       </p>
 

@@ -9,7 +9,7 @@ afterEach(() => {
 describe("emails", () => {
   it("puts the code in the subject and body", () => {
     const m = emails.verifyCode("a@b.gh", "042917");
-    expect(m.subject).toBe("042917 is your 888SoccerBet code");
+    expect(m.subject).toBe("042917 is your Bet Zone code");
     expect(m.html).toContain("042917");
     expect(m.text).toContain("042917");
   });
@@ -18,7 +18,7 @@ describe("emails", () => {
     const m = emails.win("a@b.gh", 2_000n, "<script>x</script>");
     expect(m.html).not.toContain("<script>");
     expect(m.html).toContain("&lt;script&gt;");
-    expect(m.subject).toBe("You won GHS 20.00 on 888SoccerBet");
+    expect(m.subject).toBe("You won GHS 20.00 on Bet Zone");
   });
 
   it("builds reset links on the live domain", () => {

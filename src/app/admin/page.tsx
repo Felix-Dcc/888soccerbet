@@ -66,7 +66,7 @@ export default async function AdminDashboard({ searchParams }: { searchParams: P
 
   return (
     <>
-      <Head title="Command center" description="Users, money and betting across 888SoccerBet at a glance.">
+      <Head title="Command center" description="Users, money and betting across Bet Zone at a glance.">
         <Range path="/admin" current={range.key} />
         {can(u, "reports.export") && (
           <details className="relative">

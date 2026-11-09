@@ -1,7 +1,7 @@
 /**
  * The Odds API adapter — real pre-match odds only. IMPORTANT: this is an odds feed,
  * NOT a licensed sportsbook. It provides no bet placement, settlement, risk management
- * or liability. 888SoccerBet's own engine handles those against whatever feed is configured.
+ * or liability. Bet Zone's own engine handles those against whatever feed is configured.
  *
  * Every price is the median of the real bookmaker prices for that exact outcome and line (a
  * single stale or outlier bookmaker can't set ours), and a market is left out when its prices
@@ -144,7 +144,7 @@ export function toFixture(ev: ApiEvent, sportKey: string, league: string): Provi
 }
 
 /**
- * Per-match markets, as a registry: API market key -> the 888SoccerBet market types it produces and
+ * Per-match markets, as a registry: API market key -> the Bet Zone market types it produces and
  * how to build them from the bookmakers' prices. To offer another market the feed prices, add an
  * entry here (and a grading rule in settlement.ts); which keys are requested is configuration
  * (ODDS_EXTRA_MARKETS). Only markets that settle from the final score are listed — the results
@@ -399,7 +399,7 @@ export function parseScore(name: string, home: string, away: string): [number, n
   return [Number(h), Number(a)];
 }
 
-/** Every 888SoccerBet market type the per-match sync is responsible for (suspended when not refreshed). */
+/** Every Bet Zone market type the per-match sync is responsible for (suspended when not refreshed). */
 export const EVENT_MARKET_TYPES: MarketType[] = [...new Set(Object.values(EVENT_MARKETS).flatMap((m) => m.types))];
 
 /** Build all per-match markets for the requested API keys (unknown keys are ignored). */

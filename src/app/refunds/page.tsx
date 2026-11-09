@@ -4,7 +4,7 @@ import { LegalPage } from "@/components/LegalPage";
 import { legal } from "@/lib/legal";
 
 export const dynamic = "force-dynamic"; // states the live operator settings
-export const metadata: Metadata = { title: "Refund Policy — 888SoccerBet" };
+export const metadata: Metadata = { title: "Refund Policy — Bet Zone" };
 
 /** When money comes back to the player, and when it can't. Mirrors what the wallet and settlement code do. */
 export default function RefundsPage() {

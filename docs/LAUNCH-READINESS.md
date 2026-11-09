@@ -1,6 +1,6 @@
 # Launch readiness — blockers to real-money operation
 
-888SoccerBet's software core is built and tested, but a functioning website is **not**
+Bet Zone's software core is built and tested, but a functioning website is **not**
 authorised to accept bets. The following are required before any real-money launch, and
 none can be satisfied by code alone.
 
@@ -17,7 +17,7 @@ none can be satisfied by code alone.
    - **Qualified Ghanaian gaming-law counsel must review before launch.**
 2. **Licensed B2B sportsbook / trading platform.** An odds API is not a sportsbook. Real
    operation needs a provider that supplies live pricing **plus** risk management,
-   liability control, suspension and settlement under commercial terms. 888SoccerBet's engine
+   liability control, suspension and settlement under commercial terms. Bet Zone's engine
    is built to sit behind such a feed via the `OddsProvider` adapter — the commercial
    agreement and credentials are outstanding.
 3. **Licensed payment / Mobile Money aggregator.** Approved merchant credentials with a

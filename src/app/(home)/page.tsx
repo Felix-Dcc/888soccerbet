@@ -19,9 +19,9 @@ export const dynamic = "force-dynamic";
 
 /** Home banners, all exactly 3:1 (1560x520) so they fill the slider without cropping. */
 const BANNERS: { src: StaticImageData; label: string; href?: string }[] = [
-  { src: banner1, label: "888SoccerBet: play bigger, bet smarter, win more" },
+  { src: banner1, label: "Bet Zone: play bigger, bet smarter, win more" },
   { src: banner2, label: "Win GHS 15,000: register now", href: "/register" },
-  { src: banner3, label: "Keep winning with 888SoccerBet: register now", href: "/register" },
+  { src: banner3, label: "Keep winning with Bet Zone: register now", href: "/register" },
   // "Bet now" banners jump to the match list further down this page.
   { src: banner4, label: "Bigger odds, bigger wins: bet now", href: "/#all-matches" },
   { src: banner5, label: "Global football, bigger opportunities: bet now", href: "/#all-matches" },

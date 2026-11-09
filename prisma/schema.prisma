@@ -1,4 +1,4 @@
-// 888SoccerBet data model. Money is stored as BigInt minor units (pesewas; 100 = GHS 1).
+// Bet Zone data model. Money is stored as BigInt minor units (pesewas; 100 = GHS 1).
 // Odds are stored as integer milli-odds (2.50 => 2500) so all bet math is exact integers.
 
 generator client {

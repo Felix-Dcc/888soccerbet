@@ -58,7 +58,7 @@ export function Header() {
       {/* Only this top bar stays pinned; the tab row and sports row scroll away beneath it. */}
       <header className="site-header theme-dark sticky top-0 z-40 border-b border-line bg-ink-800">
         <div className="mx-auto flex h-14 max-w-[1280px] items-center gap-2 px-3 max-[390px]:gap-1.5 sm:gap-3 sm:px-4 lg:h-[60px] lg:gap-6">
-          <Link href="/" aria-label="888SoccerBet home" className="shrink-0">
+          <Link href="/" aria-label="Bet Zone home" className="shrink-0">
             {/* Slightly smaller wordmark on narrow phones, so search, the balance eye, balance and menu fit beside it. */}
             <Logo />
           </Link>
@@ -205,7 +205,7 @@ const ACCOUNT_LINK = "hidden shrink-0 items-center text-sm font-semibold text-li
 /** Hairline between the account links, as on most books' utility bars. */
 const Pipe = () => <span aria-hidden className="hidden h-4 w-px shrink-0 bg-white/15 md:block" />;
 
-/** Market and currency. 888SoccerBet serves one market, so this states it — it isn't a picker. */
+/** Market and currency. Bet Zone serves one market, so this states it — it isn't a picker. */
 function LocaleChip() {
   return (
     <span className="hidden shrink-0 items-center gap-1.5 rounded-full border border-white/15 bg-black/20 px-2.5 py-1 text-xs font-semibold text-white/85 lg:inline-flex">

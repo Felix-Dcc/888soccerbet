@@ -44,10 +44,10 @@ export default function LoginPage() {
   return (
     <AuthShell
       title="Welcome back"
-      subtitle="Log in to your 888SoccerBet account."
+      subtitle="Log in to your Bet Zone account."
       footer={
         <>
-          New to 888SoccerBet?{" "}
+          New to Bet Zone?{" "}
           <Link href="/register" className="font-semibold text-lime hover:underline">
             Create an account
           </Link>

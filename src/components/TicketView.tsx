@@ -63,7 +63,7 @@ function SettledTicket({ bet, verifyCode, owner }: { bet: Ticket; verifyCode: st
           </span>
         </div>
         <div className="mt-1 flex items-baseline justify-between gap-3">
-          <span className="text-sm text-fog">Total 888SoccerBet Return</span>
+          <span className="text-sm text-fog">Total Bet Zone Return</span>
           <span className={`whitespace-nowrap font-display text-[28px] font-extrabold leading-tight tabular-nums ${won ? WIN : "text-white"}`}>
             <span className="mr-1 text-sm font-bold opacity-70">GHS</span>
             {amount}

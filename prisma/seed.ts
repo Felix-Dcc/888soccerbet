@@ -18,7 +18,7 @@ async function main() {
       email: "admin@888soccerbet.com",
       passwordHash: hashPassword("Admin123!"),
       role: "SUPER_ADMIN",
-      displayName: "888SoccerBet Admin",
+      displayName: "Bet Zone Admin",
       kycStatus: "VERIFIED",
       dateOfBirth: new Date("1990-01-01"),
       phone: "0240000002",

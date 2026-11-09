@@ -13,7 +13,7 @@ export interface Pick {
 }
 
 /** Window event that opens the betslip (drawer on mobile, focus on desktop). */
-export const OPEN_SLIP_EVENT = "888soccerbet:open-slip";
+export const OPEN_SLIP_EVENT = "betzone:open-slip";
 
 interface BetslipState {
   picks: Pick[];

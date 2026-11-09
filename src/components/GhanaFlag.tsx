@@ -1,4 +1,4 @@
-/** Ghana's flag — the market 888SoccerBet serves. Shared by the header chip and the footer brand. */
+/** Ghana's flag — the market Bet Zone serves. Shared by the header chip and the footer brand. */
 export function GhanaFlag({ className = "h-3 w-4" }: { className?: string }) {
   return (
     <svg viewBox="0 0 9 6" className={`${className} shrink-0 rounded-[2px]`} aria-hidden>

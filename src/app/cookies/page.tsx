@@ -3,7 +3,7 @@ import { LegalPage, LegalTable } from "@/components/LegalPage";
 import { legal } from "@/lib/legal";
 
 export const dynamic = "force-dynamic"; // states the live operator settings
-export const metadata: Metadata = { title: "Cookies Policy — 888SoccerBet" };
+export const metadata: Metadata = { title: "Cookies Policy — Bet Zone" };
 
 /**
  * Everything the site stores on a device. All of it is strictly necessary or a choice the player

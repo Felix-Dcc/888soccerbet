@@ -1,4 +1,4 @@
-# Brand: 888SoccerBet
+# Brand: Bet Zone
 
 ## Name selection
 
@@ -13,44 +13,41 @@ international) and distinctiveness from the reference:
 | Oddwin | odds + win | descriptive, weak as a trademark |
 | Sankobet | Sankofa + bet | culturally strong but long and on-the-nose |
 
-**888SoccerBet** was chosen as the final brand by the owner, replacing the earlier working
-name *Kingz Bet*. It names the sport and the product plainly and is easy to say and type.
+**Bet Zone** is the brand, chosen by the owner, replacing the working names *Kingz Bet* and
+then *888SoccerBet*. It is short, easy to say and type, and reads instantly as a betting site.
 
-### Clearance status (temporary brand) — ⚠️ high conflict risk
+### Clearance status (temporary brand) — ⚠️ check before launch
 
-- **"888" is an established gambling trademark.** 888 Holdings plc runs 888sport,
-  888casino and 888poker and holds registered marks across many jurisdictions. A betting
-  brand opening with "888" is therefore **substantially more likely to attract an
-  opposition or infringement claim** than a coined name. Treat this as the primary brand
-  risk, ahead of everything else in this document.
+- "Bet Zone" / "Betzone" is a common construction, and betting businesses already trade under
+  it in several markets. A full trademark and domain clearance is therefore essential and more
+  likely to surface conflicts than for a coined name.
 - No clearance search was run for this name here, and this is **not** legal clearance. A
   registered trademark search (USPTO/EUIPO + Ghana Registrar of Companies service-mark
-  register) and domain registration are required before any launch. Until then
-  888SoccerBet is a **temporary/working brand**.
+  register) and domain registration are required before any launch. Until then Bet Zone is a
+  **temporary/working brand**.
+- Email and web addresses still use the old `888soccerbet.com` domain until a Bet Zone domain
+  is chosen (`EMAIL_FROM`, `LEGAL_EMAIL`, `APP_URL` and the support links).
 
 ## Visual identity
 
-A restrained **dark** identity. One accent carries actions; colour is never decorative.
+**White and green**, taken from the supplied logo.
 
-- **Base** `#0B1220`, surfaces `#111B2E`, raised `#18253D`, hairline borders `#24334F`.
-- **Text** `#E8EDF5`, muted `#8E9BB3`.
-- **Amber** `#F0A53A` is the single accent: primary actions, odds and bonuses.
-- **Green** `#2EA66F` and **red** `#D9534F` are reserved strictly for win/loss and status.
-- Surfaces are separated by lightness steps and 1px borders — no gradients, no glow.
-- The **admin console** is scoped to its own palette (muted indigo `#5C7CFA` dark /
-  `#3B5BDB` light) with a remembered light/dark toggle, so staff tools never read as the
-  player site.
+- **White mode is the default.** Page `#F7FAF8`, cards `#FFFFFF`, hairlines `#DFEBE3`, text
+  `#0A1A10`. Actions use a deepened brand green `#15803D` (the logo green is too pale for text
+  on white); odds and bonuses `#166534`.
+- **Deep brand green** for the always-dark blocks (header, footer, tickets) and dark mode:
+  page `#03140A`, surfaces `#061E0F`, with the logo's own green `#58F800` for actions.
+- Emerald and red are reserved for win/loss; amber only for warnings.
+- The **admin console** uses the same palette, white by default, with its own remembered
+  white/dark toggle.
 - Typography: **Sora** (display) + **Manrope** (body), tabular figures for money and odds.
-- Logo: the supplied 888SoccerBet artwork (`public/img/brand/888soccerbet-logo.png`), used in
-  the site header and the admin sidebar. A small inline-SVG mark (`BrandMark` in
-  `src/components/Logo.tsx`) stands in where only a square icon fits.
-- Icons: the browser-tab favicon (`src/app/icon.png`, `src/app/favicon.ico`) is the logo's own
-  football and green swoosh on a dark rounded tile; the phone home-screen icon
-  (`src/app/apple-icon.png`) is the full logo on a dark square.
-
-> **Open point:** the supplied logo uses a vivid green (`#3CDC3C`) while the product UI
-> runs on amber. The logo currently keeps its own green; switching the site accent to
-> green is a one-token change in `src/app/globals.css` if that is preferred.
+- Logo: the supplied Bet Zone artwork, cut out of its black background
+  (`public/img/brand/betzone-logo.png`), used in the header, admin sidebar, win pop-up and
+  booking pop-up. A small inline-SVG mark (`BrandMark` in `src/components/Logo.tsx`) stands in
+  where only a square icon fits.
+- Icons: the browser-tab favicon (`src/app/icon.png`, `src/app/favicon.ico`) is the crown and
+  "BET ZONE" on a dark rounded tile; the phone home-screen icon (`src/app/apple-icon.png`) is
+  the full logo.
 
 Tokens live in `tailwind.config.ts`; base styles and component classes in
 `src/app/globals.css`.

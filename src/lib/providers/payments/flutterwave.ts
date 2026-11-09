@@ -76,8 +76,8 @@ export class FlutterwaveProvider implements PaymentProvider {
       amount: ghsAmount(req.amountPesewas),
       currency: "GHS",
       reference: req.ref, // unique: Flutterwave rejects a repeat, so a retried request can't pay twice
-      narration: "888SoccerBet withdrawal",
-      beneficiary_name: req.name || "888SoccerBet player",
+      narration: "Bet Zone withdrawal",
+      beneficiary_name: req.name || "Bet Zone player",
       callback_url: `${this.appUrl}/api/webhooks/payments`,
     });
     const data = json.data as { id?: number | string } | undefined;

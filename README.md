@@ -1,10 +1,10 @@
-# 888SoccerBet
+# Bet Zone
 
 A sandbox online sportsbook: football & basketball, pre-match and live, with a
 server-authoritative bet engine, a double-entry ledger wallet, idempotent payment
 webhooks, settlement, and an operations console.
 
-> **Not for real-money use.** 888SoccerBet is a demonstration platform. It holds no Gaming
+> **Not for real-money use.** Bet Zone is a demonstration platform. It holds no Gaming
 > Commission of Ghana licence, integrates no licensed trading or payment provider, and
 > moves no real money. Every external integration here is a clearly-labelled **sandbox
 > adapter**. See [`docs/LAUNCH-READINESS.md`](docs/LAUNCH-READINESS.md).

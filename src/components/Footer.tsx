@@ -5,7 +5,7 @@ import { GhanaFlag } from "./GhanaFlag";
 /** Only pages that exist. Nothing here advertises a product or document the site doesn't have. */
 const COLUMNS: { title: string; links: { href: string; label: string }[] }[] = [
   {
-    title: "888SoccerBet Ghana",
+    title: "Bet Zone Ghana",
     links: [
       { href: "/terms", label: "Terms & Conditions" },
       { href: "/privacy", label: "Privacy Policy" },

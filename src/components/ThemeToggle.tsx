@@ -7,7 +7,7 @@ const THEME_EVENT = "kb:theme";
 
 /** Dark / White switch. Applies to <html> at once and is remembered per browser. */
 export function ThemeToggle({ className = "" }: { className?: string }) {
-  const [theme, setTheme] = useState<Theme>("dark");
+  const [theme, setTheme] = useState<Theme>("light");
   // THEME_SCRIPT already applied the saved theme before paint; this only syncs the control, and
   // keeps every copy of it (menu + Account page) in step.
   useEffect(() => {

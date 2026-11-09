@@ -66,14 +66,14 @@ export function AdminShell({
   const logout = useLogout();
   const [collapsed, setCollapsed] = useState(false);
   const [drawer, setDrawer] = useState(false);
-  const [theme, setTheme] = useState<"dark" | "light">("dark");
+  const [theme, setTheme] = useState<"dark" | "light">("light");
 
   // Restore the remembered rail width and theme (per browser). The theme itself is already
   // applied pre-paint by ADMIN_THEME_SCRIPT; this just syncs the toggle's own state.
   useEffect(() => {
     try {
       setCollapsed(localStorage.getItem(COLLAPSE_KEY) === "1");
-      if (localStorage.getItem(THEME_KEY) === "light") setTheme("light");
+      if (localStorage.getItem(THEME_KEY) === "dark") setTheme("dark");
     } catch {}
   }, []);
 

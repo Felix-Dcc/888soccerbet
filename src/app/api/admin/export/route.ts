@@ -80,7 +80,7 @@ export async function GET(req: Request) {
     return new Response(body, {
       headers: {
         "content-type": "text/csv; charset=utf-8",
-        "content-disposition": `attachment; filename="888soccerbet-${kind}-${range.from.toISOString().slice(0, 10)}-to-${new Date(range.to.getTime() - 1).toISOString().slice(0, 10)}.csv"`,
+        "content-disposition": `attachment; filename="betzone-${kind}-${range.from.toISOString().slice(0, 10)}-to-${new Date(range.to.getTime() - 1).toISOString().slice(0, 10)}.csv"`,
         "cache-control": "no-store",
       },
     });

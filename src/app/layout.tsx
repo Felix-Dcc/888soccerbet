@@ -16,7 +16,7 @@ const display = Sora({ subsets: ["latin"], weight: ["600", "700", "800"], variab
 const body = Manrope({ subsets: ["latin"], weight: ["400", "500", "600", "700", "800"], variable: "--font-body" });
 
 export const metadata: Metadata = {
-  title: "888SoccerBet — Sports Betting",
+  title: "Bet Zone — Sports Betting",
   description: "Football and basketball odds across the Premier League, Champions League, La Liga, Serie A, Bundesliga and NBA.",
   // iOS Safari would turn match IDs, odds and booking codes into tel:/mailto: links before React
   // loads, breaking hydration (and making an ID tappable to call it).
@@ -58,8 +58,9 @@ async function HotMatchesWithData() {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    // The head script adds a splash class to <html> before hydration; that difference is expected.
-    <html lang="en" className={`${display.variable} ${body.variable}`} suppressHydrationWarning>
+    // White is the default; the head script removes it for players who chose dark, and adds a
+    // splash class, before hydration. Those differences are expected.
+    <html lang="en" data-theme="light" className={`${display.variable} ${body.variable}`} suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />
         <script dangerouslySetInnerHTML={{ __html: SPLASH_SCRIPT }} />

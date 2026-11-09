@@ -137,7 +137,7 @@ function WinCard({ win, remaining, onClose }: { win: Win; remaining: number; onC
         <div className="w-full max-w-sm animate-win-pop text-center [text-shadow:0_2px_10px_rgba(0,0,0,.65)] motion-reduce:animate-none">
           {win.beatPct !== null && win.beatPct > 0 && (
             <p className="mx-auto mb-3 max-w-[16rem] text-[15px] leading-snug text-white/80">
-              Your win beats <span className="font-bold text-teal">{win.beatPct}%</span> of wins on 888SoccerBet this month.
+              Your win beats <span className="font-bold text-teal">{win.beatPct}%</span> of wins on Bet Zone this month.
             </p>
           )}
           <h2

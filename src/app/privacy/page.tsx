@@ -4,7 +4,7 @@ import { LegalPage, LegalTable } from "@/components/LegalPage";
 import { legal } from "@/lib/legal";
 
 export const dynamic = "force-dynamic"; // states the live operator settings
-export const metadata: Metadata = { title: "Privacy Policy — 888SoccerBet" };
+export const metadata: Metadata = { title: "Privacy Policy — Bet Zone" };
 
 /** What we collect, why, who sees it, how long we keep it, and the player's rights (Act 843). */
 export default function PrivacyPage() {
@@ -13,7 +13,7 @@ export default function PrivacyPage() {
     <LegalPage title="Privacy Policy" path="/privacy">
       <h2>Who we are</h2>
       <p>
-        {l.operator} (&quot;888SoccerBet&quot;, &quot;we&quot;) runs this website and is responsible for your personal data. {l.address}. Contact:{" "}
+        {l.operator} (&quot;Bet Zone&quot;, &quot;we&quot;) runs this website and is responsible for your personal data. {l.address}. Contact:{" "}
         <a href={`mailto:${l.email}`}>{l.email}</a>.
         {l.dpcRegistration
           ? ` We are registered with Ghana's Data Protection Commission (${l.dpcRegistration}).`
@@ -30,7 +30,7 @@ export default function PrivacyPage() {
           ["Password", "To sign you in. We store only a scrypt hash, never the password itself."],
           ["Mobile number", "To sign you in, and as the mobile money number for deposits and withdrawals."],
           ["Date of birth", "To confirm you are 18 or older, as gambling law requires."],
-          ["Referral code (optional)", "To link your account to the 888SoccerBet agent who invited you."],
+          ["Referral code (optional)", "To link your account to the Bet Zone agent who invited you."],
           ["Consent record", "The date and version of the Terms and this policy you accepted."],
           ["Bets, cash outs and transactions", "To run your wallet, pay winnings and keep the records gaming and anti-money-laundering law require."],
           ["Mobile money numbers on payments", "To send and receive each payment and resolve disputes about it."],
@@ -86,7 +86,7 @@ export default function PrivacyPage() {
       </p>
 
       <h2>Age</h2>
-      <p>888SoccerBet is only for people aged 18 or over. We do not knowingly collect data about anyone younger.</p>
+      <p>Bet Zone is only for people aged 18 or over. We do not knowingly collect data about anyone younger.</p>
 
       <h2>Cookies</h2>
       <p>

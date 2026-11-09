@@ -1,7 +1,7 @@
 import type { Config } from "tailwindcss";
 
 /**
- * 888SoccerBet tokens. Colours are CSS variables (src/app/globals.css) so one class works in
+ * Bet Zone tokens. Colours are CSS variables (src/app/globals.css) so one class works in
  * both palettes: the site is light, and `.theme-dark` re-scopes a block (photo heroes) to the
  * dark palette. `white` is the foreground token, so `text-white` = main text colour.
  */

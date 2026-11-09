@@ -1,9 +1,9 @@
 import { useId } from "react";
 import Image from "next/image";
-import logoArt from "../../public/img/brand/888soccerbet-logo.png";
+import logoArt from "../../public/img/brand/betzone-logo.png";
 
 /** Brand colours are fixed assets, not theme tokens: they must hold in any palette or email client. */
-const GREEN = "#3CDC3C";
+const GREEN = "#58F800"; // the Bet Zone logo green
 
 /**
  * Square mark — the crown over a football on a dark tile — for places that need an icon
@@ -19,9 +19,9 @@ export function BrandMark({ size = 30, className = "" }: { size?: number; classN
           <stop offset="1" stopColor="#0B0F14" />
         </linearGradient>
         <linearGradient id={`${id}g`} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0" stopColor="#FFE7A3" />
-          <stop offset=".5" stopColor="#F5C451" />
-          <stop offset="1" stopColor="#C98A1B" />
+          <stop offset="0" stopColor="#B6FF7A" />
+          <stop offset=".5" stopColor="#58F800" />
+          <stop offset="1" stopColor="#2E9E00" />
         </linearGradient>
       </defs>
       <rect width="32" height="32" rx="9" fill={`url(#${id}t)`} />
@@ -42,16 +42,16 @@ export function BrandMark({ size = 30, className = "" }: { size?: number; classN
   );
 }
 
-/** "888SOCCERBET" wordmark — caps, with BET in the brand green, as in the lockup. */
+/** "BET ZONE" wordmark — caps, with ZONE in the brand green, as in the lockup. */
 export function Wordmark() {
   return (
     <span className="whitespace-nowrap tracking-tight">
-      888SOCCER<span style={{ color: GREEN }}>BET</span>
+      BET <span style={{ color: GREEN }}>ZONE</span>
     </span>
   );
 }
 
 /** The supplied logo, cut out of its stadium artwork so it sits on any dark surface. */
 export function Logo({ className = "h-11" }: { className?: string }) {
-  return <Image src={logoArt} alt="888SoccerBet" width={168} height={90} className={`w-auto ${className}`} />;
+  return <Image src={logoArt} alt="Bet Zone" width={168} height={97} className={`w-auto ${className}`} />;
 }

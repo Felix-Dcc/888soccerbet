@@ -27,12 +27,12 @@ const NOUNS = [
   "Pumas", "Crusaders", "Valkyries", "Reapers", "Hurricanes", "Admirals", "Legionnaires", "Bulls", "Serpents", "Kestrels",
 ];
 const FOOTBALL_COMPS = [
-  "888SoccerBet Exhibition Cup", "Nebula Invitational", "Phantom Trophy", "Galaxy Friendly Series", "Aurora Challenge Cup",
+  "Bet Zone Exhibition Cup", "Nebula Invitational", "Phantom Trophy", "Galaxy Friendly Series", "Aurora Challenge Cup",
   "Zenith Masters Cup", "Orion Premier Shield", "Vortex Champions Trophy", "Eclipse Super Cup", "Summit Classic",
   "Meridian League Cup", "Equinox Invitational", "Titan Challenge Cup", "Horizon Premier Series", "Comet Clash", "Pinnacle Trophy",
 ];
 const BASKETBALL_COMPS = [
-  "888SoccerBet Hoops Showcase", "Orbit Basketball Invitational", "Skyline Exhibition League", "Apex Hoops Classic",
+  "Bet Zone Hoops Showcase", "Orbit Basketball Invitational", "Skyline Exhibition League", "Apex Hoops Classic",
   "Nova Slam Series", "Zenith Court Cup", "Vertex Ball League", "Summit Dunk Classic",
 ];
 const VENUES = [

@@ -8,7 +8,7 @@ import { cashoutMarginPct, MIN_CASHOUT, partialLimit } from "@/lib/cashout";
 import { formatPesewas } from "@/lib/money";
 
 export const dynamic = "force-dynamic"; // quotes the limits the site enforces right now
-export const metadata: Metadata = { title: "Terms & Conditions — 888SoccerBet" };
+export const metadata: Metadata = { title: "Terms & Conditions — Bet Zone" };
 
 const ghs = (p: bigint) => `GHS ${formatPesewas(p)}`;
 
@@ -20,14 +20,14 @@ export default function TermsPage() {
     <LegalPage title="Terms & Conditions" path="/terms">
       <h2>About these terms</h2>
       <p>
-        These terms are an agreement between you and {l.operator} (&quot;888SoccerBet&quot;, &quot;we&quot;). By creating an account you accept them and our{" "}
+        These terms are an agreement between you and {l.operator} (&quot;Bet Zone&quot;, &quot;we&quot;). By creating an account you accept them and our{" "}
         <Link href="/privacy">Privacy Policy</Link>. They are governed by the laws of Ghana, including the Gaming Act, 2006 (Act 721).
       </p>
       <p>
         <strong>
           {l.licence
-            ? `888SoccerBet is licensed by the Gaming Commission of Ghana (licence ${l.licence}).`
-            : "888SoccerBet is not yet licensed by the Gaming Commission of Ghana. Until it is, the site runs as a demo and no real money can be wagered."}
+            ? `Bet Zone is licensed by the Gaming Commission of Ghana (licence ${l.licence}).`
+            : "Bet Zone is not yet licensed by the Gaming Commission of Ghana. Until it is, the site runs as a demo and no real money can be wagered."}
         </strong>
       </p>
 

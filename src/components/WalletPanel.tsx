@@ -226,7 +226,7 @@ export function WalletPanel({ minDepositGhs, isAdmin = false, verification }: { 
               "Checking with your network. This takes a few seconds."
             ) : (
               <>
-                GHS {approving.amount} to 888SoccerBet. Enter your MoMo PIN on the prompt.
+                GHS {approving.amount} to Bet Zone. Enter your MoMo PIN on the prompt.
                 {approving.ussd && <> No prompt? Dial {approving.ussd}.</>}
               </>
             )}
@@ -392,7 +392,7 @@ function WithdrawalBanner({ info }: { info: { ref: string; amount: string } }) {
         <BrandMark size={36} className="rounded-lg" />
         <div className="min-w-0 flex-1">
           <div className="flex items-baseline justify-between gap-2 text-xs">
-            <span className="font-bold text-white">888SoccerBet</span>
+            <span className="font-bold text-white">Bet Zone</span>
             <span className="text-fog">now</span>
           </div>
           <p className="mt-0.5 text-sm leading-snug text-white">Withdrawal of GHS {info.amount} processed · Ref {info.ref}</p>

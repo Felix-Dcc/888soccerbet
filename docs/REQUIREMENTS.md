@@ -2,9 +2,9 @@
 
 The reference (a Ghana-facing sportsbook) was inspected for **functionality only**. Its
 name, artwork, copy and page composition were not reused. Observed capabilities and how
-888SoccerBet implements each:
+Bet Zone implements each:
 
-| Reference capability | 888SoccerBet implementation | Status |
+| Reference capability | Bet Zone implementation | Status |
 |---|---|---|
 | Sports navigation (Soccer, etc.) | Sport catalogue (`Sport`), nav + filter chips | ✅ football, basketball |
 | Competition / fixture discovery | `Competition`, `Fixture`, home + live pages | ✅ |

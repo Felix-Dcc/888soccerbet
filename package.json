@@ -1,8 +1,8 @@
 {
-  "name": "888soccerbet",
+  "name": "betzone",
   "version": "0.1.0",
   "private": true,
-  "description": "888SoccerBet — sandbox sportsbook platform (not licensed for real-money operation)",
+  "description": "Bet Zone — sandbox sportsbook platform (not licensed for real-money operation)",
   "scripts": {
     "dev": "next dev",
     "build": "prisma generate && next build",

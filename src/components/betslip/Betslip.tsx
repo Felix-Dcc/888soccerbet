@@ -380,7 +380,7 @@ function Booking({ picks, onLoad }: { picks: Pick[]; onLoad: (picks: Pick[]) => 
       if (res.status !== 201) return setState({ k: "error", msg: d.error ?? "Could not book" });
       const at = new Date();
       const image = await drawSlipImage(d.code, picks, at)
-        .then((b) => new File([b], `888soccerbet-${d.code}.png`, { type: "image/png" }))
+        .then((b) => new File([b], `betzone-${d.code}.png`, { type: "image/png" }))
         .catch(() => null); // the code is still usable without the picture
       setBooked({ code: d.code, image, at });
       setOpen(true);
@@ -526,7 +526,7 @@ function BookingDialog({ booked, picks, onClose }: { booked: Booked; picks: Pick
   }
   function save() {
     if (!image || !url) return;
-    if (ios && canShareFile) return void navigator.share({ files: [image], title: `888SoccerBet booking ${code}` }).catch(() => {});
+    if (ios && canShareFile) return void navigator.share({ files: [image], title: `Bet Zone booking ${code}` }).catch(() => {});
     const a = document.createElement("a");
     a.href = url;
     a.download = image.name;
@@ -534,7 +534,7 @@ function BookingDialog({ booked, picks, onClose }: { booked: Booked; picks: Pick
     setSaved(true);
   }
 
-  const text = `888SoccerBet booking code ${code}`;
+  const text = `Bet Zone booking code ${code}`;
   const combined = combineMilliOdds(picks.map((p) => p.milliOdds));
   const shareBtn = "flex flex-col items-center gap-1.5 text-[11px] font-medium text-fog transition-colors hover:text-white";
   const shareIcon = "grid h-11 w-11 place-items-center rounded-full transition-transform hover:scale-105";

@@ -3,42 +3,42 @@
 @tailwind utilities;
 
 /*
- * 888SoccerBet design tokens — restrained dark theme.
- * Values are "R G B" so Tailwind opacity modifiers work. The whole site is dark; surfaces are
- * separated by lightness steps + 1px borders (no heavy shadows, no gradients, no glow).
+ * Bet Zone design tokens — white and green.
+ * Values are "R G B" so Tailwind opacity modifiers work. White is the default (layout.tsx sets
+ * data-theme="light"); dark mode and the always-dark blocks use the deep brand green. Surfaces are
+ * separated by lightness steps + 1px borders.
  * Colour rules:
- *   - Amber (--lime) is the single accent: primary actions, odds, bonuses, active/selected states.
- *   - Green (--teal) / red (--danger) are reserved strictly for win / loss (and money in / out).
+ *   - Green (--lime) is the accent: primary actions, active/selected states; --gold carries value
+ *     (odds, balance, bonuses) in a second green.
+ *   - Emerald (--teal) / red (--danger) are reserved strictly for win / loss (and money in / out).
  * `.theme-dark` is kept as a no-op alias so blocks that still carry it inherit these same tokens.
  */
 :root,
 .theme-dark {
   color-scheme: dark;
   /*
-   * "Night pitch" — taken from the logo: a near-black with a faint green cast (the stadium it
-   * sits in), the swoosh green for action and the crown gold for value. Neutrals stay low in
-   * chroma so the two brand colours are the only things that glow.
+   * Deep brand green, from the Bet Zone logo: the dark blocks (header, footer, tickets) and dark
+   * mode. The logo's own green (#58F800) carries actions; neutrals stay green-tinted and quiet.
    */
-  --fg: 235 243 238; /* text primary  #EBF3EE */
-  --ink-900: 10 15 12; /* page background  #0A0F0C */
-  --ink-800: 17 24 20; /* surface: header, inputs  #111814 */
-  --ink-700: 17 24 20; /* surface: cards  #111814 */
-  --ink-600: 23 33 27; /* raised surface: odds cells, wells  #17211B */
-  --ink-500: 30 43 35; /* raised, one step up (hover)  #1E2B23 */
-  --ink-400: 44 62 51; /* strong border / hover border  #2C3E33 */
-  --line: 33 48 41; /* hairline border  #213029 */
-  --fog: 170 185 175; /* secondary text  #AAB9AF */
-  --fog-muted: 143 160 149; /* secondary text, dimmer  #8FA095 (>= 4.5:1 on surfaces) */
-  --lime: 60 220 60; /* ACTION — the swoosh green  #3CDC3C */
-  --lime-600: 46 190 46; /* green, pressed/hover  #2EBE2E */
-  --lime-ink: 6 18 9; /* text on green  #061209 */
-  --gold: 245 196 81; /* VALUE — the crown gold: odds, balance, bonuses  #F5C451 */
-  --gold-600: 225 172 53; /* gold, pressed  #E1AC35 */
-  --gold-ink: 6 18 9; /* text on gold */
-  --teal: 34 197 139; /* WIN — emerald, kept distinct from the brand green  #22C58B */
-  --danger: 229 83 78; /* LOSS red  #E5534E */
-  --warn: 245 196 81; /* warnings share the crown gold */
-  /* Soft, flat elevation — surfaces are told apart by lightness + border, not shadow. */
+  --fg: 240 253 244; /* text  #F0FDF4 */
+  --ink-900: 3 20 10; /* page  #03140A */
+  --ink-800: 6 30 15; /* header, inputs  #061E0F */
+  --ink-700: 6 30 15; /* cards */
+  --ink-600: 10 40 21; /* raised: odds cells  #0A2815 */
+  --ink-500: 15 52 28; /* hover  #0F341C */
+  --ink-400: 28 78 44; /* strong border  #1C4E2C */
+  --line: 21 60 34; /* hairline  #153C22 */
+  --fog: 167 199 177; /* secondary text  #A7C7B1 */
+  --fog-muted: 134 171 146; /* muted text  #86AB92 */
+  --lime: 88 248 0; /* ACTION — the logo green  #58F800 */
+  --lime-600: 76 214 0;
+  --lime-ink: 3 20 10; /* text on green */
+  --gold: 182 255 122; /* VALUE — odds, balance, bonuses: a pale logo green  #B6FF7A */
+  --gold-600: 150 235 90;
+  --gold-ink: 3 20 10;
+  --teal: 52 211 153; /* WIN — emerald, distinct from the brand green  #34D399 */
+  --danger: 248 96 96; /* LOSS  #F86060 */
+  --warn: 250 204 21; /* warnings: amber, so they stand out from the green  #FACC15 */
   --shadow-card: 0 1px 2px rgb(0 0 0 / 0.3);
   --shadow-lift: 0 4px 14px -6px rgb(0 0 0 / 0.6);
 }
@@ -60,81 +60,98 @@
  */
 :root[data-theme="light"] {
   color-scheme: light;
-  --fg: 14 23 18; /* text  #0E1712 */
-  --ink-900: 243 246 244; /* page  #F3F6F4 */
-  --ink-800: 255 255 255; /* surface: inputs */
+  /*
+   * White and green, the default. The logo green is ~1.6:1 on white, too pale for text, so
+   * actions and odds use deeper greens from the same family. Every pairing measures >= 4.5:1.
+   */
+  --fg: 10 26 16; /* text  #0A1A10 */
+  --ink-900: 247 250 248; /* page  #F7FAF8 */
+  --ink-800: 255 255 255; /* inputs */
   --ink-700: 255 255 255; /* cards */
-  --ink-600: 237 242 239; /* raised: odds tiles, wells  #EDF2EF */
-  --ink-500: 226 233 229; /* hover  #E2E9E5 */
-  --ink-400: 199 211 204; /* strong border  #C7D3CC */
-  --line: 220 228 223; /* hairline  #DCE4DF */
-  --fog: 69 85 76; /* secondary text  #45554C */
-  --fog-muted: 90 106 97; /* muted text  #5A6A61 */
-  --lime: 21 128 61; /* ACTION — the brand green, deepened for white  #15803D */
+  --ink-600: 240 247 242; /* raised: odds tiles, wells  #F0F7F2 */
+  --ink-500: 225 240 230; /* hover  #E1F0E6 */
+  --ink-400: 190 214 198; /* strong border  #BED6C6 */
+  --line: 223 235 227; /* hairline  #DFEBE3 */
+  --fog: 55 85 66; /* secondary text  #375542 */
+  --fog-muted: 82 110 92; /* muted text  #526E5C */
+  --lime: 21 128 61; /* ACTION — brand green, deepened for white  #15803D */
   --lime-600: 22 101 52; /* pressed  #166534 */
   --lime-ink: 255 255 255; /* text on green */
-  --gold: 146 96 0; /* VALUE — the crown gold, deepened for white  #926000 */
-  --gold-600: 120 79 0;
-  --gold-ink: 255 255 255; /* text on gold */
+  --gold: 22 101 52; /* VALUE — odds, balance, bonuses  #166534 */
+  --gold-600: 20 83 45;
+  --gold-ink: 255 255 255;
   --teal: 4 120 87; /* WIN  #047857 */
   --danger: 197 48 48; /* LOSS  #C53030 */
-  --warn: 146 96 0;
+  --warn: 161 98 7; /* warnings: amber  #A16207 */
   --shadow-card: 0 1px 2px rgb(16 24 20 / 0.06);
   --shadow-lift: 0 6px 16px -8px rgb(16 24 20 / 0.18);
 }
 
 /*
- * Admin console scope: its own premium palette, separate from the player site. Deep graphite
- * surfaces told apart by small lightness steps, one soft indigo accent for navigation and primary
- * actions, and green/amber/red only for status. The shared token names are re-pointed here, so
- * existing admin classes (text-white -> --fg, text-lime -> accent, bg-ink-* -> surfaces) re-skin
- * without being rewritten. Dark by default; `data-admin-theme="light"` flips to the light theme.
+ * Admin console scope: the Bet Zone white-and-green palette, re-declared on the console so it
+ * doesn't follow the player's theme. The shared token names are re-pointed here, so existing
+ * admin classes (text-white -> --fg, text-lime -> accent, bg-ink-* -> surfaces) re-skin without
+ * being rewritten. White by default; `data-admin-theme="dark"` flips to the deep-green theme.
  */
 .admin-shell {
-  color-scheme: dark;
-  --fg: 237 240 245; /* text  #EDF0F5 */
-  --ink-900: 9 11 16; /* page  #090B10 */
-  --ink-800: 13 16 22; /* sidebar / top bar  #0D1016 */
-  --ink-700: 17 21 28; /* cards  #11151C */
-  --ink-600: 22 27 35; /* raised  #161B23 */
-  --ink-500: 28 34 44; /* hover  #1C222C */
-  --ink-400: 48 56 70; /* strong border */
-  --line: 31 37 47; /* hairline  #1F252F */
-  --fog: 148 158 175; /* muted  #949EAF */
-  --fog-muted: 108 117 133;
-  --lime: 129 140 248; /* ACCENT indigo  #818CF8 */
-  --lime-600: 99 102 241;
-  --lime-ink: 255 255 255;
-  --teal: 52 199 135; /* success  #34C787 */
-  --danger: 244 96 96; /* danger  #F46060 */
-  --warn: 245 176 65; /* warning  #F5B041 */
-  --shadow-card: inset 0 1px 0 rgb(255 255 255 / 0.03), 0 1px 2px rgb(0 0 0 / 0.4);
-  --shadow-lift: 0 16px 40px -16px rgb(0 0 0 / 0.7);
+  color-scheme: light;
+  /*
+   * White and green, the default. The logo green is ~1.6:1 on white, too pale for text, so
+   * actions and odds use deeper greens from the same family. Every pairing measures >= 4.5:1.
+   */
+  --fg: 10 26 16; /* text  #0A1A10 */
+  --ink-900: 247 250 248; /* page  #F7FAF8 */
+  --ink-800: 255 255 255; /* inputs */
+  --ink-700: 255 255 255; /* cards */
+  --ink-600: 240 247 242; /* raised: odds tiles, wells  #F0F7F2 */
+  --ink-500: 225 240 230; /* hover  #E1F0E6 */
+  --ink-400: 190 214 198; /* strong border  #BED6C6 */
+  --line: 223 235 227; /* hairline  #DFEBE3 */
+  --fog: 55 85 66; /* secondary text  #375542 */
+  --fog-muted: 82 110 92; /* muted text  #526E5C */
+  --lime: 21 128 61; /* ACTION — brand green, deepened for white  #15803D */
+  --lime-600: 22 101 52; /* pressed  #166534 */
+  --lime-ink: 255 255 255; /* text on green */
+  --gold: 22 101 52; /* VALUE — odds, balance, bonuses  #166534 */
+  --gold-600: 20 83 45;
+  --gold-ink: 255 255 255;
+  --teal: 4 120 87; /* WIN  #047857 */
+  --danger: 197 48 48; /* LOSS  #C53030 */
+  --warn: 161 98 7; /* warnings: amber  #A16207 */
+  --shadow-card: 0 1px 2px rgb(16 24 20 / 0.06);
+  --shadow-lift: 0 16px 40px -16px rgb(15 23 42 / 0.25);
   color: rgb(var(--fg));
 }
 /* Both forms: the <html> attribute is set pre-paint (no theme flash), the shell's own attribute
-   after hydration. Either one selects the light theme. */
-.admin-shell[data-admin-theme="light"],
-:root[data-admin-theme="light"] .admin-shell {
-  color-scheme: light;
-  --fg: 15 23 42; /* text  #0F172A */
-  --ink-900: 246 247 249; /* page  #F6F7F9 */
-  --ink-800: 255 255 255; /* sidebar / top bar */
-  --ink-700: 255 255 255; /* cards */
-  --ink-600: 248 249 251; /* raised */
-  --ink-500: 241 243 246; /* hover */
-  --ink-400: 203 210 220; /* strong border */
-  --line: 230 233 238; /* hairline  #E6E9EE */
-  --fog: 100 116 139; /* muted  #64748B */
-  --fog-muted: 148 163 184;
-  --lime: 79 70 229; /* ACCENT indigo  #4F46E5 */
-  --lime-600: 67 56 202;
-  --lime-ink: 255 255 255;
-  --teal: 5 150 105;
-  --danger: 220 38 38;
-  --warn: 217 119 6;
-  --shadow-card: 0 1px 2px rgb(15 23 42 / 0.04), 0 1px 3px rgb(15 23 42 / 0.06);
-  --shadow-lift: 0 16px 40px -16px rgb(15 23 42 / 0.25);
+   after hydration. Either one selects the dark theme; these selectors outrank the white base. */
+.admin-shell[data-admin-theme="dark"],
+:root[data-admin-theme="dark"] .admin-shell {
+  color-scheme: dark;
+  /*
+   * Deep brand green, from the Bet Zone logo: the dark blocks (header, footer, tickets) and dark
+   * mode. The logo's own green (#58F800) carries actions; neutrals stay green-tinted and quiet.
+   */
+  --fg: 240 253 244; /* text  #F0FDF4 */
+  --ink-900: 3 20 10; /* page  #03140A */
+  --ink-800: 6 30 15; /* header, inputs  #061E0F */
+  --ink-700: 6 30 15; /* cards */
+  --ink-600: 10 40 21; /* raised: odds cells  #0A2815 */
+  --ink-500: 15 52 28; /* hover  #0F341C */
+  --ink-400: 28 78 44; /* strong border  #1C4E2C */
+  --line: 21 60 34; /* hairline  #153C22 */
+  --fog: 167 199 177; /* secondary text  #A7C7B1 */
+  --fog-muted: 134 171 146; /* muted text  #86AB92 */
+  --lime: 88 248 0; /* ACTION — the logo green  #58F800 */
+  --lime-600: 76 214 0;
+  --lime-ink: 3 20 10; /* text on green */
+  --gold: 182 255 122; /* VALUE — odds, balance, bonuses: a pale logo green  #B6FF7A */
+  --gold-600: 150 235 90;
+  --gold-ink: 3 20 10;
+  --teal: 52 211 153; /* WIN — emerald, distinct from the brand green  #34D399 */
+  --danger: 248 96 96; /* LOSS  #F86060 */
+  --warn: 250 204 21; /* warnings: amber, so they stand out from the green  #FACC15 */
+  --shadow-card: 0 1px 2px rgb(0 0 0 / 0.3);
+  --shadow-lift: 0 16px 40px -16px rgb(0 0 0 / 0.7);
 }
 /* The console is its own app: the player site's header steps aside while it is on screen. */
 body:has(.admin-shell) .site-header {
@@ -481,13 +498,9 @@ body {
   padding-top: 0.08em;
 }
 .sb-digit,
-.sb-soccer,
 .sb-bet {
   display: inline-block;
   animation: sb-rise 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) both;
-}
-.sb-soccer {
-  animation-delay: 1.15s;
 }
 .sb-bet {
   color: #3cdc3c;

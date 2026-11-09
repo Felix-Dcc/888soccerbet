@@ -5,7 +5,7 @@
  */
 import { formatPesewas } from "./money";
 
-const FROM = { name: process.env.EMAIL_FROM_NAME || "888SoccerBet", email: process.env.EMAIL_FROM || "no-reply@888soccerbet.com" };
+const FROM = { name: process.env.EMAIL_FROM_NAME || "Bet Zone", email: process.env.EMAIL_FROM || "no-reply@888soccerbet.com" };
 const appUrl = () => (process.env.APP_URL || "https://888soccerbet.com").replace(/\/+$/, "");
 
 export interface Email {
@@ -46,9 +46,9 @@ function layout(title: string, body: string, cta?: { label: string; href: string
   return `<!doctype html><html><body style="margin:0;background:#EEF1F4;font-family:Arial,Helvetica,sans-serif;color:#111827">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#EEF1F4;padding:24px 12px"><tr><td align="center">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;background:#ffffff;border-radius:14px;overflow:hidden">
-<tr><td style="background:#0A0F0C;padding:18px 24px;font-size:20px;font-weight:800;color:#ffffff">888<span style="letter-spacing:.5px">SOCCER</span><span style="color:#3CDC3C">BET</span></td></tr>
+<tr><td style="background:#03140A;padding:18px 24px;font-size:20px;font-weight:800;color:#ffffff">BET <span style="color:#58F800">ZONE</span></td></tr>
 <tr><td style="padding:28px 24px 8px"><h1 style="margin:0 0 14px;font-size:22px">${esc(title)}</h1>${body}${button}</td></tr>
-<tr><td style="padding:18px 24px 24px;font-size:12px;color:#6B7280">You're getting this because of activity on your 888SoccerBet account. 18+ only. Play responsibly.<br>${esc(appUrl())}</td></tr>
+<tr><td style="padding:18px 24px 24px;font-size:12px;color:#6B7280">You're getting this because of activity on your Bet Zone account. 18+ only. Play responsibly.<br>${esc(appUrl())}</td></tr>
 </table></td></tr></table></body></html>`;
 }
 const p = (s: string) => `<p style="margin:0 0 12px;font-size:15px;line-height:1.5">${s}</p>`;
@@ -58,42 +58,42 @@ export const emails = {
   verifyCode(to: string, code: string): Email {
     return {
       to,
-      subject: `${code} is your 888SoccerBet code`,
+      subject: `${code} is your Bet Zone code`,
       html: layout(
         "Confirm your email",
-        p("Enter this code on 888SoccerBet to confirm your email address:") +
+        p("Enter this code on Bet Zone to confirm your email address:") +
           `<p style="margin:18px 0;font-size:34px;font-weight:800;letter-spacing:8px">${esc(code)}</p>` +
           p("It expires in 30 minutes. If you didn't create an account, you can ignore this email."),
         { label: "Enter code", href: `${appUrl()}/verify-email` },
       ),
-      text: `Your 888SoccerBet code is ${code}. Enter it at ${appUrl()}/verify-email. It expires in 30 minutes. If you didn't create an account, ignore this email.`,
+      text: `Your Bet Zone code is ${code}. Enter it at ${appUrl()}/verify-email. It expires in 30 minutes. If you didn't create an account, ignore this email.`,
     };
   },
 
   passwordReset(to: string, link: string): Email {
     return {
       to,
-      subject: "Reset your 888SoccerBet password",
+      subject: "Reset your Bet Zone password",
       html: layout(
         "Reset your password",
-        p("Someone asked to reset the password on your 888SoccerBet account. Use the button below to choose a new one.") +
+        p("Someone asked to reset the password on your Bet Zone account. Use the button below to choose a new one.") +
           p("The link works once and expires in 30 minutes. If this wasn't you, ignore this email: your password stays the same."),
         { label: "Choose a new password", href: link },
       ),
-      text: `Reset your 888SoccerBet password: ${link}\nThe link works once and expires in 30 minutes. If this wasn't you, ignore this email.`,
+      text: `Reset your Bet Zone password: ${link}\nThe link works once and expires in 30 minutes. If this wasn't you, ignore this email.`,
     };
   },
 
   win(to: string, payout: bigint, ref: string): Email {
     return {
       to,
-      subject: `You won ${ghs(payout)} on 888SoccerBet`,
+      subject: `You won ${ghs(payout)} on Bet Zone`,
       html: layout(
         "You won!",
         p(`Your ticket <strong>${esc(ref)}</strong> won. <strong>${esc(ghs(payout))}</strong> has been added to your balance.`),
         { label: "View ticket", href: `${appUrl()}/bets` },
       ),
-      text: `Your ticket ${ref} won. ${ghs(payout)} has been added to your 888SoccerBet balance. ${appUrl()}/bets`,
+      text: `Your ticket ${ref} won. ${ghs(payout)} has been added to your Bet Zone balance. ${appUrl()}/bets`,
     };
   },
 
@@ -101,8 +101,8 @@ export const emails = {
     return {
       to,
       subject: `Deposit received: ${ghs(amount)}`,
-      html: layout("Deposit received", p(`<strong>${esc(ghs(amount))}</strong> is now in your 888SoccerBet balance.`) + p(`Reference: ${esc(ref)}`), { label: "Open wallet", href: `${appUrl()}/wallet` }),
-      text: `${ghs(amount)} is now in your 888SoccerBet balance. Reference: ${ref}. ${appUrl()}/wallet`,
+      html: layout("Deposit received", p(`<strong>${esc(ghs(amount))}</strong> is now in your Bet Zone balance.`) + p(`Reference: ${esc(ref)}`), { label: "Open wallet", href: `${appUrl()}/wallet` }),
+      text: `${ghs(amount)} is now in your Bet Zone balance. Reference: ${ref}. ${appUrl()}/wallet`,
     };
   },
 
