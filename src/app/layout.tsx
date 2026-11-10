@@ -22,7 +22,7 @@ export const metadata: Metadata = {
   // loads, breaking hydration (and making an ID tappable to call it).
   formatDetection: { telephone: false, email: false, address: false, date: false },
 };
-export const viewport: Viewport = { themeColor: "#0A0F0C", width: "device-width", initialScale: 1 };
+export const viewport: Viewport = { themeColor: "#F8FBF9", width: "device-width", initialScale: 1 };
 
 /** Navigation data for the rail. A database outage degrades to an empty nav, not a broken page. */
 async function navData(): Promise<NavData> {

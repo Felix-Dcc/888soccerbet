@@ -389,7 +389,7 @@ function WithdrawalBanner({ info }: { info: { ref: string; amount: string } }) {
   return createPortal(
     <div className={`fixed inset-x-0 top-0 z-[80] flex justify-center px-3 pt-3 transition-transform duration-500 ease-out ${show ? "translate-y-0" : "-translate-y-[150%]"}`}>
       <div className="flex w-full max-w-sm items-start gap-3 rounded-2xl border border-line bg-ink-700/95 p-3 shadow-lift backdrop-blur">
-        <BrandMark size={36} className="rounded-lg" />
+        <BrandMark size={36} />
         <div className="min-w-0 flex-1">
           <div className="flex items-baseline justify-between gap-2 text-xs">
             <span className="font-bold text-white">Bet Zone</span>
@@ -435,12 +435,12 @@ function WithdrawalSuccess({ info, onClose }: { info: { ref: string; amount: str
     <div role="dialog" aria-modal="true" aria-labelledby="wdr-ok-title" className="fixed inset-0 z-[70] flex items-end justify-center sm:items-center sm:p-4">
       <div className="fixed inset-0 animate-fade-in bg-[#04060A]/60 backdrop-blur-[4px]" onClick={onClose} />
       <div className="relative z-10 max-h-[94vh] w-full max-w-md animate-win-pop overflow-y-auto rounded-t-3xl border border-line bg-ink-700 text-white shadow-lift sm:rounded-3xl motion-reduce:animate-none">
-        {/* receipt head: the logo on the night-pitch body, with its speed swoosh */}
-        <div className="theme-dark relative isolate flex h-32 items-start justify-center overflow-hidden bg-[linear-gradient(135deg,#17291F_0%,#0C130F_60%,#132219_100%)] pt-5">
+        {/* receipt head: the logo on the site's dark navy, with a soft green swoosh */}
+        <div className="theme-dark relative isolate flex h-32 items-start justify-center overflow-hidden bg-[linear-gradient(135deg,#17202E_0%,#040913_60%,#0C1421_100%)] pt-5">
           <svg aria-hidden className="absolute inset-0 -z-10 h-full w-full" viewBox="0 0 400 128" preserveAspectRatio="none">
-            <path d="M90 128 Q230 30 420 10 Q262 66 150 128 Z" fill="#3CDC3C" opacity=".15" />
+            <path d="M90 128 Q230 30 420 10 Q262 66 150 128 Z" fill="#00BA3B" opacity=".15" />
           </svg>
-          <Logo className="h-12" />
+          <Logo size="lg" />
           <button
             onClick={onClose}
             aria-label="Close"

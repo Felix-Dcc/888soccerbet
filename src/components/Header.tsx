@@ -56,7 +56,7 @@ export function Header() {
   return (
     <>
       {/* Only this top bar stays pinned; the tab row and sports row scroll away beneath it. */}
-      <header className="site-header theme-dark sticky top-0 z-40 border-b border-line bg-ink-800">
+      <header className="site-header sticky top-0 z-40 border-b border-line bg-ink-800">
         <div className="mx-auto flex h-14 max-w-[1280px] items-center gap-2 px-3 max-[390px]:gap-1.5 sm:gap-3 sm:px-4 lg:h-[60px] lg:gap-6">
           <Link href="/" aria-label="Bet Zone home" className="shrink-0">
             {/* Slightly smaller wordmark on narrow phones, so search, the balance eye, balance and menu fit beside it. */}
@@ -68,7 +68,7 @@ export function Header() {
           <div className="ml-auto flex items-center gap-1 max-[390px]:gap-0.5 sm:gap-2">
             {!onConsole && (
               <button
-                className="grid h-9 w-8 place-items-center rounded-lg text-white/80 hover:bg-white/10 hover:text-white max-[390px]:w-7 sm:w-9 md:hidden"
+                className="grid h-9 w-8 place-items-center rounded-lg text-fog hover:bg-ink-500 hover:text-white max-[390px]:w-7 sm:w-9 md:hidden"
                 aria-label="Search matches"
                 aria-expanded={searching}
                 onClick={() => setSearching((s) => !s)}
@@ -78,16 +78,16 @@ export function Header() {
             )}
             {onConsole ? (
               <>
-                <Link href="/" className="btn border border-white/25 px-3 py-1.5 text-[13px] text-white hover:border-white/50 hover:bg-white/5 sm:px-4 sm:py-2 sm:text-sm">
+                <Link href="/" className="btn border border-line px-3 py-1.5 text-[13px] text-white hover:border-ink-400 hover:bg-ink-500 sm:px-4 sm:py-2 sm:text-sm">
                   View site
                 </Link>
-                <Link href="/account" className="inline-flex h-9 items-center gap-2 rounded-lg px-2.5 text-sm font-semibold text-white/85 hover:bg-white/10 hover:text-white">
+                <Link href="/account" className="inline-flex h-9 items-center gap-2 rounded-lg px-2.5 text-sm font-semibold text-fog hover:bg-ink-500 hover:text-white">
                   <SportIcon sport="account" className="h-5 w-5" />
                   <span className="hidden sm:inline">Account</span>
                 </Link>
               </>
             ) : me === null ? (
-              <div className="h-9 w-32 animate-pulse rounded-lg bg-white/10" />
+              <div className="h-9 w-32 animate-pulse rounded-lg bg-ink-600" />
             ) : loggedIn ? (
               <>
                 <Balance amount={balance} onRefresh={load} />
@@ -106,7 +106,7 @@ export function Header() {
               <>
                 <Link
                   href="/login"
-                  className="btn border border-white/25 px-3 py-1.5 text-[13px] text-white hover:border-white/50 hover:bg-white/5 sm:px-4 sm:py-2 sm:text-sm"
+                  className="btn border border-line px-3 py-1.5 text-[13px] text-white hover:border-ink-400 hover:bg-ink-500 sm:px-4 sm:py-2 sm:text-sm"
                 >
                   Log in
                 </Link>
@@ -120,7 +120,7 @@ export function Header() {
             )}
             {!onConsole && (
             <button
-              className="grid h-9 w-8 place-items-center rounded-lg text-white/80 hover:bg-white/10 hover:text-white max-[390px]:w-7 sm:w-9 md:hidden"
+              className="grid h-9 w-8 place-items-center rounded-lg text-fog hover:bg-ink-500 hover:text-white max-[390px]:w-7 sm:w-9 md:hidden"
               aria-label="More"
               aria-expanded={menu}
               onClick={() => setMenu((m) => !m)}
@@ -134,12 +134,12 @@ export function Header() {
         </div>
 
         {searching && (
-          <div className="border-t border-white/10 px-4 py-3">
+          <div className="border-t border-line px-4 py-3">
             <SearchForm autoFocus />
           </div>
         )}
         {menu && (
-          <nav aria-label="More" className="animate-fade-in border-t border-white/10 px-4 py-2 md:hidden">
+          <nav aria-label="More" className="animate-fade-in border-t border-line px-4 py-2 md:hidden">
             {/* Sport filters live here on phones; the desktop rail carries them on wider screens. */}
             {[
               { href: "/?sport=football", label: "Football" },
@@ -147,7 +147,7 @@ export function Header() {
               ...nav.filter((n) => n.href !== "/"),
               { href: "/wallet", label: "Wallet" },
             ].map((n) => (
-              <Link key={n.href} href={n.href} className="block rounded-lg px-3 py-2.5 font-semibold text-white/85 hover:bg-white/10 hover:text-white">
+              <Link key={n.href} href={n.href} className="block rounded-lg px-3 py-2.5 font-semibold text-fog hover:bg-ink-500 hover:text-white">
                 {n.label}
               </Link>
             ))}
@@ -155,7 +155,7 @@ export function Header() {
         )}
       </header>
       {me?.user?.emailVerified === false && path !== "/verify-email" && (
-        <div role="status" className="theme-dark border-b border-lime/25 bg-ink-600 text-white">
+        <div role="status" className="border-b border-lime/25 bg-ink-600 text-white">
           <div className="mx-auto flex max-w-[1280px] flex-wrap items-center justify-between gap-x-3 gap-y-1 px-3 py-2 text-sm sm:px-4">
             <span>Confirm your email to deposit and withdraw.</span>
             <Link href="/verify-email" className="font-bold text-lime underline underline-offset-2">
@@ -165,7 +165,7 @@ export function Header() {
         </div>
       )}
       {!path.startsWith("/admin") && (
-      <div className="theme-dark hidden border-b border-line bg-ink-800 md:block">
+      <div className="hidden border-b border-line bg-ink-800 md:block">
         <nav aria-label="Main" className="mx-auto flex h-12 max-w-[1280px] items-center gap-6 px-4">
           {nav.map((n) => {
             const active = n.href === "/" ? path === "/" || path.startsWith("/fixture") : path.startsWith(n.href);
@@ -175,7 +175,7 @@ export function Header() {
                 href={n.href}
                 aria-current={active ? "page" : undefined}
                 className={`relative flex h-full items-center gap-1.5 whitespace-nowrap font-display text-[15px] font-extrabold italic transition-colors ${
-                  active ? "text-lime" : "text-white/85 hover:text-white"
+                  active ? "text-lime" : "text-fog hover:text-white"
                 }`}
               >
                 {n.label === "Live" && <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-danger" />}
@@ -187,7 +187,7 @@ export function Header() {
           <button
             onClick={() => setSearching((s) => !s)}
             aria-expanded={searching}
-            className="ml-auto flex shrink-0 items-center gap-1.5 text-sm font-semibold text-white/85 transition-colors hover:text-white"
+            className="ml-auto flex shrink-0 items-center gap-1.5 text-sm font-semibold text-fog transition-colors hover:text-white"
           >
             <SportIcon sport="search" className="h-4 w-4" />
             Search
@@ -203,12 +203,12 @@ export function Header() {
 const ACCOUNT_LINK = "hidden shrink-0 items-center text-sm font-semibold text-lime transition-colors hover:text-white md:inline-flex";
 
 /** Hairline between the account links, as on most books' utility bars. */
-const Pipe = () => <span aria-hidden className="hidden h-4 w-px shrink-0 bg-white/15 md:block" />;
+const Pipe = () => <span aria-hidden className="hidden h-4 w-px shrink-0 bg-line md:block" />;
 
 /** Market and currency. Bet Zone serves one market, so this states it — it isn't a picker. */
 function LocaleChip() {
   return (
-    <span className="hidden shrink-0 items-center gap-1.5 rounded-full border border-white/15 bg-black/20 px-2.5 py-1 text-xs font-semibold text-white/85 lg:inline-flex">
+    <span className="hidden shrink-0 items-center gap-1.5 rounded-full border border-line bg-ink-600 px-2.5 py-1 text-xs font-semibold text-fog lg:inline-flex">
       <GhanaFlag />
       Ghana
     </span>
@@ -274,14 +274,14 @@ function Balance({ amount, onRefresh }: { amount: string; onRefresh: () => void 
       return !h;
     });
   };
-  const btn = "grid h-7 w-7 place-items-center rounded-md text-white/60 hover:bg-white/10 hover:text-white";
+  const btn = "grid h-7 w-7 place-items-center rounded-md text-fog-muted hover:bg-ink-500 hover:text-white";
   const text = `GHS ${amount}`;
   return (
     <>
       {/* Phones: the eye sits right after search; the full bar below carries its own. */}
       <button
         onClick={toggle}
-        className="grid h-9 w-8 place-items-center rounded-lg text-white/80 hover:bg-white/10 hover:text-white max-[390px]:w-7 sm:hidden"
+        className="grid h-9 w-8 place-items-center rounded-lg text-fog hover:bg-ink-500 hover:text-white max-[390px]:w-7 sm:hidden"
         aria-label={hidden ? "Show balance" : "Hide balance"}
         aria-pressed={hidden}
       >
@@ -291,14 +291,14 @@ function Balance({ amount, onRefresh }: { amount: string; onRefresh: () => void 
           {hidden && <path d="M4 4l16 16" />}
         </svg>
       </button>
-      <div className="flex items-center gap-1 rounded-lg border border-white/20 bg-black/15 py-0.5 pl-2 pr-0.5 sm:hidden">
+      <div className="flex items-center gap-1 rounded-lg border border-line bg-ink-600 py-0.5 pl-2 pr-0.5 sm:hidden">
         <Link
           href="/wallet"
           className={`whitespace-nowrap font-bold tabular-nums text-gold ${amount.length > 9 ? "text-[12px]" : "text-[13px]"}`}
           aria-label={hidden ? "Balance hidden, open wallet" : `Balance ${text}, open wallet`}
         >
           {/* On the narrowest phones a 5+ figure balance needs the label's room; the aria-label keeps "GHS". */}
-          <span className={`mr-0.5 text-[10px] font-semibold text-white/70 ${amount.length > 8 ? "max-[390px]:hidden" : ""}`}>GHS</span>
+          <span className={`mr-0.5 text-[10px] font-semibold text-fog-muted ${amount.length > 8 ? "max-[390px]:hidden" : ""}`}>GHS</span>
           {hidden ? "••••" : amount}
         </Link>
         <Link href="/wallet" aria-label="Deposit" className="grid h-7 w-7 place-items-center rounded-md bg-lime text-lime-ink hover:bg-lime-600">
@@ -307,7 +307,7 @@ function Balance({ amount, onRefresh }: { amount: string; onRefresh: () => void 
           </svg>
         </Link>
       </div>
-      <div className="hidden items-center gap-0.5 rounded-lg border border-white/20 bg-black/15 py-0.5 pl-3 pr-1 sm:flex">
+      <div className="hidden items-center gap-0.5 rounded-lg border border-line bg-ink-600 py-0.5 pl-3 pr-1 sm:flex">
         <Link href="/wallet" className="mr-1 text-sm font-bold tabular-nums text-gold" aria-label={hidden ? "Balance hidden" : `Balance ${text}`}>
           {hidden ? "GHS ••••" : text}
         </Link>
@@ -349,7 +349,7 @@ function SearchForm({ autoFocus = false }: { autoFocus?: boolean }) {
       }}
       className="relative w-full max-w-md"
     >
-      <span className="pointer-events-none absolute inset-y-0 left-3 grid place-items-center text-white/60">
+      <span className="pointer-events-none absolute inset-y-0 left-3 grid place-items-center text-fog-muted">
         <SportIcon sport="search" className="h-4 w-4" />
       </span>
       <label htmlFor={autoFocus ? "q-mobile" : "q"} className="sr-only">
@@ -363,7 +363,7 @@ function SearchForm({ autoFocus = false }: { autoFocus?: boolean }) {
         onChange={(e) => setQ(e.target.value)}
         placeholder="Search teams or competitions"
         maxLength={60}
-        className="h-10 w-full rounded-full border border-white/15 bg-white/10 py-0 pl-9 pr-4 text-sm text-white outline-none transition placeholder:text-white/55 focus:border-lime focus:bg-white/15 focus:ring-2 focus:ring-lime/30"
+        className="h-10 w-full rounded-full border border-line bg-ink-600 py-0 pl-9 pr-4 text-sm text-white outline-none transition placeholder:text-fog-muted focus:border-lime focus:bg-line focus:ring-2 focus:ring-lime/30"
       />
     </form>
   );

@@ -1,15 +1,17 @@
+import { TrendingUp } from "lucide-react";
+
 /**
  * Brand loading screen shown when the site is opened (once per browser tab session), ~2s:
- * a neon green streak traces a ring -> the Bet Zone logo comes into focus from a blur -> a
- * light sweep crosses the logo (masked to its shape) -> a comet keeps orbiting the ring and a
- * soft glow breathes behind the logo until the page is ready. Server-rendered markup + CSS,
- * so it paints in the first bytes; the logo is a small dedicated copy, fetched first.
- * SPLASH_SCRIPT (in <head>) decides whether to show it and when to fade it out. Every element's
- * resting style is its final frame, so reduced-motion users see the finished logo.
+ * a green streak traces a ring -> the logo tile pops in and a light sweep crosses it -> "Bet
+ * Zone · SPORTSBOOK" comes into focus beside it -> a comet keeps orbiting the ring and a soft
+ * glow breathes behind until the page is ready. Server-rendered markup + CSS (no images), so it
+ * paints in the first bytes, in the visitor's own theme. SPLASH_SCRIPT (in <head>) decides
+ * whether to show it and when to fade it out. Every element's resting style is its final frame,
+ * so reduced-motion users see the finished logo.
  */
 export function Splash() {
   return (
-    <div id="kb-splash" className="theme-dark" role="status" aria-live="polite" aria-label="Loading Bet Zone">
+    <div id="kb-splash" role="status" aria-live="polite" aria-label="Loading Bet Zone">
       <div className="bz-stage" aria-hidden>
         <div className="bz-glow" />
         <svg className="bz-ring" viewBox="0 0 200 200">
@@ -18,9 +20,15 @@ export function Splash() {
         <svg className="bz-comet" viewBox="0 0 200 200">
           <circle cx="100" cy="100" r="92" pathLength={1} />
         </svg>
-        {/* eslint-disable-next-line @next/next/no-img-element -- must paint with the first bytes, before hydration */}
-        <img className="bz-logo" src="/img/brand/betzone-splash.webp" alt="" width={640} height={370} fetchPriority="high" decoding="async" />
-        <div className="bz-sheen" />
+        <div className="bz-mark">
+          <span className="bz-tile">
+            <TrendingUp strokeWidth={2} className="bz-arrow" />
+          </span>
+          <span className="bz-word">
+            <span className="bz-name font-display">Bet Zone</span>
+            <span className="bz-tag font-display">Sportsbook</span>
+          </span>
+        </div>
       </div>
       <div className="kb-splash-bar" aria-hidden>
         <span />

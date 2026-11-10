@@ -27,7 +27,7 @@ export function AuthShell({
         {/* Scrim so the copy stays readable whatever part of the photo sits behind it. */}
         <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/60 to-black/40" />
         <div className="relative flex h-full flex-col justify-between p-10 text-snow">
-          <Logo className="h-12 self-start" />
+          <Logo size="lg" className="theme-dark self-start" />
           <div>
             <h2 className="font-display text-3xl font-extrabold leading-tight tracking-tight">
               Every match.
@@ -51,7 +51,7 @@ export function AuthShell({
 
       <div className="flex flex-col justify-center px-6 py-10 sm:px-12">
         <div className="mx-auto w-full max-w-sm">
-          <Logo className="mb-8 h-10 lg:hidden" />
+          <Logo className="mb-8 lg:hidden" />
           <h1 className="font-display text-2xl font-extrabold tracking-tight text-white sm:text-3xl">{title}</h1>
           {subtitle && <p className="mt-2 text-sm text-fog">{subtitle}</p>}
           <div className="mt-8">{children}</div>

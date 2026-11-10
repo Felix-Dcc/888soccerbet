@@ -247,9 +247,8 @@ function RailHeader({ collapsed, roleBadge }: { collapsed: boolean; roleBadge: s
   }
   return (
     <div className="flex h-16 shrink-0 items-center gap-2.5 px-5">
-      {/* The logo is white lettering: in the light theme it sits on a dark plate so it stays legible. */}
-      <Link href="/admin" aria-label="Console home" className="rounded-lg [[data-admin-theme=light]_&]:bg-[#0D1016] [[data-admin-theme=light]_&]:px-2 [[data-admin-theme=light]_&]:py-1">
-        <Logo className="h-9" />
+      <Link href="/admin" aria-label="Console home" className="min-w-0 rounded-lg">
+        <Logo />
       </Link>
       <span title={roleBadge} className="rounded-md bg-lime/10 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-lime ring-1 ring-inset ring-lime/20">
         Admin

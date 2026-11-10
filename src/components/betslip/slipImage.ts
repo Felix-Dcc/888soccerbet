@@ -7,22 +7,22 @@
 import { combineMilliOdds, formatMilliOdds, formatPesewas, potentialPayout } from "@/lib/money";
 import { formatStamp } from "@/lib/time";
 import type { Pick } from "./BetslipContext";
-import logoArt from "../../../public/img/brand/betzone-logo.png";
 
 const W = 1080;
 const PAD = 48; // dark margin around the white card
 const IN = 48; // text inset inside the white card
 const C = {
-  brand: "#0A2815",
-  brandDark: "#03140A",
-  panel: "#111814",
-  code: "#58F800",
-  ink: "#0A0F0C",
-  fog: "#4E5D53",
-  line: "#E1E8E3",
-  band: "#E5F6E5",
-  bandText: "#167516",
-  gold: "#B6FF7A",
+  // The Bet Zone site's palette: its dark theme for the bars, its light theme for the card.
+  brand: "#17202E",
+  brandDark: "#040913",
+  panel: "#0C1421",
+  code: "#00BA3B",
+  ink: "#040C06",
+  fog: "#556159",
+  line: "#D2DAD4",
+  band: "#D6F5D9",
+  bandText: "#005600",
+  gold: "#8EF39E",
 };
 const EXAMPLE_STAKE = 10_000n; // GHS 100 in pesewas
 
@@ -49,16 +49,37 @@ function pickLabel(p: Pick): string {
   return p.selectionName;
 }
 
-/** The real logo, decoded before drawing; null if it can't load (the wordmark is drawn instead). */
-async function loadLogo(): Promise<HTMLImageElement | null> {
-  try {
-    const img = new Image();
-    img.src = logoArt.src;
-    await img.decode();
-    return img;
-  } catch {
-    return null;
+/** The Bet Zone logo, drawn: the green tile with its rising-trend arrow, the name and SPORTSBOOK. */
+function drawLogo(ctx: CanvasRenderingContext2D, x: number, cy: number, display: string) {
+  const T = 96;
+  const y = cy - T / 2;
+  const g = ctx.createLinearGradient(x, y, x + T, y + T);
+  g.addColorStop(0, C.code);
+  g.addColorStop(1, "rgba(0,186,59,.8)");
+  ctx.fillStyle = g;
+  ctx.beginPath();
+  ctx.roundRect(x, y, T, T, 24);
+  ctx.fill();
+  // lucide "trending-up" (24-unit box), centred in the tile
+  const k = (T * 0.58) / 24;
+  const ox = x + (T - 24 * k) / 2;
+  const oy = y + (T - 24 * k) / 2;
+  ctx.strokeStyle = "#FAFCFB";
+  ctx.lineWidth = 2 * k;
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+  for (const pts of [[[16, 7], [22, 7], [22, 13]], [[22, 7], [13.5, 15.5], [8.5, 10.5], [2, 17]]]) {
+    ctx.beginPath();
+    pts.forEach(([px, py], i) => (i ? ctx.lineTo(ox + px! * k, oy + py! * k) : ctx.moveTo(ox + px! * k, oy + py! * k)));
+    ctx.stroke();
   }
+  ctx.textAlign = "left";
+  ctx.fillStyle = "#FFFFFF";
+  ctx.font = `800 56px ${display}`;
+  ctx.fillText("Bet Zone", x + T + 24, cy - 12);
+  ctx.fillStyle = C.code;
+  ctx.font = `800 20px ${display}`;
+  ctx.fillText("S P O R T S B O O K", x + T + 26, cy + 32);
 }
 
 export async function drawSlipImage(code: string, picks: Pick[], bookedAt: Date = new Date()): Promise<Blob> {
@@ -68,7 +89,6 @@ export async function drawSlipImage(code: string, picks: Pick[], bookedAt: Date 
     [`800 40px ${f.display}`, `800 36px ${f.body}`, `700 30px ${f.body}`, `600 30px ${f.body}`, `500 30px ${f.body}`].map((x) => document.fonts.load(x).catch(() => [])),
   );
 
-  const logo = await loadLogo();
   const combined = combineMilliOdds(picks.map((p) => p.milliOdds));
   const BAR = 190;
   const PANEL = 400;
@@ -86,14 +106,14 @@ export async function drawSlipImage(code: string, picks: Pick[], bookedAt: Date 
   const ctx = canvas.getContext("2d")!;
   ctx.textBaseline = "middle";
 
-  // Brand bar: the real logo left, "BETSLIP" + booking time right, on the night-pitch body
-  // with the logo's speed swoosh behind it.
+  // Brand bar: the logo left, "BETSLIP" + booking time right, on the site's dark navy with a
+  // soft green swoosh behind it.
   const grad = ctx.createLinearGradient(0, 0, W, BAR);
   grad.addColorStop(0, C.brand);
   grad.addColorStop(1, C.brandDark);
   ctx.fillStyle = grad;
   ctx.fillRect(0, 0, W, BAR);
-  ctx.fillStyle = "rgba(88,248,0,.14)";
+  ctx.fillStyle = "rgba(0,186,59,.12)";
   ctx.beginPath();
   ctx.moveTo(W * 0.35, BAR);
   ctx.quadraticCurveTo(W * 0.62, BAR * 0.2, W + 20, BAR * 0.05);
@@ -102,16 +122,7 @@ export async function drawSlipImage(code: string, picks: Pick[], bookedAt: Date 
   ctx.fill();
   ctx.fillStyle = C.code;
   ctx.fillRect(0, BAR - 4, W, 4);
-  if (logo) {
-    const lh = 128;
-    ctx.drawImage(logo, PAD, (BAR - lh) / 2, (logo.width / logo.height) * lh, lh);
-  } else {
-    ctx.fillStyle = "#FFFFFF";
-    ctx.font = `800 46px ${f.display}`;
-    ctx.fillText("BET ", PAD, BAR / 2);
-    ctx.fillStyle = C.code;
-    ctx.fillText("ZONE", PAD + ctx.measureText("BET ").width, BAR / 2);
-  }
+  drawLogo(ctx, PAD, BAR / 2, f.display);
   ctx.textAlign = "right";
   ctx.fillStyle = "#FFFFFF";
   ctx.font = `800 34px ${f.display}`;

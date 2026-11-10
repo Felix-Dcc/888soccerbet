@@ -189,7 +189,7 @@ export function CashoutPanel({
             step={1}
             value={Number(part)}
             onChange={(e) => setPart(BigInt(e.target.value))}
-            className="w-full accent-[#F5C451]"
+            className="w-full accent-[rgb(var(--lime))]"
           />
           <div className="grid grid-cols-2 gap-2">
             <button type="button" onClick={() => setMode("confirm")} className={ghost}>

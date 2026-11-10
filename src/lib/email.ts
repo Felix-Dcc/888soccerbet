@@ -46,7 +46,7 @@ function layout(title: string, body: string, cta?: { label: string; href: string
   return `<!doctype html><html><body style="margin:0;background:#EEF1F4;font-family:Arial,Helvetica,sans-serif;color:#111827">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#EEF1F4;padding:24px 12px"><tr><td align="center">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;background:#ffffff;border-radius:14px;overflow:hidden">
-<tr><td style="background:#03140A;padding:18px 24px;font-size:20px;font-weight:800;color:#ffffff">BET <span style="color:#58F800">ZONE</span></td></tr>
+<tr><td style="background:#FFFFFF;border-bottom:3px solid #00A01B;padding:18px 24px;font-size:20px;font-weight:800;color:#040C06">Bet Zone <span style="color:#00A01B;font-size:10px;letter-spacing:3px;font-weight:800">SPORTSBOOK</span></td></tr>
 <tr><td style="padding:28px 24px 8px"><h1 style="margin:0 0 14px;font-size:22px">${esc(title)}</h1>${body}${button}</td></tr>
 <tr><td style="padding:18px 24px 24px;font-size:12px;color:#6B7280">You're getting this because of activity on your Bet Zone account. 18+ only. Play responsibly.<br>${esc(appUrl())}</td></tr>
 </table></td></tr></table></body></html>`;

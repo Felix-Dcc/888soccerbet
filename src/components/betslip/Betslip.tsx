@@ -543,12 +543,12 @@ function BookingDialog({ booked, picks, onClose }: { booked: Booked; picks: Pick
     <div role="dialog" aria-modal="true" aria-label={`Booking code ${code}`} className="fixed inset-0 z-[60] flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/70" onClick={onClose} />
       <div className="relative w-full max-w-sm animate-fade-in overflow-hidden rounded-2xl border border-line bg-ink-700 shadow-lift">
-        {/* ticket head: the logo on the night-pitch body, with its speed swoosh */}
-        <div className="theme-dark relative isolate flex items-center justify-center overflow-hidden bg-[linear-gradient(135deg,#17291F_0%,#0C130F_60%,#132219_100%)] px-6 py-5">
+        {/* ticket head: the logo on the site's dark navy, with a soft green swoosh */}
+        <div className="theme-dark relative isolate flex items-center justify-center overflow-hidden bg-[linear-gradient(135deg,#17202E_0%,#040913_60%,#0C1421_100%)] px-6 py-5">
           <svg aria-hidden className="absolute inset-0 -z-10 h-full w-full" viewBox="0 0 400 120" preserveAspectRatio="none">
-            <path d="M110 120 Q240 26 420 8 Q262 60 156 120 Z" fill="#3CDC3C" opacity=".15" />
+            <path d="M110 120 Q240 26 420 8 Q262 60 156 120 Z" fill="#00BA3B" opacity=".15" />
           </svg>
-          <Logo className="h-14" />
+          <Logo size="lg" />
           <button
             ref={closeRef}
             onClick={onClose}

@@ -236,7 +236,7 @@ function Sparkles() {
 
 /** Falling confetti; positions are fixed per piece so it renders the same every time. */
 function Confetti() {
-  const colors = ["#F5C451", "#3CDC3C", "#FFFFFF", "#E1AC35", "#22C58B", "#FFE59A"]; // the logo: crown gold, swoosh green, white
+  const colors = ["#F5C451", "#00BA3B", "#FFFFFF", "#E1AC35", "#8EF39E", "#FFE59A"]; // trophy gold with the brand greens and white
   return (
     <div aria-hidden className="pointer-events-none fixed inset-0 z-0 overflow-hidden motion-reduce:hidden">
       {Array.from({ length: 28 }, (_, i) => (

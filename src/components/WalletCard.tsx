@@ -15,12 +15,12 @@ export function WalletCard({ balance, holder, phone, since }: { balance: bigint;
   return (
     <section
       aria-label="Wallet balance"
-      className="theme-dark group relative isolate flex aspect-[1.586/1] w-full flex-col justify-between overflow-hidden rounded-2xl border border-white/[0.09] bg-[linear-gradient(135deg,#17291F_0%,#0C130F_52%,#132219_100%)] p-5 text-white shadow-[0_28px_50px_-22px_rgba(0,0,0,.9),inset_0_1px_0_rgba(255,255,255,.08)] transition-transform duration-300 ease-out hover:-translate-y-1 sm:p-6"
+      className="theme-dark group relative isolate flex aspect-[1.586/1] w-full flex-col justify-between overflow-hidden rounded-2xl border border-white/[0.09] bg-[linear-gradient(135deg,#17202E_0%,#040913_52%,#0C1421_100%)] p-5 text-white shadow-[0_28px_50px_-22px_rgba(0,0,0,.9),inset_0_1px_0_rgba(255,255,255,.08)] transition-transform duration-300 ease-out hover:-translate-y-1 sm:p-6"
     >
       {/* the logo's speed swoosh, sweeping across the card */}
       <svg aria-hidden className="absolute inset-0 -z-10 h-full w-full" viewBox="0 0 400 252" preserveAspectRatio="none">
-        <path d="M-20 214 Q170 104 430 52 Q196 132 -20 240 Z" fill="#3CDC3C" opacity=".16" />
-        <path d="M-20 252 Q196 156 430 120 Q212 190 -20 262 Z" fill="#3CDC3C" opacity=".08" />
+        <path d="M-20 214 Q170 104 430 52 Q196 132 -20 240 Z" fill="#00BA3B" opacity=".16" />
+        <path d="M-20 252 Q196 156 430 120 Q212 190 -20 262 Z" fill="#00BA3B" opacity=".08" />
       </svg>
       {/* a faint crown-gold warmth behind the logo */}
       <div aria-hidden className="absolute -right-16 -top-20 -z-10 h-56 w-56 rounded-full bg-[radial-gradient(circle,rgba(245,196,81,.16),transparent_65%)]" />
@@ -32,7 +32,7 @@ export function WalletCard({ balance, holder, phone, since }: { balance: bigint;
 
       <div className="flex items-start justify-between">
         <Chip />
-        <Logo className="h-9 sm:h-10" />
+        <Logo size="sm" />
       </div>
 
       <div className="flex items-end justify-between gap-3">

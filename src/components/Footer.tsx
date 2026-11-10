@@ -29,7 +29,7 @@ const COLUMNS: { title: string; links: { href: string; label: string }[] }[] = [
 
 export function Footer() {
   return (
-    <footer className="theme-dark mt-6 border-t border-line bg-ink-800 pb-28 lg:pb-10">
+    <footer className="mt-6 border-t border-line bg-ink-800 pb-28 lg:pb-10">
       <div className="h-0.5 bg-lime" />
 
       <div className="mx-auto grid max-w-[1280px] gap-8 px-4 pt-10 sm:grid-cols-[1.6fr_1fr_1fr]">

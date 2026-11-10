@@ -1,57 +1,41 @@
-import { useId } from "react";
-import Image from "next/image";
-import logoArt from "../../public/img/brand/betzone-logo.png";
+import { TrendingUp } from "lucide-react";
 
-/** Brand colours are fixed assets, not theme tokens: they must hold in any palette or email client. */
-const GREEN = "#58F800"; // the Bet Zone logo green
-
-/**
- * Square mark — the crown over a football on a dark tile — for places that need an icon
- * (collapsed admin rail). The browser-tab favicon is the logo's own football (src/app/icon.png).
+/*
+ * The Bet Zone logo, as on the Bet Zone site (betzone-henna.vercel.app): a green tile with a
+ * rising-trend arrow beside the name and a SPORTSBOOK tag. Built from theme tokens, so the name
+ * reads on white and on the dark blocks alike; the tile is the brand green in both.
  */
-export function BrandMark({ size = 30, className = "" }: { size?: number; className?: string }) {
-  const id = useId().replace(/:/g, "");
-  return (
-    <svg width={size} height={size} viewBox="0 0 32 32" aria-hidden="true" className={`shrink-0 ${className}`}>
-      <defs>
-        <linearGradient id={`${id}t`} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0" stopColor="#1C2533" />
-          <stop offset="1" stopColor="#0B0F14" />
-        </linearGradient>
-        <linearGradient id={`${id}g`} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0" stopColor="#B6FF7A" />
-          <stop offset=".5" stopColor="#58F800" />
-          <stop offset="1" stopColor="#2E9E00" />
-        </linearGradient>
-      </defs>
-      <rect width="32" height="32" rx="9" fill={`url(#${id}t)`} />
-      <rect x=".5" y=".5" width="31" height="31" rx="8.5" fill="none" stroke={GREEN} strokeOpacity=".45" />
-      <g fill={`url(#${id}g)`}>
-        <path d="M10.4 11.4 9.3 6.2l3.3 2.4L16 4.3l3.4 4.3 3.3-2.4-1.1 5.2Z" />
-        <rect x="10.3" y="12" width="11.4" height="1.9" rx=".8" />
-      </g>
-      <circle cx="9.3" cy="5.3" r="1.05" fill={`url(#${id}g)`} />
-      <circle cx="22.7" cy="5.3" r="1.05" fill={`url(#${id}g)`} />
-      <circle cx="16" cy="3.4" r="1.15" fill={`url(#${id}g)`} />
-      <circle cx="16" cy="21.2" r="6.8" fill="#FFFFFF" stroke="#0B0F14" strokeWidth=".9" />
-      <path d="M16 17.1l3.2 2.3-1.2 3.8h-4l-1.2-3.8z" fill="#0B0F14" />
-      <g stroke="#0B0F14" strokeWidth=".85" strokeLinecap="round">
-        <path d="M16 17.1v-2.6M12.8 19.4l-2.4-.8M19.2 19.4l2.4-.8M14 23.2l-1.5 2.2M18 23.2l1.5 2.2" />
-      </g>
-    </svg>
-  );
-}
 
-/** "BET ZONE" wordmark — caps, with ZONE in the brand green, as in the lockup. */
-export function Wordmark() {
+const SIZES = {
+  sm: { tile: "size-8 rounded-lg", icon: "size-4", name: "text-base", tag: "text-[8px]" },
+  md: { tile: "size-9 rounded-xl sm:size-10", icon: "size-5 sm:size-6", name: "text-lg sm:text-xl", tag: "text-[9px] sm:text-[9.5px]" },
+  lg: { tile: "size-12 rounded-2xl", icon: "size-7", name: "text-2xl", tag: "text-[11px]" },
+} as const;
+
+/** The tile on its own — for places with room for a square mark only (collapsed admin rail, toasts). */
+export function BrandMark({ size = 36, className = "" }: { size?: number; className?: string }) {
   return (
-    <span className="whitespace-nowrap tracking-tight">
-      BET <span style={{ color: GREEN }}>ZONE</span>
+    <span
+      aria-hidden
+      className={`grid shrink-0 place-items-center rounded-xl bg-gradient-to-br from-lime to-lime/80 text-lime-ink shadow-md shadow-lime/25 ${className}`}
+      style={{ width: size, height: size }}
+    >
+      <TrendingUp strokeWidth={2} style={{ width: size * 0.56, height: size * 0.56 }} />
     </span>
   );
 }
 
-/** The supplied logo, cut out of its stadium artwork so it sits on any dark surface. */
-export function Logo({ className = "h-11" }: { className?: string }) {
-  return <Image src={logoArt} alt="Bet Zone" width={168} height={97} className={`w-auto ${className}`} />;
+export function Logo({ size = "md", className = "" }: { size?: keyof typeof SIZES; className?: string }) {
+  const s = SIZES[size];
+  return (
+    <span className={`inline-flex min-w-0 items-center gap-2.5 ${className}`} role="img" aria-label="Bet Zone">
+      <span aria-hidden className={`grid shrink-0 place-items-center bg-gradient-to-br from-lime to-lime/80 text-lime-ink shadow-md shadow-lime/25 ${s.tile}`}>
+        <TrendingUp strokeWidth={2} className={s.icon} />
+      </span>
+      <span aria-hidden className="flex flex-col">
+        <span className={`truncate font-display font-extrabold leading-none tracking-tight text-white ${s.name}`}>Bet Zone</span>
+        <span className={`mt-0.5 font-display font-extrabold uppercase leading-tight tracking-widest text-lime ${s.tag}`}>Sportsbook</span>
+      </span>
+    </span>
+  );
 }

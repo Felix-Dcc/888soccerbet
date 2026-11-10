@@ -26,7 +26,7 @@ function BottomNav({ onSlip }: { onSlip: () => void }) {
     </Link>
   );
   return (
-    <nav aria-label="App" className="theme-dark fixed inset-x-0 bottom-0 z-40 border-t border-white/[0.06] bg-ink-900/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl lg:hidden">
+    <nav aria-label="App" className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-ink-900/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl lg:hidden">
       <div className="mx-auto flex max-w-md items-end">
         {tab("/", "Home", "all", path === "/")}
         {tab("/live", "Live", "live", path === "/live")}
