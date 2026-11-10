@@ -10,15 +10,26 @@ export const dynamic = "force-dynamic";
 const GROUPS: { label: string; hrefs: string[] }[] = [
   {
     label: "Navigation",
-    hrefs: ["/admin", "/admin/users", "/admin/operations", "/admin/games", "/admin/admins", "/admin/roles", "/admin/referrals", "/admin/audit", "/admin/system"],
+    hrefs: [
+      "/admin", "/admin/analytics", "/admin/users", "/admin/finance",
+      "/admin/operations", "/admin/matches", "/admin/games",
+      "/admin/settlement", "/admin/risk", "/admin/promotions",
+      "/admin/admins", "/admin/roles", "/admin/referrals", "/admin/audit", "/admin/system",
+    ],
   },
 ];
 const ICON_KEY: Record<string, string> = {
   "/admin": "dashboard",
-  "/admin/operations": "operations",
-  "/admin/games": "games",
-  "/admin/referrals": "referrals",
+  "/admin/analytics": "chart",
   "/admin/users": "players",
+  "/admin/finance": "coins",
+  "/admin/operations": "operations",
+  "/admin/matches": "ticket",
+  "/admin/games": "games",
+  "/admin/settlement": "check",
+  "/admin/risk": "alert",
+  "/admin/promotions": "referral",
+  "/admin/referrals": "referrals",
   "/admin/admins": "team",
   "/admin/roles": "roles",
   "/admin/audit": "audit",

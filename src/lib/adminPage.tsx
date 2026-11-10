@@ -32,9 +32,15 @@ export async function adminPage(anyOf: (Permission | SuperAction)[] = []): Promi
 
 export const NAV: { href: string; label: string; icon: IconName; anyOf: (Permission | SuperAction)[] }[] = [
   { href: "/admin", label: "Dashboard", icon: "command", anyOf: [] },
+  { href: "/admin/analytics", label: "Analytics", icon: "chart", anyOf: ["reports.view"] },
   { href: "/admin/users", label: "Users", icon: "players", anyOf: ["users.view", "referrals.view", "referrals.view_all"] },
+  { href: "/admin/finance", label: "Finance & Wallet", icon: "coins", anyOf: ["payments.view", "payments.payout"] },
   { href: "/admin/operations", label: "Betting Ops", icon: "desk", anyOf: ["settlement.manage", "verification.review", "odds.sync", "bets.view", "payments.payout"] },
+  { href: "/admin/matches", label: "Matches & Odds", icon: "ticket", anyOf: ["bets.view", "settlement.manage", "fixtures.manage"] },
   { href: "/admin/games", label: "Create Match", icon: "plus", anyOf: ["fixtures.manage"] },
+  { href: "/admin/settlement", label: "Settlement Engine", icon: "check", anyOf: ["settlement.manage"] },
+  { href: "/admin/risk", label: "Risk Management", icon: "alert", anyOf: ["bets.view"] },
+  { href: "/admin/promotions", label: "Promotions", icon: "referral", anyOf: ["reports.view"] },
   { href: "/admin/admins", label: "Sub-Admins", icon: "team", anyOf: ["admins.view"] },
   { href: "/admin/roles", label: "Roles", icon: "roles", anyOf: ["roles.manage"] },
   { href: "/admin/referrals", label: "Referrals", icon: "referral", anyOf: ["referrals.view"] },
