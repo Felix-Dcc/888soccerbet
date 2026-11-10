@@ -1,7 +1,7 @@
 import { TrendingUp } from "lucide-react";
 
 /**
- * Brand loading screen shown when the site is opened (once per browser tab session), ~2s:
+ * Brand loading screen shown when the site is opened (once per browser tab session), ~1.4s:
  * a green streak traces a ring -> the logo tile pops in and a light sweep crosses it -> "Bet
  * Zone · SPORTSBOOK" comes into focus beside it -> a comet keeps orbiting the ring and a soft
  * glow breathes behind until the page is ready. Server-rendered markup + CSS (no images), so it
@@ -43,4 +43,4 @@ export function Splash() {
  *  - otherwise fade it out once the page has loaded and the reveal has played (MIN), and in
  *    any case after MAX so a slow image can never trap the visitor.
  */
-export const SPLASH_SCRIPT = `(function(){var d=document.documentElement;try{if(sessionStorage.getItem("kb.splash")){d.classList.add("kb-splash-off");return}sessionStorage.setItem("kb.splash","1")}catch(e){}var t0=Date.now(),MIN=2300,MAX=6000,gone=false;function hide(){if(gone)return;gone=true;d.classList.add("kb-splash-done")}function onLoad(){setTimeout(hide,Math.max(0,MIN-(Date.now()-t0)))}if(document.readyState==="complete")onLoad();else window.addEventListener("load",onLoad);setTimeout(hide,MAX)})();`;
+export const SPLASH_SCRIPT = `(function(){var d=document.documentElement;try{if(sessionStorage.getItem("kb.splash")){d.classList.add("kb-splash-off");return}sessionStorage.setItem("kb.splash","1")}catch(e){}var t0=Date.now(),MIN=1400,MAX=4000,gone=false;function hide(){if(gone)return;gone=true;d.classList.add("kb-splash-done")}function onLoad(){setTimeout(hide,Math.max(0,MIN-(Date.now()-t0)))}if(document.readyState==="complete")onLoad();else window.addEventListener("load",onLoad);setTimeout(hide,MAX)})();`;

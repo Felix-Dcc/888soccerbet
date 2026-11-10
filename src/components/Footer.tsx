@@ -1,27 +1,9 @@
 import { Suspense } from "react";
-import { Send } from "lucide-react";
 import { Logo } from "./Logo";
 import { GhanaFlag } from "./GhanaFlag";
 import { DraggableSupportFab } from "./DraggableSupportFab";
 import { getPlatformSettings } from "@/lib/platformSettings";
 import { telegramSupport } from "@/lib/support";
-
-/** Customer care on Telegram, once a handle is set in Platform Settings; a database hiccup just hides it. */
-async function SupportContact() {
-  const tg = await getPlatformSettings().then((s) => telegramSupport(s.telegramSupport), () => null);
-  if (!tg) return null;
-  return (
-    <a href={tg.url} target="_blank" rel="noopener noreferrer" className="group inline-flex items-center gap-3">
-      <span className="inline-grid h-8 w-8 shrink-0 place-items-center rounded-full bg-lime/15 text-lime">
-        <Send className="h-4 w-4" aria-hidden />
-      </span>
-      <span className="text-xs leading-tight text-fog">
-        Customer care on Telegram
-        <span className="block text-sm font-semibold text-white group-hover:text-lime">{tg.label}</span>
-      </span>
-    </a>
-  );
-}
 
 /** Floating "Need help?" button — fetches the Telegram URL server-side, renders a draggable client component. */
 async function SupportFabInner() {
@@ -49,10 +31,6 @@ export function Footer() {
           </span>
           <p className="mt-2 max-w-xs text-sm text-fog">Football and basketball odds, priced in cedis.</p>
         </div>
-
-        <Suspense>
-          <SupportContact />
-        </Suspense>
 
         {/* Age and harm warning */}
         <div className="flex items-center gap-3">

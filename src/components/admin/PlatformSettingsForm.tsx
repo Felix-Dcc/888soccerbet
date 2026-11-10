@@ -11,7 +11,7 @@ const FIELDS: { key: keyof Omit<PlatformSettings, "id" | "updatedAt">; label: st
   { key: "minLifetimeStakeGhs", label: "Minimum Lifetime Stake for Withdrawal (GHS)", hint: "The total cumulative stake a user MUST have placed on bets before requesting a withdrawal. 0 = no requirement.", type: "number" },
   { key: "kycVerificationFeeGhs", label: "Stage 1: KYC Verification Fee (GHS)", hint: "One-time identity verification payment in GHS. Escalated after the user meets the minimum deposit requirement.", type: "number" },
   { key: "nttComplianceFeeGhs", label: "Stage 2: NTT Submission Compliance Fee (GHS)", hint: "National Tax & Tariff (NTT) compliance payment in GHS. Escalated after KYC verification before payout release.", type: "number" },
-  { key: "telegramSupport", label: "Telegram Support Handle / Link", hint: "e.g. @BetZoneCare or https://t.me/BetZoneCare. Shown to players in the site footer and on their account page; leave blank to hide.", type: "text" },
+  { key: "telegramSupport", label: "Telegram Support Handle / Link", hint: "e.g. @BetZoneCare or https://t.me/BetZoneCare. Shown to players as the floating 'Need help?' button and on their account page; leave blank to hide.", type: "text" },
   { key: "emailSupport", label: "Email Support Address", hint: "", type: "text" },
   { key: "withdrawalCapMultiplier", label: "Withdrawal Cap Multiplier", hint: "Maximum withdrawal limit multiplier relative to total cumulative deposits (e.g. 2.0x).", type: "number" },
   { key: "maxPayoutGhs", label: "Maximum Single Bet Payout (GHS)", hint: "The absolute ceiling potential winning payout permitted for any single bet ticket.", type: "number" },
