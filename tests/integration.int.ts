@@ -25,6 +25,8 @@ vi.mock("../src/lib/email", async (load) => {
   return { ...real, sendEmail: async (m: { to: string; subject: string; text: string }) => (mail.sent.push(m), true) };
 });
 import { randomUUID } from "node:crypto";
+import { readFileSync } from "node:fs";
+import { hashPassword, verifyPassword } from "../src/lib/auth";
 import type { MarketType, Prisma } from "@prisma/client";
 import { prisma } from "../src/lib/db";
 import { houseAccountId, userAccountId, postTransaction, userCashBalance, ledgerIsBalanced } from "../src/lib/ledger";
@@ -2008,5 +2010,30 @@ describe("clearing demo data", () => {
     // The books still add up, which is the check that would have rolled it all back.
     expect(await ledgerIsBalanced()).toBe(true);
     expect(await verifyAuditChain()).toMatchObject({ ok: true }); // the audit trail is untouched
+  });
+});
+
+describe("betzone seed logins migration", () => {
+  const rename = () => prisma.$executeRawUnsafe(readFileSync("prisma/migrations/20261110180000_betzone_seed_logins/migration.sql", "utf8"));
+  const emails = ["admin@888soccerbet.com", "admin@betzone.com.co", "demo@888soccerbet.com", "demo@betzone.com.co"];
+  const clear = () => prisma.user.deleteMany({ where: { email: { in: emails } } });
+
+  it("moves an old seeded login to betzone with its password, and never clashes with an existing one", async () => {
+    await clear();
+    try {
+      const admin = await prisma.user.create({ data: { email: "admin@888soccerbet.com", passwordHash: hashPassword("Admin123!"), role: "SUPER_ADMIN", referralCode: referralCode() } });
+      await prisma.user.create({ data: { email: "demo@888soccerbet.com", passwordHash: "x", referralCode: referralCode() } });
+      await prisma.user.create({ data: { email: "demo@betzone.com.co", passwordHash: "x", referralCode: referralCode() } });
+      await rename();
+      const moved = await findUserByIdentifier("admin@betzone.com.co");
+      expect(moved?.id).toBe(admin.id);
+      expect(verifyPassword("Admin123!", moved!.passwordHash)).toBe(true);
+      // The new address is taken, so the old demo account is left alone instead of failing the deploy.
+      expect(await prisma.user.count({ where: { email: "demo@888soccerbet.com" } })).toBe(1);
+      await rename(); // runs safely twice
+      expect(await prisma.user.count({ where: { email: { in: emails } } })).toBe(3);
+    } finally {
+      await clear();
+    }
   });
 });
