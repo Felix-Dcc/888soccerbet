@@ -82,7 +82,9 @@ export default async function FinancePage({ searchParams }: { searchParams: Prom
             <EmptyState icon="check" title="No pending withdrawals" />
           ) : (
             <Grid head={["User", "Type", "Amount", "Requested", "Actions"]} right={[2, 4]} minWidth="40rem">
-              {payouts.map((p) => (
+              {payouts.map((p) => {
+                const m = (p.metadata ?? {}) as { msisdn?: string; network?: string; accountName?: string };
+                return (
                 <tr key={p.ref}>
                   <td className={td}>
                     <Link href={`/admin/users/${p.user.id}`} className="text-white hover:text-lime">
@@ -94,9 +96,10 @@ export default async function FinancePage({ searchParams }: { searchParams: Prom
                   <td className={td}><Pill tone="bad">WITHDRAWAL</Pill></td>
                   <td className={`${td} text-right tabular-nums font-semibold text-white`}>GHS {formatPesewas(p.amount)}</td>
                   <td className={`${td} whitespace-nowrap text-fog`}>{when(p.createdAt)}</td>
-                  <td className={td}>{can(u, "payments.payout") && <PayoutActions payRef={p.ref} />}</td>
+                  <td className={td}>{can(u, "payments.payout") && <PayoutActions refCode={p.ref} amount={formatPesewas(p.amount)} msisdn={m.msisdn ?? "?"} network={m.network ?? "?"} accountName={m.accountName} />}</td>
                 </tr>
-              ))}
+                );
+              })}
             </Grid>
           )}
         </Panel>

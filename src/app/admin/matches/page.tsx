@@ -79,7 +79,7 @@ export default async function MatchesPage({ searchParams }: { searchParams: Prom
                   {f.homeScore != null && f.awayScore != null ? `${f.homeScore} : ${f.awayScore}` : "— : —"}
                 </td>
                 <td className={`${td} text-fog`}>
-                  {f.competition ? `${f.competition.sport} / ${f.competition.name}` : "Unknown"}
+                  {f.competition ? `${f.competition.sportKey} / ${f.competition.name}` : "Unknown"}
                 </td>
                 <td className={`${td} whitespace-nowrap text-fog`}>
                   {kickoffDay(f.startsAt.toISOString())}, {kickoffTime(f.startsAt.toISOString())}
