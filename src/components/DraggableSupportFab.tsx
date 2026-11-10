@@ -51,6 +51,23 @@ export function DraggableSupportFab({ url }: { url: string }) {
     };
   }, [onMove, onUp]);
 
+  const full = "Need help?";
+  const [typed, setTyped] = useState("");
+  const [showLabel, setShowLabel] = useState(false);
+
+  useEffect(() => {
+    if (!placed) return;
+    const delay = setTimeout(() => setShowLabel(true), 600);
+    return () => clearTimeout(delay);
+  }, [placed]);
+
+  useEffect(() => {
+    if (!showLabel) return;
+    if (typed.length >= full.length) return;
+    const t = setTimeout(() => setTyped(full.slice(0, typed.length + 1)), 80);
+    return () => clearTimeout(t);
+  }, [showLabel, typed]);
+
   if (!placed) return null;
 
   return (
@@ -66,10 +83,12 @@ export function DraggableSupportFab({ url }: { url: string }) {
       className="fixed z-50 flex cursor-grab flex-col items-center active:cursor-grabbing"
       style={{ left: pos.x, top: pos.y, touchAction: "none" }}
     >
-      <span className="relative mb-1.5 rounded-full bg-lime px-3 py-1 text-[11px] font-bold text-white shadow-lg shadow-lime/30">
-        Need help?
-        <span className="absolute -bottom-1 left-1/2 h-2 w-2 -translate-x-1/2 rotate-45 bg-lime" />
-      </span>
+      {showLabel && (
+        <span className="relative mb-1.5 rounded-full bg-lime px-3 py-1 text-[11px] font-bold text-white shadow-lg shadow-lime/30">
+          {typed}{typed.length < full.length && <span className="animate-pulse">|</span>}
+          <span className="absolute -bottom-1 left-1/2 h-2 w-2 -translate-x-1/2 rotate-45 bg-lime" />
+        </span>
+      )}
       <span className="flex h-14 w-14 items-center justify-center rounded-full bg-lime shadow-lg shadow-lime/30">
         <svg width="32" height="32" viewBox="0 0 100 100" fill="white" xmlns="http://www.w3.org/2000/svg" aria-hidden>
           <circle cx="40" cy="36" r="16" />
