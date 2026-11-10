@@ -112,7 +112,7 @@ export default async function AccountPage() {
               <h2 className="font-semibold text-white">Need help?</h2>
               <p className="mt-0.5 text-sm text-fog-muted">Our support team answers by email.</p>
             </div>
-            <a href="mailto:support@888soccerbet.com" className="btn-ghost px-4 py-2 text-sm">
+            <a href="mailto:support@betzone.com.co" className="btn-ghost px-4 py-2 text-sm">
               Contact support
             </a>
           </section>
