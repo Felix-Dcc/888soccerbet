@@ -63,6 +63,7 @@ const PATHS = {
   plus: "M12 5v14M5 12h14",
   lock: "M6 11h12v10H6zM8 11V7a4 4 0 0 1 8 0v4",
   chart: "M3 3v18h18M7 16l4-4 4 4 5-6",
+  badge: "M12 3l8 4v5c0 5-3.5 8-8 9-4.5-1-8-4-8-9V7l8-4z",
 } as const;
 export type IconName = keyof typeof PATHS;
 
