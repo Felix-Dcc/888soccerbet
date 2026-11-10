@@ -3,7 +3,7 @@ import { prisma } from "@/lib/db";
 import { adminPage } from "@/lib/adminPage";
 import { kickoffDay, kickoffTime } from "@/lib/time";
 import { Crest } from "@/components/Crest";
-import { ManualGameForm, GenerateMatchForm } from "@/components/AdminTools";
+import { ManualGameForm, GenerateMatchForm, MatchActions } from "@/components/AdminTools";
 import { EmptyState, Head, Panel, Pill } from "@/components/admin/kit";
 
 export const dynamic = "force-dynamic";
@@ -56,7 +56,7 @@ export default async function CreateGamesPage() {
           ) : (
             <ul className="divide-y divide-line">
               {upcoming.map((f) => (
-                <li key={f.id} className="flex items-center gap-3 px-5 py-3.5">
+                <li key={f.id} className="flex flex-wrap items-center gap-3 px-5 py-3.5">
                   <span className="flex -space-x-1.5">
                     <Crest name={f.homeTeam} src={f.homeTeamLogo} size="sm" />
                     <Crest name={f.awayTeam} src={f.awayTeamLogo} size="sm" />
@@ -69,9 +69,9 @@ export default async function CreateGamesPage() {
                       {f.competition.displayName ?? f.competition.name} · {kickoffDay(f.startsAt.toISOString())} {kickoffTime(f.startsAt.toISOString())} · #{f.code}
                     </span>
                   </span>
-                  {/* Generated games carry a script and settle themselves; hand-made ones need a result entered. */}
                   {f.script !== null && <Pill tone="neutral">generated</Pill>}
                   {f.startsAt > now ? <Pill tone="info">upcoming</Pill> : f.script === null ? <Pill tone="warn">needs result</Pill> : <Pill tone="good">in play</Pill>}
+                  <MatchActions fixtureId={f.id} homeTeam={f.homeTeam} awayTeam={f.awayTeam} venue={f.venue} startsAt={f.startsAt.toISOString()} isScheduled={f.status === "SCHEDULED"} />
                 </li>
               ))}
             </ul>

@@ -181,6 +181,35 @@ export async function rescheduleManualFixture(fixtureId: string, startsAtISO: st
   return r.count > 0;
 }
 
+/** Delete a manual/generated game that hasn't started and has no bets. Returns false if not deletable. */
+export async function deleteManualFixture(fixtureId: string): Promise<boolean> {
+  return prisma.$transaction(async (tx) => {
+    const f = await tx.fixture.findFirst({ where: { id: fixtureId, providerRef: null, status: "SCHEDULED" } });
+    if (!f) return false;
+    const hasBets = await tx.betSelection.count({ where: { fixtureId } });
+    if (hasBets > 0) return false;
+    // Markets and selections cascade from the fixture.
+    await tx.market.deleteMany({ where: { fixtureId } });
+    await tx.fixture.delete({ where: { id: fixtureId } });
+    return true;
+  });
+}
+
+/** Edit teams, venue or kick-off of a scheduled manual/generated game. Returns false if not editable. */
+export async function editManualFixture(fixtureId: string, data: { homeTeam?: string; awayTeam?: string; venue?: string; startsAt?: string }): Promise<boolean> {
+  const update: Record<string, unknown> = {};
+  if (data.homeTeam) { update.homeTeam = data.homeTeam; update.homeTeamLogo = crestUrl(data.homeTeam); }
+  if (data.awayTeam) { update.awayTeam = data.awayTeam; update.awayTeamLogo = crestUrl(data.awayTeam); }
+  if (data.venue !== undefined) update.venue = data.venue;
+  if (data.startsAt) {
+    update.startsAt = new Date(data.startsAt);
+    if ((update.startsAt as Date) > new Date()) update.status = "SCHEDULED";
+  }
+  if (Object.keys(update).length === 0) return false;
+  const r = await prisma.fixture.updateMany({ where: { id: fixtureId, providerRef: null, status: "SCHEDULED" }, data: update });
+  return r.count > 0;
+}
+
 /** A team the feed has no badge for still needs a crest; ours is drawn from the name. */
 export const crestUrl = (team: string) => `/api/crest/${encodeURIComponent(team)}?v=2`;
 

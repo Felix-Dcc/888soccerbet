@@ -146,6 +146,16 @@ export const rescheduleFixtureSchema = z
   .object({ fixtureId: z.string().min(1), startsAt: z.string().datetime({ offset: true, message: "Enter a valid kick-off time" }) })
   .refine((f) => new Date(f.startsAt).getTime() < Date.now() + MAX_AHEAD_MS, { message: "Kick-off must be within 60 days", path: ["startsAt"] });
 
+export const deleteFixtureSchema = z.object({ fixtureId: z.string().min(1) });
+
+export const editFixtureSchema = z.object({
+  fixtureId: z.string().min(1),
+  homeTeam: z.string().min(1).max(60).optional(),
+  awayTeam: z.string().min(1).max(60).optional(),
+  venue: z.string().max(100).optional(),
+  startsAt: z.string().datetime({ offset: true }).optional(),
+}).refine((f) => !f.startsAt || new Date(f.startsAt).getTime() < Date.now() + MAX_AHEAD_MS, { message: "Kick-off must be within 60 days", path: ["startsAt"] });
+
 /** Money in pesewas as a digit string, so no float rounding on the way in. */
 const pesewas = z.string().regex(/^\d{1,13}$/, "Invalid amount").transform((s) => BigInt(s));
 export const cashoutSchema = z.object({
