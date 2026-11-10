@@ -1,28 +1,46 @@
 import Link from "next/link";
 import { prisma } from "@/lib/db";
 import { adminPage } from "@/lib/adminPage";
+import { can } from "@/lib/permissions";
 import { systemHealth } from "@/lib/systemHealth";
+import { getPlatformSettings } from "@/lib/platformSettings";
+import { PlatformSettingsForm } from "@/components/admin/PlatformSettingsForm";
 import { EmptyState, Grid, Head, Light, Panel, Pill, ago, td, when } from "@/components/admin/kit";
 
 export const dynamic = "force-dynamic";
 
-/** Status board: every live check as a tile, the providers, and the latest provider callbacks. */
 export default async function SystemPage() {
   const gate = await adminPage(["system.view"]);
   if (!gate.ok) return gate.deny;
-  const [h, hooks] = await Promise.all([systemHealth(), prisma.webhookEvent.findMany({ orderBy: { receivedAt: "desc" }, take: 15 })]);
+  const u = gate.user;
+  const [h, hooks, settings] = await Promise.all([
+    systemHealth(),
+    prisma.webhookEvent.findMany({ orderBy: { receivedAt: "desc" }, take: 15 }),
+    getPlatformSettings(),
+  ]);
   const bad = h.alerts.filter((a) => a.level !== "ok");
   const worst = bad.some((a) => a.level === "critical") ? "critical" : bad.length ? "warn" : "ok";
 
   return (
     <>
-      <Head title="Settings">
+      <Head title="Platform Settings & Rules" description="Configure global deposit limits, minimum withdrawal thresholds, and support contacts.">
         <span className="flex items-center gap-2 text-sm font-semibold text-white">
           <Light level={worst} pulse={worst !== "ok"} />
           {worst === "ok" ? "All systems normal" : `${bad.length} need attention`}
         </span>
       </Head>
 
+      {/* ── Platform Settings ── */}
+      {can(u, "system.view") && (
+        <>
+          <Panel title="Global Platform Rules & Thresholds" icon="system">
+            <p className="mb-4 text-sm text-fog">Configure deposit limits, minimum stakes, and withdrawal eligibility controls.</p>
+          </Panel>
+          <PlatformSettingsForm initial={settings} />
+        </>
+      )}
+
+      {/* ── System Health ── */}
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {h.alerts.map((a) => {
           const body = (

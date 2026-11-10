@@ -35,6 +35,16 @@ export function limits() {
   };
 }
 
+export async function dbLimits() {
+  const { getPlatformSettings } = await import("./platformSettings");
+  const s = await getPlatformSettings();
+  return {
+    min: toPesewas(s.minStakeGhs),
+    max: toPesewas(s.maxStakeGhs),
+    maxPayout: toPesewas(s.maxPayoutGhs),
+  };
+}
+
 /** Minimum stake in GHS, for the betslip UI (same setting the engine enforces). */
 export const minStakeGhs = () => Number(limits().min) / 100;
 

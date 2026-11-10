@@ -499,6 +499,25 @@ model BookingCode {
   @@index([createdAt])
 }
 
+// ---------------------------------------------------------------- Platform settings
+
+model PlatformSettings {
+  id                      String   @id @default("singleton")
+  minWithdrawalGhs        Int      @default(2000)
+  minDepositGhs           Int      @default(50)
+  minStakeGhs             Int      @default(250)
+  maxStakeGhs             Int      @default(5000)
+  maxPayoutGhs            Int      @default(200000)
+  minDepositToWithdrawGhs Int      @default(0)
+  minLifetimeStakeGhs     Int      @default(0)
+  kycVerificationFeeGhs   Int      @default(500)
+  nttComplianceFeeGhs     Int      @default(500)
+  withdrawalCapMultiplier Int      @default(10)
+  telegramSupport         String   @default("")
+  emailSupport            String   @default("")
+  updatedAt               DateTime @updatedAt
+}
+
 model SupportTicket {
   id        String   @id @default(cuid())
   userId    String
