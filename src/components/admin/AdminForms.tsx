@@ -380,6 +380,92 @@ export function RoleEditor({ perms, role }: { perms: PermInfo[]; role?: RoleInfo
 }
 
 /** Staff actions on a player: suspend/reactivate (users.suspend), balance correction (wallets.adjust). */
+/**
+ * Credit or debit an account's cash: pick the direction, enter a positive amount and a reason, then
+ * confirm with your password. Posted as a ledger adjustment with an idempotency key (a double click
+ * can't post twice) and written to the audit log. A debit can't take the balance below zero.
+ */
+function BalanceAdjust({ url, extra = {}, email, idPrefix }: { url: string; extra?: Record<string, unknown>; email: string; idPrefix: string }) {
+  const router = useRouter();
+  const [dir, setDir] = useState<"credit" | "debit">("credit");
+  const [amount, setAmount] = useState("");
+  const [reason, setReason] = useState("");
+  const [key, setKey] = useState(newId);
+  const [open, setOpen] = useState(false);
+  const [done, setDone] = useState<string | null>(null);
+  const value = /^\d+(\.\d{1,2})?$/.test(amount.trim()) ? Number(amount) : 0;
+  const valid = value > 0 && value <= 100_000 && reason.trim().length >= 5;
+  const ghsText = `GHS ${value.toFixed(2)}`;
+  return (
+    <div className="space-y-2">
+      <form
+        className="space-y-2"
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (valid) setOpen(true);
+        }}
+      >
+        <div role="radiogroup" aria-label="Credit or debit" className="grid grid-cols-2 rounded-lg bg-ink-800 p-1 text-sm font-semibold">
+          {(["credit", "debit"] as const).map((d) => (
+            <button
+              key={d}
+              type="button"
+              role="radio"
+              aria-checked={dir === d}
+              onClick={() => setDir(d)}
+              className={`rounded-md py-1.5 transition ${dir === d ? (d === "credit" ? "bg-lime text-lime-ink" : "bg-danger text-white") : "text-fog hover:text-white"}`}
+            >
+              {d === "credit" ? "Credit (add)" : "Debit (remove)"}
+            </button>
+          ))}
+        </div>
+        <div className="grid gap-2 sm:grid-cols-[10rem_1fr]">
+          <div>
+            <label className="label" htmlFor={`${idPrefix}-amount`}>Amount (GHS)</label>
+            <input id={`${idPrefix}-amount`} required inputMode="decimal" placeholder="0.00" className="input tabular-nums" value={amount} onChange={(e) => setAmount(e.target.value.replace(/[^\d.]/g, ""))} />
+          </div>
+          <div>
+            <label className="label" htmlFor={`${idPrefix}-reason`}>Reason</label>
+            <input id={`${idPrefix}-reason`} required minLength={5} maxLength={300} placeholder="At least 5 characters" className="input" value={reason} onChange={(e) => setReason(e.target.value)} />
+          </div>
+        </div>
+        <button disabled={!valid} className={`px-4 py-2 text-sm ${dir === "credit" ? "btn-lime" : "btn border border-danger/50 text-danger hover:bg-danger/10"}`}>
+          {dir === "credit" ? "Credit" : "Debit"} {value > 0 ? ghsText : "balance"}
+        </button>
+      </form>
+      {done && (
+        <p role="status" className="text-sm text-lime">
+          {done}
+        </p>
+      )}
+      <ConfirmDialog
+        open={open}
+        danger={dir === "debit"}
+        title={dir === "credit" ? "Credit balance" : "Debit balance"}
+        message={
+          <>
+            {dir === "credit" ? "Add" : "Remove"} <b className="text-white">{ghsText}</b> {dir === "credit" ? "to" : "from"} {email}&apos;s balance. It&apos;s recorded in the ledger and audit log
+            and can&apos;t be edited; a mistake needs an opposite adjustment.
+          </>
+        }
+        confirmLabel={dir === "credit" ? "Credit" : "Debit"}
+        onClose={() => setOpen(false)}
+        onConfirm={async (password) => {
+          const { error } = await send(url, "POST", { ...extra, amountGhs: dir === "credit" ? value : -value, reason: reason.trim(), idempotencyKey: key, password });
+          if (error) return error;
+          setOpen(false);
+          setKey(newId()); // the next adjustment is a new one
+          setAmount("");
+          setReason("");
+          setDone(`${dir === "credit" ? "Credited" : "Debited"} ${ghsText}`);
+          router.refresh();
+          return null;
+        }}
+      />
+    </div>
+  );
+}
+
 export function PlayerActions({
   playerId,
   email,
@@ -398,13 +484,10 @@ export function PlayerActions({
   verified: boolean;
 }) {
   const router = useRouter();
-  const [action, setAction] = useState<"status" | "adjust" | "verify" | null>(null);
+  const [action, setAction] = useState<"status" | "verify" | null>(null);
   const [reason, setReason] = useState("");
-  const [amount, setAmount] = useState("");
-  const [key, setKey] = useState(newId);
   const [done, setDone] = useState<string | null>(null);
   const suspending = status === "ACTIVE";
-  const amountNum = Number(amount);
   return (
     <div className="space-y-4">
       {canSuspend && (
@@ -417,29 +500,7 @@ export function PlayerActions({
           Verify account
         </button>
       )}
-      {canAdjust && (
-        <form
-          className="space-y-2"
-          onSubmit={(e) => {
-            e.preventDefault();
-            setAction("adjust");
-          }}
-        >
-          <div className="grid gap-2 sm:grid-cols-[10rem_1fr]">
-            <div>
-              <label className="label" htmlFor="adj-amount">Amount (GHS, minus to debit)</label>
-              <input id="adj-amount" required inputMode="decimal" pattern="-?\d+(\.\d{1,2})?" className="input" value={amount} onChange={(e) => setAmount(e.target.value)} />
-            </div>
-            <div>
-              <label className="label" htmlFor="adj-reason">Reason</label>
-              <input id="adj-reason" required minLength={5} maxLength={300} className="input" value={reason} onChange={(e) => setReason(e.target.value)} />
-            </div>
-          </div>
-          <button disabled={!amountNum} className="btn-ghost px-4 py-2 text-sm">
-            Post balance correction
-          </button>
-        </form>
-      )}
+      {canAdjust && <BalanceAdjust url={`/api/admin/players/${playerId}`} extra={{ action: "adjust" }} email={email} idPrefix="adj" />}
       {done && (
         <p role="status" className="text-sm text-lime">
           {done}
@@ -470,28 +531,6 @@ export function PlayerActions({
         }}
       />
       <ConfirmDialog
-        open={action === "adjust"}
-        title="Post balance correction"
-        message={
-          <>
-            {amountNum > 0 ? "Credit" : "Debit"} <b className="text-white">GHS {Math.abs(amountNum).toFixed(2)}</b> {amountNum > 0 ? "to" : "from"} {email}. This is recorded in the ledger and audit log and can&apos;t be edited; a mistake needs an opposite correction.
-          </>
-        }
-        confirmLabel="Post correction"
-        onClose={() => setAction(null)}
-        onConfirm={async (password) => {
-          const { error } = await send(`/api/admin/players/${playerId}`, "POST", { action: "adjust", amountGhs: amountNum, reason, idempotencyKey: key, password });
-          if (error) return error;
-          setAction(null);
-          setKey(newId()); // next correction is a new one
-          setAmount("");
-          setReason("");
-          setDone("Correction posted");
-          router.refresh();
-          return null;
-        }}
-      />
-      <ConfirmDialog
         open={action === "verify"}
         title="Verify account"
         message={
@@ -514,67 +553,9 @@ export function PlayerActions({
   );
 }
 
-/** Credit (or debit, with a minus) an administrator's own cash balance. Password-confirmed, audited. */
+/** Credit or debit an administrator's own cash balance. Password-confirmed, audited. */
 export function AdminBalanceCredit({ adminId, email }: { adminId: string; email: string }) {
-  const router = useRouter();
-  const [open, setOpen] = useState(false);
-  const [amount, setAmount] = useState("");
-  const [reason, setReason] = useState("");
-  const [key, setKey] = useState(newId);
-  const [done, setDone] = useState<string | null>(null);
-  const amountNum = Number(amount);
-  return (
-    <div className="space-y-2">
-      <form
-        className="space-y-2"
-        onSubmit={(e) => {
-          e.preventDefault();
-          setOpen(true);
-        }}
-      >
-        <div className="grid gap-2 sm:grid-cols-[10rem_1fr]">
-          <div>
-            <label className="label" htmlFor="ac-amount">Amount (GHS, minus to debit)</label>
-            <input id="ac-amount" required inputMode="decimal" pattern="-?\d+(\.\d{1,2})?" className="input" value={amount} onChange={(e) => setAmount(e.target.value)} />
-          </div>
-          <div>
-            <label className="label" htmlFor="ac-reason">Reason</label>
-            <input id="ac-reason" required minLength={5} maxLength={300} className="input" value={reason} onChange={(e) => setReason(e.target.value)} />
-          </div>
-        </div>
-        <button disabled={!amountNum} className="btn-lime px-4 py-2 text-sm">
-          {amountNum < 0 ? "Debit balance" : "Credit balance"}
-        </button>
-      </form>
-      {done && (
-        <p role="status" className="text-sm text-lime">
-          {done}
-        </p>
-      )}
-      <ConfirmDialog
-        open={open}
-        title={amountNum < 0 ? "Debit balance" : "Credit balance"}
-        message={
-          <>
-            {amountNum > 0 ? "Credit" : "Debit"} <b className="text-white">GHS {Math.abs(amountNum).toFixed(2)}</b> {amountNum > 0 ? "to" : "from"} {email}. Recorded in the ledger and audit log and can&apos;t be edited; a mistake needs an opposite correction.
-          </>
-        }
-        confirmLabel={amountNum < 0 ? "Debit" : "Credit"}
-        onClose={() => setOpen(false)}
-        onConfirm={async (password) => {
-          const { error } = await send(`/api/admin/admins/${adminId}/balance`, "POST", { amountGhs: amountNum, reason, idempotencyKey: key, password });
-          if (error) return error;
-          setOpen(false);
-          setKey(newId());
-          setAmount("");
-          setReason("");
-          setDone("Balance updated");
-          router.refresh();
-          return null;
-        }}
-      />
-    </div>
-  );
+  return <BalanceAdjust url={`/api/admin/admins/${adminId}/balance`} email={email} idPrefix="ac" />;
 }
 
 /** Delete an admin account's settled financial history (the transaction-list rows). Any admin; balances and the ledger are left alone, pending items kept. */
