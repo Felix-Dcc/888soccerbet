@@ -273,6 +273,7 @@ const ACTION_TEXT: Record<string, string> = {
   PLAYER_SUSPEND: "suspended a player",
   PLAYER_REACTIVATE: "reactivated a player",
   ADMIN_CREATE: "added an administrator",
+  ADMIN_INVITE: "created an admin invite link",
   ADMIN_SUSPEND: "suspended an administrator",
   ADMIN_REACTIVATE: "reactivated an administrator",
   ADMIN_ACCESS_CHANGE: "changed an administrator's access",

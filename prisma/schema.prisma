@@ -97,6 +97,22 @@ model AdminRole {
 /**
  * Single-use links: admin account setup and password reset. Only the hash is stored.
  */
+// A single-use link a super admin hands out: whoever opens it chooses their own email and password
+// and becomes an administrator with this access. Only the token's hash is stored.
+model AdminInvite {
+  id          String    @id @default(cuid())
+  tokenHash   String    @unique
+  role        Role
+  adminRoleId String?
+  permGrants  String[]  @default([])
+  permDenials String[]  @default([])
+  createdById String
+  expiresAt   DateTime
+  usedAt      DateTime?
+  usedById    String?
+  createdAt   DateTime  @default(now())
+}
+
 model AccountToken {
   id          String    @id @default(cuid())
   userId      String

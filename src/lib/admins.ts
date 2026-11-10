@@ -112,6 +112,94 @@ export async function createAdmin(actor: User, input: NewAdmin, ip?: string) {
   }
 }
 
+export interface InviteAccess {
+  role: Extract<Role, "ADMIN" | "SUPER_ADMIN">;
+  adminRoleId?: string | null;
+  permGrants?: string[];
+  permDenials?: string[];
+}
+
+/** A single-use invite link (raw token returned once, only its hash stored) for a new administrator with this access. */
+export async function createAdminInvite(actor: User, access: InviteAccess, ip?: string) {
+  return prisma.$transaction(async (tx) => {
+    if (access.adminRoleId && !(await tx.adminRole.findUnique({ where: { id: access.adminRoleId } }))) throw new AdminError("BAD_ROLE", "That role doesn't exist", 422);
+    const admin = access.role === "ADMIN";
+    const token = randomBytes(32).toString("base64url");
+    const invite = await tx.adminInvite.create({
+      data: {
+        tokenHash: hashToken(token),
+        role: access.role,
+        adminRoleId: admin ? (access.adminRoleId ?? null) : null,
+        permGrants: admin ? cleanPermissions(access.permGrants ?? []) : [],
+        permDenials: admin ? cleanPermissions(access.permDenials ?? []) : [],
+        createdById: actor.id,
+        expiresAt: new Date(Date.now() + SETUP_TTL_MS),
+      },
+    });
+    await audit(
+      { actorUserId: actor.id, action: "ADMIN_INVITE", targetType: "AdminInvite", targetId: invite.id, after: { role: invite.role, adminRoleId: invite.adminRoleId, permGrants: invite.permGrants, permDenials: invite.permDenials, expiresAt: invite.expiresAt }, ip },
+      tx,
+    );
+    return { token, expiresAt: invite.expiresAt };
+  });
+}
+
+type Db = Prisma.TransactionClient | typeof prisma;
+
+/** The invite behind a link if it can still be used: unused, unexpired, and its creator still an active super admin. */
+async function usableInvite(db: Db, token: string) {
+  const invite = await db.adminInvite.findUnique({ where: { tokenHash: hashToken(token) } });
+  if (!invite || invite.usedAt || invite.expiresAt < new Date()) return null;
+  const creator = await db.user.findUnique({ where: { id: invite.createdById }, select: { role: true, status: true } });
+  if (creator?.role !== "SUPER_ADMIN" || creator.status !== "ACTIVE") return null;
+  return invite;
+}
+
+/** For the invite page: whether the link still works, before the visitor fills anything in. */
+export async function adminInviteValid(token: string): Promise<boolean> {
+  return !!(await usableInvite(prisma, token));
+}
+
+/** The invitee chooses their email and password: the administrator account is created with the invite's access. */
+export async function acceptAdminInvite(token: string, email: string, password: string, ip?: string) {
+  try {
+    return await prisma.$transaction(async (tx) => {
+      const invite = await usableInvite(tx, token);
+      if (!invite) throw new AdminError("BAD_LINK", "This invite link is invalid, used or expired; ask a super admin for a new one", 410);
+      // Claim it first, so two tabs (or two people) can never both use one link.
+      const claimed = await tx.adminInvite.updateMany({ where: { id: invite.id, usedAt: null }, data: { usedAt: new Date() } });
+      if (!claimed.count) throw new AdminError("BAD_LINK", "This invite link has already been used", 410);
+      if (await tx.user.findUnique({ where: { email }, select: { id: true } })) throw new AdminError("EMAIL_TAKEN", "An account with this email already exists; use a different email");
+      if (invite.adminRoleId && !(await tx.adminRole.findUnique({ where: { id: invite.adminRoleId } })))
+        throw new AdminError("BAD_ROLE", "The role on this invite no longer exists; ask a super admin for a new link", 410);
+      let code = newAdminReferralCode();
+      for (let i = 0; i < 5 && (await tx.user.findUnique({ where: { referralCode: code }, select: { id: true } })); i++) code = newAdminReferralCode();
+      const user = await tx.user.create({
+        data: {
+          email,
+          role: invite.role,
+          adminRoleId: invite.adminRoleId,
+          permGrants: invite.permGrants,
+          permDenials: invite.permDenials,
+          passwordHash: hashPassword(password),
+          referralCode: code,
+        },
+      });
+      await tx.adminInvite.update({ where: { id: invite.id }, data: { usedById: user.id } });
+      await audit(
+        { actorUserId: invite.createdById, action: "ADMIN_CREATE", targetType: "User", targetId: user.id, after: { email: user.email, ...accessSnapshot(user), referralCode: user.referralCode, inviteId: invite.id }, ip },
+        tx,
+      );
+      await audit({ actorUserId: user.id, action: "ADMIN_SETUP_COMPLETE", targetType: "User", targetId: user.id, ip }, tx);
+      return user;
+    });
+  } catch (e) {
+    // Lost a race with another sign-up for the same email (or referral code): nothing was written, the link still works.
+    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") throw new AdminError("TAKEN", "That email was just taken; use a different email");
+    throw e;
+  }
+}
+
 export interface AccessChange {
   role?: Extract<Role, "ADMIN" | "SUPER_ADMIN">;
   adminRoleId?: string | null;

@@ -3,6 +3,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { newId } from "@/lib/clientId";
 import { ConfirmDialog, send } from "./ConfirmDialog";
+import { CopyButton } from "@/components/CopyButton";
 
 type PermInfo = { key: string; label: string };
 type RoleInfo = { id: string; name: string; permissions: string[] };
@@ -35,19 +36,25 @@ function PermissionPicker({ all, value, onChange, idPrefix }: { all: PermInfo[];
 /** Super admin: create an administrator, then hand them their single-use setup link. */
 export function CreateAdminForm({ perms, roles }: { perms: PermInfo[]; roles: RoleInfo[] }) {
   const router = useRouter();
-  const [f, setF] = useState({ email: "", displayName: "", username: "", role: "ADMIN" as "ADMIN" | "SUPER_ADMIN", adminRoleId: "" });
+  const [f, setF] = useState({ role: "ADMIN" as "ADMIN" | "SUPER_ADMIN", adminRoleId: "" });
   const [grants, setGrants] = useState<string[]>(["dashboard.view", "referrals.view"]);
   const [confirm, setConfirm] = useState(false);
   const [link, setLink] = useState<string | null>(null);
-  const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => setF((s) => ({ ...s, [k]: e.target.value }));
+  const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLSelectElement>) => setF((s) => ({ ...s, [k]: e.target.value }));
 
   if (link)
     return (
       <div role="status" className="space-y-3">
-        <p className="text-sm text-white">Admin created. Send them this single-use link to set their password (it expires in 72 hours and is shown only once):</p>
-        <input readOnly value={link} onFocus={(e) => e.target.select()} className="input font-mono text-xs" aria-label="Setup link" />
-        <button type="button" className="btn-ghost px-4 py-2 text-sm" onClick={() => { setLink(null); setF({ email: "", displayName: "", username: "", role: "ADMIN", adminRoleId: "" }); }}>
-          Create another
+        <p className="text-sm text-white">
+          Invite link ready. Send it to the new admin: they open it, choose their own email and password, and get the access you picked. It works once, expires in 72 hours, and is shown
+          only now.
+        </p>
+        <div className="flex gap-2">
+          <input readOnly value={link} onFocus={(e) => e.target.select()} className="input min-w-0 flex-1 font-mono text-xs" aria-label="Admin invite link" />
+          <CopyButton text={link} label="Copy link" />
+        </div>
+        <button type="button" className="btn-ghost px-4 py-2 text-sm" onClick={() => setLink(null)}>
+          Generate another
         </button>
       </div>
     );
@@ -60,20 +67,7 @@ export function CreateAdminForm({ perms, roles }: { perms: PermInfo[]; roles: Ro
         setConfirm(true);
       }}
     >
-      <div className="grid gap-3 sm:grid-cols-3">
-        <div>
-          <label className="label" htmlFor="na-name">Name</label>
-          <input id="na-name" required minLength={2} maxLength={60} className="input" value={f.displayName} onChange={set("displayName")} />
-        </div>
-        <div>
-          <label className="label" htmlFor="na-user">Username</label>
-          <input id="na-user" required pattern="[A-Za-z0-9_.\-]{3,24}" title="3-24 letters, numbers, . _ -" className="input" value={f.username} onChange={set("username")} />
-        </div>
-        <div>
-          <label className="label" htmlFor="na-email">Email</label>
-          <input id="na-email" type="email" required className="input" value={f.email} onChange={set("email")} />
-        </div>
-      </div>
+      <p className="text-sm text-fog">Pick their access, then generate a link. The new admin sets their own email and password from it.</p>
       <div className="grid gap-3 sm:grid-cols-2">
         <div>
           <label className="label" htmlFor="na-type">Type</label>
@@ -102,27 +96,23 @@ export function CreateAdminForm({ perms, roles }: { perms: PermInfo[]; roles: Ro
           <PermissionPicker all={perms} value={grants} onChange={setGrants} idPrefix="na" />
         </fieldset>
       )}
-      <button className="btn-lime px-5 py-2.5 text-sm">Create admin</button>
+      <button className="btn-lime px-5 py-2.5 text-sm">Add admin</button>
       <ConfirmDialog
         open={confirm}
-        title="Create administrator"
-        message={
-          <>
-            Create <b className="text-white">{f.email}</b> as {f.role === "SUPER_ADMIN" ? "a super admin with full access" : "an admin"}?
-          </>
-        }
-        confirmLabel="Create"
+        title="Generate admin invite link"
+        message={<>Create a single-use link that makes whoever opens it {f.role === "SUPER_ADMIN" ? "a super admin with full access" : "an admin with the access above"}?</>}
+        confirmLabel="Generate link"
         onClose={() => setConfirm(false)}
         onConfirm={async (password) => {
           const { error, data } = await send("/api/admin/admins", "POST", {
-            ...f,
-            adminRoleId: f.adminRoleId || null,
+            role: f.role,
+            adminRoleId: f.role === "ADMIN" ? f.adminRoleId || null : null,
             permGrants: f.role === "ADMIN" ? grants : [],
             password,
           });
           if (error) return error;
           setConfirm(false);
-          setLink(String(data.setupUrl));
+          setLink(String(data.inviteUrl));
           router.refresh();
           return null;
         }}
