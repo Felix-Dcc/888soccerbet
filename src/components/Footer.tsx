@@ -17,7 +17,7 @@ export function Footer() {
       </div>
 
       {/* Age and harm warning, the way a licensed book is required to carry it. */}
-      <div className="mx-auto mt-10 flex max-w-[1280px] items-center gap-3 border-t border-line px-4 pt-5">
+      <div className="mx-auto mt-10 flex max-w-[1280px] items-center justify-end gap-3 border-t border-line px-4 pt-5">
         <span className="inline-grid h-8 w-8 shrink-0 place-items-center rounded-full border-2 border-danger text-[11px] font-extrabold text-white">18+</span>
         <p className="text-xs text-fog">Age 18 and above only. Play responsibly — betting is addictive and can be psychologically harmful.</p>
       </div>
