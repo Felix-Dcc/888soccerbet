@@ -38,6 +38,7 @@ export const NAV: { href: string; label: string; icon: IconName; anyOf: (Permiss
   { href: "/admin/operations", label: "Betting Ops", icon: "desk", anyOf: ["settlement.manage", "verification.review", "odds.sync", "bets.view", "payments.payout"] },
   { href: "/admin/matches", label: "Matches & Odds", icon: "ticket", anyOf: ["bets.view", "settlement.manage", "fixtures.manage"] },
   { href: "/admin/games", label: "Create Match", icon: "plus", anyOf: ["fixtures.manage"] },
+  { href: "/admin/crests", label: "Club Crests", icon: "badge", anyOf: ["fixtures.manage"] },
   { href: "/admin/settlement", label: "Settlement Engine", icon: "check", anyOf: ["settlement.manage"] },
   { href: "/admin/risk", label: "Risk Management", icon: "alert", anyOf: ["bets.view"] },
   { href: "/admin/promotions", label: "Promotions", icon: "referral", anyOf: ["reports.view"] },

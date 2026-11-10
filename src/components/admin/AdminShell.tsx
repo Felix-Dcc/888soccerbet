@@ -19,6 +19,7 @@ import {
   Sun,
   Moon,
   ChevronRight,
+  Shield,
   type LucideIcon,
 } from "lucide-react";
 import { Logo } from "@/components/Logo";
@@ -34,6 +35,7 @@ const ICONS: Record<string, LucideIcon> = {
   roles: ShieldCheck,
   audit: ScrollText,
   system: Settings,
+  badge: Shield,
 };
 
 export interface NavSection {

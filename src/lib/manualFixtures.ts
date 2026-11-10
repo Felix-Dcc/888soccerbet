@@ -182,10 +182,10 @@ export async function rescheduleManualFixture(fixtureId: string, startsAtISO: st
 }
 
 /** A team the feed has no badge for still needs a crest; ours is drawn from the name. */
-export const crestUrl = (team: string) => `/api/crest/${encodeURIComponent(team)}`;
+export const crestUrl = (team: string) => `/api/crest/${encodeURIComponent(team)}?v=2`;
 
 /** A fictional competition's emblem, drawn from its name (round league style). */
-export const leagueCrestUrl = (name: string) => `/api/crest/${encodeURIComponent(name)}?kind=league`;
+export const leagueCrestUrl = (name: string) => `/api/crest/${encodeURIComponent(name)}?kind=league&v=2`;
 
 /** Fill in a drawn crest for either side of a manual game that has no real badge. */
 async function giveGeneratedCrests(fixtureId: string): Promise<void> {

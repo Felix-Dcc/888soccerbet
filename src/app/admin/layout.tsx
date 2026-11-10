@@ -12,7 +12,7 @@ const GROUPS: { label: string; hrefs: string[] }[] = [
     label: "Navigation",
     hrefs: [
       "/admin", "/admin/analytics", "/admin/users", "/admin/finance",
-      "/admin/operations", "/admin/matches", "/admin/games",
+      "/admin/operations", "/admin/matches", "/admin/games", "/admin/crests",
       "/admin/settlement", "/admin/risk", "/admin/promotions",
       "/admin/admins", "/admin/roles", "/admin/referrals", "/admin/audit", "/admin/system",
     ],
@@ -26,6 +26,7 @@ const ICON_KEY: Record<string, string> = {
   "/admin/operations": "operations",
   "/admin/matches": "ticket",
   "/admin/games": "games",
+  "/admin/crests": "badge",
   "/admin/settlement": "check",
   "/admin/risk": "alert",
   "/admin/promotions": "referral",

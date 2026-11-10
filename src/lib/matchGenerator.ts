@@ -7,6 +7,7 @@
 import type { MarketType } from "@prisma/client";
 import type { ManualFixtureInput } from "./validation";
 import { CORRECT_SCORE_MAX, FOOTBALL_TOTAL_LINES } from "./markets";
+import { LEAGUES } from "./crests/catalog";
 
 type Sport = "football" | "basketball";
 
@@ -225,20 +226,24 @@ export function inPlayFootballOdds(
   return priceBook(footballMarketProbs(home, away, GOAL_RATE[0] * t, GOAL_RATE[1] * t, primary), margin);
 }
 
-/** Two distinct fictional team names. */
-function twoTeams(): [string, string] {
+/** Two distinct clubs from a random catalog league (football) or adjective-noun names (basketball). */
+function twoTeams(sport: Sport): [string, string, string, string] {
+  if (sport === "football") {
+    const league = pick(LEAGUES);
+    const shuffled = [...league.clubs].sort(() => Math.random() - 0.5);
+    return [shuffled[0]!.name, shuffled[1]!.name, league.name, `${shuffled[0]!.town} Stadium`];
+  }
   const name = () => `${pick(ADJECTIVES)} ${pick(NOUNS)}`;
   let home = name();
   let away = name();
   while (away === home) away = name();
-  return [home, away];
+  return [home, away, pick(BASKETBALL_COMPS), pick(VENUES)];
 }
 
 export function generateMatch(sport: Sport = Math.random() < 0.8 ? "football" : "basketball"): ManualFixtureInput {
-  const [homeTeam, awayTeam] = twoTeams();
-  // Kick off 1.5–4 hours out, rounded to the next 5 minutes, so it sits in the upcoming list.
+  const [homeTeam, awayTeam, competition, venue] = twoTeams(sport);
   const startsAtMs = Math.ceil((Date.now() + range(1.5, 4) * 3_600_000) / 300_000) * 300_000;
-  const base = { homeTeam, awayTeam, venue: pick(VENUES), startsAt: new Date(startsAtMs).toISOString() };
+  const base = { homeTeam, awayTeam, venue, startsAt: new Date(startsAtMs).toISOString() };
 
   // The main line of a market is the one closest to even money, so it reads like a real board.
   const evenest = (lines: number[], chance: (line: number) => number) =>
@@ -253,7 +258,7 @@ export function generateMatch(sport: Sport = Math.random() < 0.8 ? "football" : 
     const lines = (offsets: number[], main: number) => offsets.map((d) => main + d);
     return {
       sportKey: "basketball",
-      competition: pick(BASKETBALL_COMPS),
+      competition,
       ...base,
       result: { home: twoWay(priced, "MONEYLINE")!.home, away: twoWay(priced, "MONEYLINE")!.away },
       total: overUnder(priced, "OVER_UNDER", primary.total)!,
@@ -276,7 +281,7 @@ export function generateMatch(sport: Sport = Math.random() < 0.8 ? "football" : 
   const picks = (type: MarketType) => Object.fromEntries(Object.entries(bookMarket(priced, type)!.picks).filter(([, o]) => o !== null)) as Record<string, number>;
   return {
     sportKey: "football",
-    competition: pick(FOOTBALL_COMPS),
+    competition,
     ...base,
     result: { home: picks("MATCH_RESULT")["1"]!, draw: picks("MATCH_RESULT").X!, away: picks("MATCH_RESULT")["2"]! },
     total: overUnder(priced, "OVER_UNDER", total)!,
