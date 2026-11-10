@@ -33,7 +33,7 @@ export class FlutterwaveProvider implements PaymentProvider {
   constructor(
     private readonly secretKey: string,
     private readonly secretHash: string,
-    private readonly appUrl = (process.env.APP_URL || "https://888soccerbet.com").replace(/\/+$/, ""),
+    private readonly appUrl = (process.env.APP_URL || "https://betzone.com.co").replace(/\/+$/, ""),
   ) {
     this.isSandbox = secretKey.includes("_TEST");
   }

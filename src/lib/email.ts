@@ -5,8 +5,8 @@
  */
 import { formatPesewas } from "./money";
 
-const FROM = { name: process.env.EMAIL_FROM_NAME || "Bet Zone", email: process.env.EMAIL_FROM || "no-reply@888soccerbet.com" };
-const appUrl = () => (process.env.APP_URL || "https://888soccerbet.com").replace(/\/+$/, "");
+const FROM = { name: process.env.EMAIL_FROM_NAME || "Bet Zone", email: process.env.EMAIL_FROM || "no-reply@betzone.com.co" };
+const appUrl = () => (process.env.APP_URL || "https://betzone.com.co").replace(/\/+$/, "");
 
 export interface Email {
   to: string;

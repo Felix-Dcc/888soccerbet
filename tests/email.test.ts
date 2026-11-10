@@ -43,7 +43,7 @@ describe("sendEmail", () => {
     expect(await sendEmail(emails.verifyCode("a@b.gh", "123456"))).toBe(true);
     const [url, init] = f.mock.calls[0] as unknown as [string, RequestInit];
     expect(url).toBe("https://api.brevo.com/v3/smtp/email");
-    expect(JSON.parse(init.body as string)).toMatchObject({ sender: { email: "no-reply@888soccerbet.com" }, to: [{ email: "a@b.gh" }] });
+    expect(JSON.parse(init.body as string)).toMatchObject({ sender: { email: "no-reply@betzone.com.co" }, to: [{ email: "a@b.gh" }] });
     vi.spyOn(console, "error").mockImplementation(() => {});
     vi.stubGlobal("fetch", vi.fn(async () => { throw new Error("down"); }));
     expect(await sendEmail(emails.verifyCode("a@b.gh", "123456"))).toBe(false);
