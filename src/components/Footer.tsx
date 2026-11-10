@@ -3,30 +3,6 @@ import { Logo } from "./Logo";
 import { GhanaFlag } from "./GhanaFlag";
 
 /** Only pages that exist. Nothing here advertises a product or document the site doesn't have. */
-const COLUMNS: { title: string; links: { href: string; label: string }[] }[] = [
-  {
-    title: "Bet Zone Ghana",
-    links: [
-      { href: "/terms", label: "Terms & Conditions" },
-      { href: "/privacy", label: "Privacy Policy" },
-      { href: "/cookies", label: "Cookies Policy" },
-      { href: "/refunds", label: "Refund Policy" },
-      { href: "mailto:support@888soccerbet.com", label: "Support" },
-    ],
-  },
-  {
-    title: "How to play",
-    links: [
-      { href: "/", label: "Sports" },
-      { href: "/live", label: "Live betting" },
-      { href: "/results", label: "Results" },
-      { href: "/promotions", label: "Promotions" },
-      { href: "/bets", label: "My bets" },
-      { href: "/wallet", label: "Wallet" },
-    ],
-  },
-];
-
 export function Footer() {
   return (
     <footer className="mt-6 border-t border-line bg-ink-800 pb-28 lg:pb-10">
