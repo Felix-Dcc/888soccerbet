@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { Logo } from "./Logo";
 import { GhanaFlag } from "./GhanaFlag";
 
@@ -8,33 +7,13 @@ export function Footer() {
     <footer className="mt-6 border-t border-line bg-ink-800 pb-28 lg:pb-10">
       <div className="h-0.5 bg-lime" />
 
-      <div className="mx-auto grid max-w-[1280px] gap-8 px-4 pt-10 sm:grid-cols-[1.6fr_1fr_1fr]">
-        <div>
-          <span className="inline-flex items-center gap-2.5">
-            <Logo />
-            <GhanaFlag className="h-3.5 w-5" />
-            <span className="font-display text-sm font-bold tracking-wide text-white">Ghana</span>
-          </span>
-          <p className="mt-3 max-w-xs text-sm text-fog">Football and basketball odds, priced in cedis.</p>
-        </div>
-
-        {COLUMNS.map((c) => (
-          <nav key={c.title} aria-label={c.title}>
-            <h2 className="mb-3 text-sm font-bold text-white">{c.title}</h2>
-            <ul className="space-y-2">
-              {c.links.map((l) => (
-                <li key={l.label}>
-                  <Link href={l.href} className="flex items-center gap-1.5 text-sm text-fog transition-colors hover:text-white">
-                    <span aria-hidden className="text-fog-muted">
-                      ›
-                    </span>
-                    {l.label}
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          </nav>
-        ))}
+      <div className="mx-auto max-w-[1280px] px-4 pt-10">
+        <span className="inline-flex items-center gap-2.5">
+          <Logo />
+          <GhanaFlag className="h-3.5 w-5" />
+          <span className="font-display text-sm font-bold tracking-wide text-white">Ghana</span>
+        </span>
+        <p className="mt-3 max-w-xs text-sm text-fog">Football and basketball odds, priced in cedis.</p>
       </div>
 
       {/* Age and harm warning, the way a licensed book is required to carry it. */}
