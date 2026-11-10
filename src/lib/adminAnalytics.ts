@@ -83,7 +83,7 @@ export async function scopeMetrics(scope: Scope, range: Range): Promise<Metrics>
         (SELECT COUNT(*)::int FROM "User" u WHERE u.id IN (${S}) AND u.status = 'SUSPENDED') AS suspended,
         (SELECT COUNT(DISTINCT b."userId")::int FROM "Bet" b WHERE b."userId" IN (${S}) AND b."placedAt" >= ${from} AND b."placedAt" < ${to}) AS bettors,
         (SELECT COUNT(DISTINCT p."userId")::int FROM "PaymentIntent" p WHERE p."userId" IN (${S}) AND p.direction = 'DEPOSIT' AND p.status = 'SUCCEEDED'
-           AND COALESCE(p.metadata->>'purpose','') <> 'VERIFICATION' AND p."createdAt" >= ${from} AND p."createdAt" < ${to}) AS depositors`,
+           AND COALESCE(p.metadata->>'purpose','') NOT IN ('VERIFICATION','NTT') AND p."createdAt" >= ${from} AND p."createdAt" < ${to}) AS depositors`,
     prisma.$queryRaw<{ direction: string; status: string; verification: boolean; count: number; total: bigint }[]>`
       SELECT p.direction::text, p.status::text, COALESCE(p.metadata->>'purpose','') = 'VERIFICATION' AS verification, COUNT(*)::int AS count, COALESCE(SUM(p.amount),0)::bigint AS total
       FROM "PaymentIntent" p WHERE p."userId" IN (${S}) AND p."createdAt" >= ${from} AND p."createdAt" < ${to}

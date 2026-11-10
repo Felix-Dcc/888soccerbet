@@ -438,20 +438,22 @@ export function MatchActions({ fixtureId, homeTeam, awayTeam, venue, startsAt, i
 }
 
 /** Approve or reject a player's withdrawal verification. Either way the held money goes to their balance. */
-export function VerificationReview({ userId, email, heldGhs, complete }: { userId: string; email: string; heldGhs: string; complete: boolean }) {
+export function VerificationReview({ userId, email, heldGhs, complete, stage = "kyc" }: { userId: string; email: string; heldGhs: string; complete: boolean; stage?: "kyc" | "ntt" }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; msg: string } | null>(null);
+  const stageLabel = stage === "ntt" ? "NTT compliance" : "KYC verification";
 
   async function review(action: "approve" | "reject") {
+    const approveNote = stage === "ntt" ? "withdrawals unlock" : "they move to NTT compliance stage";
     const text =
       action === "approve"
-        ? `Approve ${email}? GHS ${heldGhs} is released to their balance and withdrawals unlock.`
-        : `Reject ${email}? GHS ${heldGhs} is returned to their balance; withdrawals stay locked and they can verify again.`;
+        ? `Approve ${stageLabel} for ${email}? GHS ${heldGhs} is released to their balance and ${approveNote}.`
+        : `Reject ${stageLabel} for ${email}? GHS ${heldGhs} is returned to their balance; they can verify again.`;
     if (!window.confirm(text)) return;
     setBusy(true);
     try {
-      const r = await fetch("/api/admin/verification", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ userId, action }) });
+      const r = await fetch("/api/admin/verification", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ userId, action, stage }) });
       const d = await r.json();
       setMsg({ ok: r.ok, msg: r.ok ? (action === "approve" ? "Approved" : "Rejected") : d.error ?? "Failed" });
       if (r.ok) router.refresh();

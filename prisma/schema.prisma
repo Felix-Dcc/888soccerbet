@@ -26,9 +26,12 @@ enum UserStatus {
 
 enum KycStatus {
   UNVERIFIED
-  PENDING
-  VERIFIED
-  REJECTED
+  PENDING       // KYC payments done, awaiting admin review
+  KYC_APPROVED  // KYC passed — now needs NTT compliance payments
+  NTT_PENDING   // NTT payments done, awaiting admin review
+  VERIFIED      // fully verified, can withdraw
+  REJECTED      // rejected at KYC stage
+  NTT_REJECTED  // rejected at NTT stage
 }
 
 model User {
@@ -275,7 +278,8 @@ enum AccountKind {
   HOUSE_PNL // house profit/loss on settled bets
   PAYMENT_CLEARING // in-flight deposits/withdrawals with the PSP
   BONUS // promotional balance
-  VERIFICATION_HOLD // a player's withdrawal-verification payments, held until an admin reviews them
+  VERIFICATION_HOLD // KYC withdrawal-verification payments, held until admin review
+  NTT_HOLD          // NTT compliance payments, held until admin review
 }
 
 model LedgerAccount {

@@ -57,7 +57,9 @@ export default async function PlayerPage({ params, searchParams }: { params: Pro
     houseResult < 0n && { level: "warn" as Level, text: `User is up ${ghs(-houseResult)} against the house` },
     life.money.failed.count > 0 && { level: "warn" as Level, text: `${life.money.failed.count} failed payment${life.money.failed.count === 1 ? "" : "s"}` },
     life.money.withdrawals.total > life.money.deposits.total && { level: "idle" as Level, text: "Withdrawn more than deposited" },
-    p.kycStatus === "PENDING" && { level: "idle" as Level, text: "Withdrawal verification awaiting review" },
+    p.kycStatus === "PENDING" && { level: "idle" as Level, text: "KYC verification awaiting review" },
+    p.kycStatus === "NTT_PENDING" && { level: "idle" as Level, text: "NTT compliance awaiting review" },
+    p.kycStatus === "KYC_APPROVED" && { level: "idle" as Level, text: "KYC approved — NTT compliance stage next" },
     (p.dailyDepositLimit !== null || p.maxStakeLimit !== null) && { level: "idle" as Level, text: "Responsible-gambling limits set" },
   ].filter((x): x is { level: Level; text: string } => !!x);
 
@@ -69,7 +71,7 @@ export default async function PlayerPage({ params, searchParams }: { params: Pro
           <h1 className="truncate font-display text-[22px] font-bold text-white">{p.email}</h1>
           <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-fog">
             <Pill tone={statusTone(p.status)}>{p.status.toLowerCase()}</Pill>
-            <Pill tone={p.kycStatus === "VERIFIED" ? "good" : p.kycStatus === "REJECTED" ? "bad" : "neutral"}>{p.kycStatus.toLowerCase()}</Pill>
+            <Pill tone={p.kycStatus === "VERIFIED" ? "good" : p.kycStatus === "REJECTED" || p.kycStatus === "NTT_REJECTED" ? "bad" : p.kycStatus === "KYC_APPROVED" ? "warn" : "neutral"}>{p.kycStatus.replace("_", " ").toLowerCase()}</Pill>
             <span>Joined {when(p.createdAt)}</span>
             <span className="font-mono">{p.id}</span>
           </div>

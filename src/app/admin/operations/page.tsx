@@ -144,10 +144,13 @@ export default async function OperationsPage({ searchParams }: { searchParams: P
                     <li key={v.userId} className="space-y-2 px-4 py-3">
                       <div className="flex items-baseline justify-between gap-3">
                         <span className="min-w-0 truncate text-sm font-semibold text-white">{v.email}</span>
-                        {v.complete ? <Pill tone="warn">ready</Pill> : <Pill tone="neutral">1 of 2</Pill>}
+                        <span className="flex items-center gap-1.5">
+                          <Pill tone="neutral">{v.stage === "ntt" ? "NTT" : "KYC"}</Pill>
+                          {v.complete ? <Pill tone="warn">ready</Pill> : <Pill tone="neutral">part-paid</Pill>}
+                        </span>
                       </div>
-                      <div className="text-xs text-fog">{ghs(v.held)} held</div>
-                      <VerificationReview userId={v.userId} email={v.email} heldGhs={formatPesewas(v.held)} complete={v.complete} />
+                      <div className="text-xs text-fog">{v.stage === "ntt" ? ghs(v.nttHeld) : ghs(v.kycHeld)} held</div>
+                      <VerificationReview userId={v.userId} email={v.email} heldGhs={formatPesewas(v.stage === "ntt" ? v.nttHeld : v.kycHeld)} complete={v.complete} stage={v.stage} />
                     </li>
                   ))}
                 </ul>

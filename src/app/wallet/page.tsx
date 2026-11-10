@@ -30,14 +30,13 @@ export default async function WalletPage() {
         <div className="space-y-6">
           <WalletCard balance={balance} holder={user.displayName ?? user.email.split("@")[0] ?? user.email} phone={user.phone} since={user.createdAt} />
           <WalletPanel
-          minDepositGhs={Number(minDeposit()) / 100}
+          minDepositGhs={Number(await minDeposit()) / 100}
           isAdmin={user.role !== "USER"}
           verification={{
             required: verification.required,
-            paid: verification.paid,
-            needed: verification.needed,
-            perPaymentGhs: Number(verification.perPayment) / 100,
-            heldGhs: Number(verification.held) / 100,
+            stage: verification.stage,
+            kyc: verification.kyc,
+            ntt: verification.ntt,
             status: verification.status,
           }}
           />

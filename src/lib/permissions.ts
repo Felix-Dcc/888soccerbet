@@ -26,6 +26,7 @@ export const PERMISSIONS = {
   "admins.view": "See administrators and their performance",
   "audit_logs.view": "Read the audit log",
   "system.view": "See system health and provider status",
+  "system.manage": "Change platform settings and thresholds",
 } as const;
 
 export type Permission = keyof typeof PERMISSIONS;

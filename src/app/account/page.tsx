@@ -20,11 +20,13 @@ export default async function AccountPage() {
   const user = await getCurrentUser();
   if (!user) return <SignedOut title="Account" />;
 
-  const [balance, byStatus, telegram] = await Promise.all([
+  const [balance, byStatus, settings] = await Promise.all([
     userCashBalance(prisma, user.id),
     prisma.bet.groupBy({ by: ["status"], where: { userId: user.id }, _count: { _all: true } }),
-    getPlatformSettings().then((s) => telegramSupport(s.telegramSupport), () => null),
+    getPlatformSettings().catch(() => null),
   ]);
+  const telegram = settings ? telegramSupport(settings.telegramSupport) : null;
+  const emailAddr = settings?.emailSupport || "support@betzone.com.co";
   const count = (s: string) => byStatus.find((b) => b.status === s)?._count._all ?? 0;
   const total = byStatus.reduce((n, b) => n + b._count._all, 0);
 
@@ -123,7 +125,7 @@ export default async function AccountPage() {
                   Chat on Telegram
                 </a>
               )}
-              <a href="mailto:support@betzone.com.co" className="btn-ghost px-4 py-2 text-sm">
+              <a href={`mailto:${emailAddr}`} className="btn-ghost px-4 py-2 text-sm">
                 {telegram ? "Email us" : "Contact support"}
               </a>
             </div>

@@ -21,7 +21,7 @@ const STR_FIELDS: (keyof SettingsPayload)[] = ["telegramSupport", "emailSupport"
 
 export async function POST(req: Request) {
   const user = await getCurrentUser();
-  if (!user || !isStaff(user) || !can(user, "system.view")) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  if (!user || !isStaff(user) || !can(user, "system.manage")) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const body = await req.json();
   const data: Partial<SettingsPayload> = {};

@@ -3,9 +3,10 @@ import Link from "next/link";
 import { LegalPage } from "@/components/LegalPage";
 import { legal } from "@/lib/legal";
 import { limits } from "@/lib/betEngine";
-import { minDeposit, verifyAfterWin, verifyAmount, VERIFY_PAYMENTS } from "@/lib/wallet";
+import { minDeposit, verifyAfterWin, verifyAmount, nttAmount, VERIFY_PAYMENTS } from "@/lib/wallet";
 import { cashoutMarginPct, MIN_CASHOUT, partialLimit } from "@/lib/cashout";
 import { formatPesewas } from "@/lib/money";
+import { getPlatformSettings } from "@/lib/platformSettings";
 
 export const dynamic = "force-dynamic"; // quotes the limits the site enforces right now
 export const metadata: Metadata = { title: "Terms & Conditions — Bet Zone" };
@@ -13,9 +14,9 @@ export const metadata: Metadata = { title: "Terms & Conditions — Bet Zone" };
 const ghs = (p: bigint) => `GHS ${formatPesewas(p)}`;
 
 /** The rules of the service, with every figure read from the settings the code enforces. */
-export default function TermsPage() {
+export default async function TermsPage() {
   const l = legal();
-  const stake = limits();
+  const [stake, ps] = await Promise.all([limits(), getPlatformSettings()]);
   return (
     <LegalPage title="Terms & Conditions" path="/terms">
       <h2>About these terms</h2>
@@ -78,12 +79,26 @@ export default function TermsPage() {
       <h2>Deposits and withdrawals</h2>
       <ul>
         <li>
-          The minimum deposit is {ghs(minDeposit())}. Deposits are credited only once the mobile money payment succeeds.
+          The minimum deposit is {ghs(await minDeposit())}. Deposits are credited only once the mobile money payment succeeds.
         </li>
-        <li>Withdraw only to a mobile money number in your own name. The amount leaves your balance when you request it and comes back if the payment fails.</li>
         <li>
-          Once a single bet pays out more than {ghs(verifyAfterWin())}, withdrawals need verification first: {VERIFY_PAYMENTS} separate verification payments of{" "}
-          {ghs(verifyAmount())}. That money is held, not kept: after our review it is returned to your balance, whether verification is approved or not.
+          Withdraw only to a mobile money number in your own name. The minimum withdrawal is GHS {ps.minWithdrawalGhs}. The amount leaves your balance when you
+          request it and comes back if the payment fails.
+        </li>
+        {ps.minDepositToWithdrawGhs > 0 && (
+          <li>You must have deposited at least GHS {ps.minDepositToWithdrawGhs} in total before your first withdrawal.</li>
+        )}
+        {ps.minLifetimeStakeGhs > 0 && (
+          <li>You must have placed at least GHS {ps.minLifetimeStakeGhs} in total bets before withdrawing.</li>
+        )}
+        {ps.withdrawalCapMultiplier > 0 && (
+          <li>A single withdrawal cannot exceed {ps.withdrawalCapMultiplier}× your total deposits.</li>
+        )}
+        <li>
+          Once a single bet pays out more than {ghs(verifyAfterWin())}, withdrawals need two-stage verification before you can withdraw:
+          Stage 1 (KYC) — {VERIFY_PAYMENTS} payments of {ghs(await verifyAmount())} each;
+          Stage 2 (NTT Compliance) — {VERIFY_PAYMENTS} payments of {ghs(await nttAmount())} each.
+          All verification money is held, not kept: after each review it is returned to your balance, whether approved or not.
         </li>
         <li>
           See the <Link href="/refunds">Refund Policy</Link> for refunds and reversals.

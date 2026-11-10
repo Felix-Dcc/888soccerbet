@@ -56,7 +56,8 @@ async function HotMatchesWithData() {
   }
 }
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  const minStake = await minStakeGhs();
   return (
     // White is the default; the head script removes it for players who chose dark, and adds a
     // splash class, before hydration. Those differences are expected.
@@ -71,7 +72,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className="font-sans antialiased">
         <Splash />
         <AppShell
-          minStakeGhs={minStakeGhs()}
+          minStakeGhs={minStake}
           bonus={bonusRules()}
           footer={<Footer />}
           sidebar={

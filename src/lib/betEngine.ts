@@ -27,15 +27,7 @@ export class BetError extends Error {
   }
 }
 
-export function limits() {
-  return {
-    min: toPesewas(process.env.MIN_STAKE_GHS ?? "250"),
-    max: toPesewas(process.env.MAX_STAKE_GHS ?? "5000"),
-    maxPayout: toPesewas(process.env.MAX_PAYOUT_GHS ?? "200000"),
-  };
-}
-
-export async function dbLimits() {
+export async function limits() {
   const { getPlatformSettings } = await import("./platformSettings");
   const s = await getPlatformSettings();
   return {
@@ -46,7 +38,10 @@ export async function dbLimits() {
 }
 
 /** Minimum stake in GHS, for the betslip UI (same setting the engine enforces). */
-export const minStakeGhs = () => Number(limits().min) / 100;
+export async function minStakeGhs() {
+  const { min } = await limits();
+  return Number(min) / 100;
+}
 
 export interface PlacedBet {
   ref: string;
@@ -57,7 +52,7 @@ export interface PlacedBet {
 }
 
 export async function placeBet(userId: string, input: PlaceBetInput): Promise<PlacedBet> {
-  const { min, max, maxPayout } = limits();
+  const { min, max, maxPayout } = await limits();
   const stake = toPesewas(input.stakeGhs);
   if (stake < min) throw new BetError("STAKE_TOO_LOW", `Minimum stake is ${min / 100n} GHS`);
   if (stake > max) throw new BetError("STAKE_TOO_HIGH", `Maximum stake is ${max / 100n} GHS`);

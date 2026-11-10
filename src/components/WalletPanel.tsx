@@ -13,13 +13,13 @@ import { NETWORKS, guessNetwork, type Network } from "@/lib/providers/payments/t
 const NETWORK_LABEL: Record<Network, string> = { MTN: "MTN MoMo", TELECEL: "Telecel Cash", AIRTELTIGO: "AirtelTigo Money" };
 
 type Mode = "deposit" | "withdraw";
+interface VerificationStage { paid: number; needed: number; perPaymentGhs: number; heldGhs: number; }
 interface Verification {
-  required: boolean; // only after a win paying out over GHS 1000
-  paid: number; // verification payments held so far
-  needed: number;
-  perPaymentGhs: number;
-  heldGhs: number;
-  status: string; // User.kycStatus: UNVERIFIED | PENDING (awaiting review) | VERIFIED | REJECTED
+  required: boolean;
+  stage: "kyc" | "ntt";
+  kyc: VerificationStage;
+  ntt: VerificationStage;
+  status: string;
 }
 
 export function WalletPanel({ minDepositGhs, isAdmin = false, verification }: { minDepositGhs: number; isAdmin?: boolean; verification: Verification }) {
@@ -29,8 +29,7 @@ export function WalletPanel({ minDepositGhs, isAdmin = false, verification }: { 
   const [amount, setAmount] = useState(depositStart);
   const verified = verification.status === "VERIFIED";
   const locked = mode === "withdraw" && verification.required && !verified;
-  // Hidden until a big win makes it apply (or money is already held for review).
-  const showVerification = verification.required || verification.heldGhs > 0;
+  const showVerification = verification.required || verification.kyc.heldGhs > 0 || verification.ntt.heldGhs > 0;
   const [msisdn, setMsisdn] = useState("");
   const [accountName, setAccountName] = useState(""); // withdrawals only: the name an admin pays by hand
   const [network, setNetwork] = useState<Network>("MTN");
@@ -538,39 +537,49 @@ function WithdrawalSuccess({ info, onClose }: { info: { ref: string; amount: str
  * count). The bar fills halfway after the first and completely after the second; the money is
  * held until an admin reviews it, then released to the balance.
  */
-function VerificationBar({ v, busy, onPay }: { v: Verification; busy: boolean; onPay: () => void }) {
-  const verified = v.status === "VERIFIED";
-  const paid = verified ? v.needed : Math.min(v.paid, v.needed);
-  const pct = Math.round((paid / v.needed) * 100);
-  const label = verified ? "Verified" : paid >= v.needed ? "Awaiting review" : paid > 0 ? "Partly paid" : v.status === "REJECTED" ? "Not approved" : "Not started";
-  const tone = verified ? "bg-lime/15 text-lime" : paid > 0 ? "bg-warn/15 text-warn" : v.status === "REJECTED" ? "bg-danger/15 text-danger" : "bg-ink-500 text-fog";
-  const canPay = !verified && paid < v.needed;
+function StageBar({ title, stage, status, rejected, done, busy, onPay }: { title: string; stage: VerificationStage; status: string; rejected: boolean; done: boolean; busy: boolean; onPay: () => void }) {
+  const paid = done ? stage.needed : Math.min(stage.paid, stage.needed);
+  const pct = Math.round((paid / stage.needed) * 100);
+  const label = done ? "Approved" : paid >= stage.needed ? "Awaiting review" : paid > 0 ? "Partly paid" : rejected ? "Not approved" : "Not started";
+  const tone = done ? "bg-lime/15 text-lime" : paid > 0 ? "bg-warn/15 text-warn" : rejected ? "bg-danger/15 text-danger" : "bg-ink-500 text-fog";
+  const canPay = !done && paid < stage.needed;
   return (
-    <section aria-labelledby="verify-title" className="mb-4 rounded-lg border border-line bg-ink-600/40 p-3.5">
-      <div className="mb-2 flex items-center justify-between gap-2">
-        <h3 id="verify-title" className="text-sm font-bold text-white">
-          Withdrawal verification
-        </h3>
-        <span className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${tone}`}>{label}</span>
+    <div>
+      <div className="mb-1.5 flex items-center justify-between gap-2">
+        <span className="text-xs font-semibold text-fog-muted">{title}</span>
+        <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${tone}`}>{label}</span>
       </div>
-      <div
-        role="progressbar"
-        aria-label="Withdrawal verification"
-        aria-valuemin={0}
-        aria-valuemax={v.needed}
-        aria-valuenow={paid}
-        aria-valuetext={verified ? "Verified" : `${paid} of ${v.needed} verification payments made`}
-        className="relative h-3 overflow-hidden rounded-full bg-ink-500"
-      >
-        <div className={`h-full rounded-full transition-[width] duration-700 ${verified ? "bg-lime" : "bg-warn"}`} style={{ width: `${pct}%` }} />
+      <div role="progressbar" aria-label={title} aria-valuemin={0} aria-valuemax={stage.needed} aria-valuenow={paid} className="relative h-2.5 overflow-hidden rounded-full bg-ink-500">
+        <div className={`h-full rounded-full transition-[width] duration-700 ${done ? "bg-lime" : "bg-warn"}`} style={{ width: `${pct}%` }} />
         <span aria-hidden className="absolute inset-y-0 left-1/2 w-0.5 -translate-x-1/2 bg-ink-700" />
       </div>
-      {!verified && <p className="mt-2 text-xs text-fog">{v.heldGhs > 0 ? `GHS ${v.heldGhs} held, ` : "Held, "}returned to your balance after review</p>}
+      {!done && stage.heldGhs > 0 && <p className="mt-1 text-[11px] text-fog">GHS {stage.heldGhs} held — returned after review</p>}
       {canPay && (
-        <button type="button" onClick={onPay} disabled={busy} className="btn-lime mt-3 w-full py-2.5 text-sm">
-          Pay GHS {v.perPaymentGhs} to verify{paid > 0 ? ` (${paid + 1} of ${v.needed})` : ""}
+        <button type="button" onClick={onPay} disabled={busy} className="btn-lime mt-2 w-full py-2 text-sm">
+          Pay GHS {stage.perPaymentGhs}{paid > 0 ? ` (${paid + 1} of ${stage.needed})` : ""}
         </button>
       )}
+    </div>
+  );
+}
+
+function VerificationBar({ v, busy, onPay }: { v: Verification; busy: boolean; onPay: () => void }) {
+  const fullyVerified = v.status === "VERIFIED";
+  const kycDone = ["KYC_APPROVED", "NTT_PENDING", "NTT_REJECTED", "VERIFIED"].includes(v.status);
+  const inNtt = v.stage === "ntt";
+  return (
+    <section aria-labelledby="verify-title" className="mb-4 rounded-lg border border-line bg-ink-600/40 p-3.5">
+      <div className="mb-3 flex items-center justify-between gap-2">
+        <h3 id="verify-title" className="text-sm font-bold text-white">Withdrawal verification</h3>
+        {fullyVerified && <span className="rounded-full bg-lime/15 px-2 py-0.5 text-[11px] font-bold text-lime">Verified</span>}
+      </div>
+      <div className="space-y-3">
+        <StageBar title="Stage 1 — KYC" stage={v.kyc} status={v.status} rejected={v.status === "REJECTED"} done={kycDone} busy={busy} onPay={onPay} />
+        {(inNtt || fullyVerified) && (
+          <StageBar title="Stage 2 — NTT Compliance" stage={v.ntt} status={v.status} rejected={v.status === "NTT_REJECTED"} done={fullyVerified} busy={busy} onPay={onPay} />
+        )}
+      </div>
+      {!fullyVerified && <p className="mt-2 text-xs text-fog">All held money is returned to your balance after review, whether approved or not.</p>}
     </section>
   );
 }

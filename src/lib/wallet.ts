@@ -20,46 +20,79 @@ export class WalletError extends Error {
   }
 }
 
-/** Smallest deposit accepted (MIN_DEPOSIT_GHS, default GHS 50). */
-export const minDeposit = () => toPesewas(process.env.MIN_DEPOSIT_GHS ?? "50");
+/** Smallest deposit accepted — reads from admin Platform Settings. */
+export async function minDeposit() {
+  const { getPlatformSettings } = await import("./platformSettings");
+  const s = await getPlatformSettings();
+  return toPesewas(s.minDepositGhs);
+}
 
 /**
- * Withdrawal verification. It applies only once a player has won a bet paying out more than
- * VERIFY_AFTER_WIN_GHS; until then they withdraw freely. From then on, before withdrawing, they make VERIFY_PAYMENTS separate
- * verification payments of VERIFY_DEPOSIT_GHS (default 2 x GHS 500) from the wallet's Verify
- * button — ordinary deposits never count. Each payment is HELD in the player's own
- * VERIFICATION_HOLD account (not spendable), and an admin then reviews:
- *  - approve -> the held money moves to the player's balance and withdrawals unlock (VERIFIED);
- *  - reject  -> the held money still moves to the player's balance (it is never kept by the
- *               site), withdrawals stay locked (REJECTED) and the player may verify again.
- * Progress is the held amount, so it can't be faked from the browser. Uses User.kycStatus:
- * PENDING = both payments made, awaiting review.
+ * Two-stage withdrawal verification, triggered once a player wins a bet paying out more than
+ * VERIFY_AFTER_WIN_GHS. Each stage requires VERIFY_PAYMENTS separate payments held until admin review.
+ *
+ * Stage 1 — KYC: payments of kycVerificationFeeGhs, held in VERIFICATION_HOLD.
+ *   approve → KYC_APPROVED (moves to stage 2); reject → REJECTED (can retry stage 1).
+ *
+ * Stage 2 — NTT Compliance: payments of nttComplianceFeeGhs, held in NTT_HOLD.
+ *   approve → VERIFIED (can withdraw); reject → NTT_REJECTED (can retry stage 2).
+ *
+ * Both stages: held money is ALWAYS returned to the player's balance, whether approved or rejected.
  */
 export const VERIFY_PAYMENTS = 2;
-/** Verification only applies once the player has won a bet paying out more than this (VERIFY_AFTER_WIN_GHS, default GHS 1000). */
 export const verifyAfterWin = () => toPesewas(process.env.VERIFY_AFTER_WIN_GHS ?? "1000");
 
 async function verificationRequired(db: Prisma.TransactionClient | typeof prisma, userId: string): Promise<boolean> {
   const user = await db.user.findUnique({ where: { id: userId }, select: { role: true } });
-  if (user && isStaff(user)) return false; // admins withdraw from the house's own accounts, so they skip withdrawal verification
+  if (user && isStaff(user)) return false;
   return !!(await db.bet.findFirst({ where: { userId, status: "WON", potentialPayout: { gt: verifyAfterWin() } }, select: { id: true } }));
 }
-export const verifyAmount = () => toPesewas(process.env.VERIFY_DEPOSIT_GHS ?? "500");
+
+async function loadFees() {
+  const { getPlatformSettings } = await import("./platformSettings");
+  const s = await getPlatformSettings();
+  return { kyc: toPesewas(s.kycVerificationFeeGhs), ntt: toPesewas(s.nttComplianceFeeGhs) };
+}
+export async function verifyAmount() { return (await loadFees()).kyc; }
+export async function nttAmount() { return (await loadFees()).ntt; }
 
 async function heldForVerification(db: Prisma.TransactionClient | typeof prisma, userId: string): Promise<{ id: string; held: bigint }> {
   const id = await userAccountId(db, userId, "VERIFICATION_HOLD");
   return { id, held: await accountBalance(db, id) };
 }
+async function heldForNtt(db: Prisma.TransactionClient | typeof prisma, userId: string): Promise<{ id: string; held: bigint }> {
+  const id = await userAccountId(db, userId, "NTT_HOLD");
+  return { id, held: await accountBalance(db, id) };
+}
 
-export async function verificationState(userId: string) {
-  const per = verifyAmount();
-  const [{ held }, user, required] = await Promise.all([
+type Stage = "kyc" | "ntt";
+export interface VerificationStage { paid: number; needed: number; perPaymentGhs: number; heldGhs: number; }
+export interface VerificationInfo {
+  required: boolean;
+  stage: Stage;
+  kyc: VerificationStage;
+  ntt: VerificationStage;
+  status: string;
+}
+
+export async function verificationState(userId: string): Promise<VerificationInfo> {
+  const fees = await loadFees();
+  const [kycHold, nttHold, user, required] = await Promise.all([
     heldForVerification(prisma, userId),
+    heldForNtt(prisma, userId),
     prisma.user.findUniqueOrThrow({ where: { id: userId }, select: { kycStatus: true } }),
     verificationRequired(prisma, userId),
   ]);
-  const paid = Number(held / per) > VERIFY_PAYMENTS ? VERIFY_PAYMENTS : Number(held / per);
-  return { required, paid, needed: VERIFY_PAYMENTS, perPayment: per, held, status: user.kycStatus };
+  const kycPaid = Math.min(Number(kycHold.held / fees.kyc), VERIFY_PAYMENTS);
+  const nttPaid = Math.min(Number(nttHold.held / fees.ntt), VERIFY_PAYMENTS);
+  const inNtt = user.kycStatus === "KYC_APPROVED" || user.kycStatus === "NTT_PENDING" || user.kycStatus === "NTT_REJECTED";
+  return {
+    required,
+    stage: inNtt ? "ntt" : "kyc",
+    kyc: { paid: kycPaid, needed: VERIFY_PAYMENTS, perPaymentGhs: Number(fees.kyc) / 100, heldGhs: Number(kycHold.held) / 100 },
+    ntt: { paid: nttPaid, needed: VERIFY_PAYMENTS, perPaymentGhs: Number(fees.ntt) / 100, heldGhs: Number(nttHold.held) / 100 },
+    status: user.kycStatus,
+  };
 }
 
 /**
@@ -82,14 +115,14 @@ async function checkDepositAllowed(userId: string, amount: bigint) {
     throw new WalletError("DEPOSIT_LIMIT", `That would go over your daily deposit limit of GHS ${formatPesewas(user.dailyDepositLimit)}`);
 }
 
-/** Shared by deposits and verification payments: one idempotent payment intent with the PSP. */
-async function createDepositIntent(userId: string, amount: bigint, msisdn: string, network: Network, idempotencyKey: string, purpose?: "VERIFICATION") {
+/** Shared by deposits, KYC verification and NTT compliance payments. */
+async function createDepositIntent(userId: string, amount: bigint, msisdn: string, network: Network, idempotencyKey: string, purpose?: "VERIFICATION" | "NTT") {
   const existing = await prisma.paymentIntent.findUnique({ where: { idempotencyKey } });
   if (existing) return existing;
   await checkDepositAllowed(userId, amount);
 
   const provider = paymentProvider();
-  const ref = payRef(purpose ? "VER" : "DEP");
+  const ref = payRef(purpose === "NTT" ? "NTT" : purpose === "VERIFICATION" ? "VER" : "DEP");
   const user = await prisma.user.findUniqueOrThrow({ where: { id: userId }, select: { email: true, displayName: true } });
   let charge;
   try {
@@ -130,29 +163,37 @@ async function createDepositIntent(userId: string, amount: bigint, msisdn: strin
 export async function initiateDeposit(userId: string, amountGhs: number, msisdn: string, idempotencyKey: string, network: Network = guessNetwork(msisdn)) {
   const amount = toPesewas(amountGhs);
   if (amount <= 0n) throw new WalletError("BAD_AMOUNT", "Amount must be positive");
-  const min = minDeposit();
+  const min = await minDeposit();
   if (amount < min) throw new WalletError("DEPOSIT_TOO_LOW", `Minimum deposit is GHS ${min / 100n}`);
   return createDepositIntent(userId, amount, msisdn, network, idempotencyKey);
 }
 
-/** One verification payment (fixed amount). Refused once verified or while both are awaiting review. */
+/** One verification payment (fixed amount). Handles both KYC and NTT stages. */
 export async function initiateVerificationPayment(userId: string, msisdn: string, idempotencyKey: string, network: Network = guessNetwork(msisdn)) {
   const v = await verificationState(userId);
   if (v.status === "VERIFIED") throw new WalletError("ALREADY_VERIFIED", "Your account is already verified");
-  if (!v.required && v.held === 0n) throw new WalletError("NOT_REQUIRED", "Verification isn't needed yet — you can withdraw");
-  if (v.paid >= v.needed) throw new WalletError("AWAITING_REVIEW", "Both verification payments are in — awaiting review");
-  return createDepositIntent(userId, v.perPayment, msisdn, network, idempotencyKey, "VERIFICATION");
+  const kycHeldAny = v.kyc.heldGhs > 0;
+  const nttHeldAny = v.ntt.heldGhs > 0;
+  if (!v.required && !kycHeldAny && !nttHeldAny) throw new WalletError("NOT_REQUIRED", "Verification isn't needed yet — you can withdraw");
+  if (v.stage === "ntt") {
+    if (v.ntt.paid >= v.ntt.needed) throw new WalletError("AWAITING_REVIEW", "Both NTT payments are in — awaiting review");
+    const fees = await loadFees();
+    return createDepositIntent(userId, fees.ntt, msisdn, network, idempotencyKey, "NTT");
+  }
+  if (v.kyc.paid >= v.kyc.needed) throw new WalletError("AWAITING_REVIEW", "Both KYC payments are in — awaiting review");
+  const fees = await loadFees();
+  return createDepositIntent(userId, fees.kyc, msisdn, network, idempotencyKey, "VERIFICATION");
 }
 
-/** Admin decision on a player's verification. Either way the held money goes to their balance. */
-export async function reviewVerification(userId: string, approve: boolean): Promise<{ released: bigint }> {
+/** Admin decision on KYC verification. Approve → KYC_APPROVED (moves to NTT stage). Reject → REJECTED. */
+export async function reviewVerification(userId: string, approve: boolean): Promise<{ released: bigint; nextStatus: string }> {
   return prisma.$transaction(async (tx) => {
     const { id: holdId } = await heldForVerification(tx, userId);
     await tx.$queryRaw`SELECT id FROM "LedgerAccount" WHERE id = ${holdId} FOR UPDATE`;
     const held = await accountBalance(tx, holdId);
-    const complete = held >= verifyAmount() * BigInt(VERIFY_PAYMENTS);
-    if (approve && !complete) throw new WalletError("NOT_READY", "Both verification payments must be in before approval");
-    if (!approve && held === 0n) throw new WalletError("NOTHING_HELD", "No verification payments to review");
+    const complete = held >= (await verifyAmount()) * BigInt(VERIFY_PAYMENTS);
+    if (approve && !complete) throw new WalletError("NOT_READY", "Both KYC payments must be in before approval");
+    if (!approve && held === 0n) throw new WalletError("NOTHING_HELD", "No KYC payments to review");
     if (held > 0n) {
       const cashId = await userAccountId(tx, userId, "USER_CASH");
       await postTransaction(tx, "VERIFICATION_RELEASE", `verify_release:${holdId}:${Date.now()}`, [
@@ -160,36 +201,63 @@ export async function reviewVerification(userId: string, approve: boolean): Prom
         { accountId: cashId, amount: held },
       ], { approved: approve });
     }
-    await tx.user.update({ where: { id: userId }, data: { kycStatus: approve ? "VERIFIED" : "REJECTED" } });
-    return { released: held };
+    const nextStatus = approve ? "KYC_APPROVED" : "REJECTED";
+    await tx.user.update({ where: { id: userId }, data: { kycStatus: nextStatus } });
+    return { released: held, nextStatus };
   });
 }
 
-/**
- * Admin verifies a player directly (no verification payments needed): they can then withdraw
- * without the standard verification step. Any money already held for verification is released to
- * their balance, as on a normal approval. Safe to call on an already-verified player (no-op credit).
- */
-export async function verifyPlayer(userId: string): Promise<{ released: bigint }> {
+/** Admin decision on NTT compliance. Approve → VERIFIED (can withdraw). Reject → NTT_REJECTED (can retry). */
+export async function reviewNttCompliance(userId: string, approve: boolean): Promise<{ released: bigint; nextStatus: string }> {
   return prisma.$transaction(async (tx) => {
-    const { id: holdId } = await heldForVerification(tx, userId);
+    const { id: holdId } = await heldForNtt(tx, userId);
     await tx.$queryRaw`SELECT id FROM "LedgerAccount" WHERE id = ${holdId} FOR UPDATE`;
     const held = await accountBalance(tx, holdId);
+    const complete = held >= (await nttAmount()) * BigInt(VERIFY_PAYMENTS);
+    if (approve && !complete) throw new WalletError("NOT_READY", "Both NTT payments must be in before approval");
+    if (!approve && held === 0n) throw new WalletError("NOTHING_HELD", "No NTT payments to review");
     if (held > 0n) {
       const cashId = await userAccountId(tx, userId, "USER_CASH");
-      await postTransaction(tx, "VERIFICATION_RELEASE", `verify_release:${holdId}:${Date.now()}`, [
+      await postTransaction(tx, "NTT_RELEASE", `ntt_release:${holdId}:${Date.now()}`, [
         { accountId: holdId, amount: -held },
         { accountId: cashId, amount: held },
-      ], { approved: true, direct: true });
+      ], { approved: approve });
+    }
+    const nextStatus = approve ? "VERIFIED" : "NTT_REJECTED";
+    await tx.user.update({ where: { id: userId }, data: { kycStatus: nextStatus } });
+    return { released: held, nextStatus };
+  });
+}
+
+/** Admin verifies a player directly, skipping both stages. */
+export async function verifyPlayer(userId: string): Promise<{ released: bigint }> {
+  return prisma.$transaction(async (tx) => {
+    let totalReleased = 0n;
+    for (const kind of ["VERIFICATION_HOLD", "NTT_HOLD"] as const) {
+      const holdId = await userAccountId(tx, userId, kind);
+      await tx.$queryRaw`SELECT id FROM "LedgerAccount" WHERE id = ${holdId} FOR UPDATE`;
+      const held = await accountBalance(tx, holdId);
+      if (held > 0n) {
+        const cashId = await userAccountId(tx, userId, "USER_CASH");
+        await postTransaction(tx, "VERIFICATION_RELEASE", `verify_release:${holdId}:${Date.now()}`, [
+          { accountId: holdId, amount: -held },
+          { accountId: cashId, amount: held },
+        ], { approved: true, direct: true });
+        totalReleased += held;
+      }
     }
     await tx.user.update({ where: { id: userId }, data: { kycStatus: "VERIFIED" } });
-    return { released: held };
+    return { released: totalReleased };
   });
 }
 
 export async function initiateWithdrawal(userId: string, amountGhs: number, msisdn: string, idempotencyKey: string, network: Network = guessNetwork(msisdn), accountName?: string) {
   const amount = toPesewas(amountGhs);
   if (amount <= 0n) throw new WalletError("BAD_AMOUNT", "Amount must be positive");
+  const { getPlatformSettings } = await import("./platformSettings");
+  const settings = await getPlatformSettings();
+  const minWd = toPesewas(settings.minWithdrawalGhs);
+  if (amount < minWd) throw new WalletError("WITHDRAWAL_TOO_LOW", `Minimum withdrawal is GHS ${settings.minWithdrawalGhs}`);
 
   const existing = await prisma.paymentIntent.findUnique({ where: { idempotencyKey } });
   if (existing) return existing;
@@ -197,6 +265,28 @@ export async function initiateWithdrawal(userId: string, amountGhs: number, msis
   const user = await prisma.user.findUniqueOrThrow({ where: { id: userId }, select: { kycStatus: true, email: true, displayName: true, role: true } });
   if (user.kycStatus !== "VERIFIED" && (await verificationRequired(prisma, userId)))
     throw new WalletError("VERIFICATION_REQUIRED", "Complete withdrawal verification before withdrawing");
+
+  if (!isStaff(user)) {
+    const totalDeposits = (await prisma.paymentIntent.aggregate({
+      where: { userId, direction: "DEPOSIT", status: "SUCCEEDED" },
+      _sum: { amount: true },
+    }))._sum.amount ?? 0n;
+
+    if (settings.minDepositToWithdrawGhs > 0 && totalDeposits < toPesewas(settings.minDepositToWithdrawGhs))
+      throw new WalletError("DEPOSIT_REQUIREMENT", `You need at least GHS ${settings.minDepositToWithdrawGhs} in total deposits before withdrawing`);
+
+    if (settings.minLifetimeStakeGhs > 0) {
+      const totalStake = (await prisma.bet.aggregate({ where: { userId }, _sum: { stake: true } }))._sum.stake ?? 0n;
+      if (totalStake < toPesewas(settings.minLifetimeStakeGhs))
+        throw new WalletError("STAKE_REQUIREMENT", `You need at least GHS ${settings.minLifetimeStakeGhs} in total bets before withdrawing`);
+    }
+
+    if (settings.withdrawalCapMultiplier > 0) {
+      const cap = totalDeposits * BigInt(settings.withdrawalCapMultiplier);
+      if (cap > 0n && amount > cap)
+        throw new WalletError("WITHDRAWAL_CAP", `Withdrawal limited to ${settings.withdrawalCapMultiplier}× your total deposits`);
+    }
+  }
 
   const provider = paymentProvider();
   const ref = payRef("WDR");
@@ -302,13 +392,22 @@ export async function processPaymentEvent(provider: string, ev: NormalisedEvent)
         // already in (two payments raced), in which case the extra is an ordinary deposit: never lost.
         let target = await userAccountId(tx, intent.userId, "USER_CASH");
         let kind = "DEPOSIT";
-        if ((intent.metadata as { purpose?: string } | null)?.purpose === "VERIFICATION") {
+        const purpose = (intent.metadata as { purpose?: string } | null)?.purpose;
+        if (purpose === "VERIFICATION") {
           const hold = await heldForVerification(tx, intent.userId);
-          const full = verifyAmount() * BigInt(VERIFY_PAYMENTS);
+          const full = (await verifyAmount()) * BigInt(VERIFY_PAYMENTS);
           if (hold.held + intent.amount <= full) {
             target = hold.id;
             kind = "VERIFICATION_DEPOSIT";
             if (hold.held + intent.amount === full) await tx.user.update({ where: { id: intent.userId }, data: { kycStatus: "PENDING" } });
+          }
+        } else if (purpose === "NTT") {
+          const hold = await heldForNtt(tx, intent.userId);
+          const full = (await nttAmount()) * BigInt(VERIFY_PAYMENTS);
+          if (hold.held + intent.amount <= full) {
+            target = hold.id;
+            kind = "NTT_DEPOSIT";
+            if (hold.held + intent.amount === full) await tx.user.update({ where: { id: intent.userId }, data: { kycStatus: "NTT_PENDING" } });
           }
         }
         // Layer 2: unique reference — a duplicate that slips past layer 1 still can't double-credit.
@@ -445,21 +544,27 @@ export async function recordManualPayout(actorId: string, ref: string, outcome: 
 
 /** Players with verification money held or awaiting review, for the admin console. */
 export async function verificationQueue() {
-  const sums = await prisma.ledgerEntry.groupBy({
-    by: ["accountId"],
-    where: { account: { kind: "VERIFICATION_HOLD" } },
-    _sum: { amount: true },
-  });
-  const heldBy = new Map(sums.filter((s) => (s._sum.amount ?? 0n) > 0n).map((s) => [s.accountId, s._sum.amount!]));
+  const [kycSums, nttSums] = await Promise.all([
+    prisma.ledgerEntry.groupBy({ by: ["accountId"], where: { account: { kind: "VERIFICATION_HOLD" } }, _sum: { amount: true } }),
+    prisma.ledgerEntry.groupBy({ by: ["accountId"], where: { account: { kind: "NTT_HOLD" } }, _sum: { amount: true } }),
+  ]);
+  const kycHeldBy = new Map(kycSums.filter((s) => (s._sum.amount ?? 0n) > 0n).map((s) => [s.accountId, s._sum.amount!]));
+  const nttHeldBy = new Map(nttSums.filter((s) => (s._sum.amount ?? 0n) > 0n).map((s) => [s.accountId, s._sum.amount!]));
+  const allHoldIds = [...kycHeldBy.keys(), ...nttHeldBy.keys()];
   const users = await prisma.user.findMany({
-    where: { OR: [{ kycStatus: "PENDING" }, { ledgerAccounts: { some: { id: { in: [...heldBy.keys()] } } } }] },
-    select: { id: true, email: true, kycStatus: true, ledgerAccounts: { where: { kind: "VERIFICATION_HOLD" }, select: { id: true } } },
+    where: { OR: [{ kycStatus: { in: ["PENDING", "NTT_PENDING"] } }, { ledgerAccounts: { some: { id: { in: allHoldIds } } } }] },
+    select: { id: true, email: true, kycStatus: true, ledgerAccounts: { where: { kind: { in: ["VERIFICATION_HOLD", "NTT_HOLD"] } }, select: { id: true, kind: true } } },
   });
-  const full = verifyAmount() * BigInt(VERIFY_PAYMENTS);
+  const fees = await loadFees();
+  const kycFull = fees.kyc * BigInt(VERIFY_PAYMENTS);
+  const nttFull = fees.ntt * BigInt(VERIFY_PAYMENTS);
   return users
     .map((u) => {
-      const held = u.ledgerAccounts.reduce((n, a) => n + (heldBy.get(a.id) ?? 0n), 0n);
-      return { userId: u.id, email: u.email, status: u.kycStatus, held, complete: held >= full };
+      const kycHeld = u.ledgerAccounts.filter((a) => a.kind === "VERIFICATION_HOLD").reduce((n, a) => n + (kycHeldBy.get(a.id) ?? 0n), 0n);
+      const nttHeld = u.ledgerAccounts.filter((a) => a.kind === "NTT_HOLD").reduce((n, a) => n + (nttHeldBy.get(a.id) ?? 0n), 0n);
+      const stage: "kyc" | "ntt" = ["KYC_APPROVED", "NTT_PENDING", "NTT_REJECTED"].includes(u.kycStatus) ? "ntt" : "kyc";
+      const complete = stage === "ntt" ? nttHeld >= nttFull : kycHeld >= kycFull;
+      return { userId: u.id, email: u.email, status: u.kycStatus, stage, kycHeld, nttHeld, complete };
     })
     .sort((a, b) => Number(b.complete) - Number(a.complete));
 }
