@@ -30,6 +30,8 @@ const SPORT_KEYS: Record<string, string[]> = {
   football: SOCCER_KEYS,
   basketball: ["basketball_nba"],
 };
+/** Every league this feed syncs. */
+export const ODDS_LEAGUES = Object.values(SPORT_KEYS).flat();
 
 interface Outcome {
   name: string;
@@ -478,7 +480,7 @@ export class TheOddsApiProvider implements OddsProvider {
 
   async fetchResults(providerRefs: string[], leagues?: string[]): Promise<ProviderResult[]> {
     const want = new Set(providerRefs);
-    return (await this.scores(leagues ?? [...SOCCER_KEYS, "basketball_nba"], "&daysFrom=3")).filter((r) => want.has(r.providerRef));
+    return (await this.scores(leagues ?? ODDS_LEAGUES, "&daysFrom=3")).filter((r) => want.has(r.providerRef));
   }
 
   async fetchLiveScores(leagues: string[]): Promise<ProviderResult[]> {

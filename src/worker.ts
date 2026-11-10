@@ -3,7 +3,8 @@
  * Run alongside the app:  npm run worker
  * (Jobs could also be driven by POSTing /api/cron from an external scheduler.)
  */
-import { syncFixtures, syncEventMarkets, autoSettleFinished, settleRecentlyFinished, goLiveManualFixtures, updateLiveScores, syncLiveOdds, retireOrphanedFeedFixtures } from "./lib/sync";
+import { syncFixtures, syncEventMarkets, autoSettleFinished, settleRecentlyFinished, goLiveManualFixtures, updateLiveScores, syncLiveOdds, retireOrphanedFeedFixtures, dueLeagues } from "./lib/sync";
+import { ODDS_LEAGUES } from "./lib/providers/odds/theOddsApi";
 import { enrichCompetitions, enrichTeams } from "./lib/assets";
 import { advanceScriptedMatches } from "./lib/scriptedMatches";
 import { oddsProvider } from "./lib/providers/odds";
@@ -15,6 +16,7 @@ import { liveBettingLeagues } from "./lib/markets";
 // 2 per league with a finished-but-unsettled match (<= 12). 48h sync ~= 34 x 15 = ~510/mo, so on
 // the free tier the per-match markets pause automatically once credits fall below
 // ODDS_EXTRA_RESERVE (default 150) and the main odds keep syncing. A paid plan removes the squeeze.
+// On The Odds API the fixed SYNC_MS timer is replaced by per-league scheduling (oddsTick below).
 const H = 60 * 60 * 1000;
 const SYNC_MS = Number(process.env.SYNC_INTERVAL_MS ?? 48 * H);
 const SETTLE_MS = Number(process.env.SETTLE_INTERVAL_MS ?? 96 * H);
@@ -37,6 +39,24 @@ const ENRICH_MS = Number(process.env.ENRICH_INTERVAL_MS ?? 10 * 60 * 1000);
 
 // Per-match markets need the fixtures (and their league keys) the bulk sync just wrote.
 const sync = async () => ({ fixtures: await syncFixtures(), extras: await syncEventMarkets() });
+
+// The Odds API: instead of every league on one timer, each league refreshes on a cadence set by its
+// next kickoff (lib/oddsSchedule: 1h within 3h of kickoff ... daily with nothing scheduled). The
+// due-check is DB-only; credits are spent only on leagues that are due.
+const ODDS_TICK_MS = 15 * 60 * 1000;
+const EXTRAS_MS = Number(process.env.ODDS_EXTRA_INTERVAL_MS ?? 3 * H);
+const lastOdds = new Map<string, number>();
+async function oddsTick() {
+  try {
+    const now = Date.now();
+    const due = await dueLeagues(ODDS_LEAGUES, lastOdds, now);
+    if (!due.length) return;
+    for (const l of due) lastOdds.set(l, now);
+    console.log("[worker] odds", { leagues: due, ...(await syncFixtures({ leagues: due })) });
+  } catch (e) {
+    console.error("[worker] odds failed:", e instanceof Error ? e.message : e);
+  }
+}
 
 let enriching = false;
 async function enrich() {
@@ -92,16 +112,24 @@ async function scripted() {
 
 async function main() {
   const p = oddsProvider();
-  console.log(`[worker] starting · provider=${p.name} · sync every ${SYNC_MS / 3_600_000}h · settle every ${SETTLE_MS / 3_600_000}h`);
-  if (p.name === "theoddsapi")
-    console.log("[worker] NOTE: The Odds API free tier is 500 credits/month (~27/sync). Defaults (48h sync, 96h settle) fit; going faster needs fewer leagues or use a premium key for more frequent updates.");
+  const smart = p.name === "theoddsapi";
+  console.log(
+    `[worker] starting · provider=${p.name} · ${smart ? `odds by next kickoff, extras every ${EXTRAS_MS / 3_600_000}h` : `sync every ${SYNC_MS / 3_600_000}h`} · settle every ${SETTLE_MS / 3_600_000}h`,
+  );
   // A feed switch always restarts the worker, so retiring the old feed's matches once here is enough.
   // It runs first so settle never asks the new feed about matches it doesn't know. No credits used.
   await safe("retire", retireOrphanedFeedFixtures);
-  await safe("sync", sync);
+  if (smart) {
+    await oddsTick(); // nothing refreshed yet in this process: every league is due
+    await safe("extras", () => syncEventMarkets());
+    setInterval(() => void oddsTick(), ODDS_TICK_MS);
+    setInterval(() => void safe("extras", () => syncEventMarkets()), EXTRAS_MS);
+  } else {
+    await safe("sync", sync);
+    setInterval(() => void safe("sync", sync), SYNC_MS);
+  }
   await safe("settle", autoSettleFinished);
   await safe("artwork", enrich);
-  setInterval(() => void safe("sync", sync), SYNC_MS);
   setInterval(() => void safe("settle", autoSettleFinished), SETTLE_MS);
   setInterval(() => void recent(), RESULT_CHECK_MS);
   setInterval(() => void safe("artwork", enrich), ENRICH_MS);

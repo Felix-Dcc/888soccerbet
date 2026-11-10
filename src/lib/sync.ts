@@ -23,6 +23,7 @@ import { competitionRank } from "./queries";
 import { runAutoCashouts } from "./cashout";
 import { IN_PLAY_MARKET_TYPES, liveBettingLeagues } from "./markets";
 import { RESULT_CHECK_HOURS, resultCheckDue } from "./resultChecks";
+import { pickDueLeagues } from "./oddsSchedule";
 
 const SPORTS = ["football", "basketball"];
 
@@ -116,13 +117,29 @@ export async function syncFixtures({ leagues, inPlay = false }: { leagues?: stri
   return { fixtures: fixtures.length, provider: provider.name, sandbox: provider.isSandbox };
 }
 
+/** Leagues whose odds are due a refresh (see oddsSchedule), judged from fixtures already stored: no credits. */
+export async function dueLeagues(leagues: readonly string[], last: ReadonlyMap<string, number>, now: number): Promise<string[]> {
+  const upcoming = await prisma.fixture.findMany({
+    where: { status: "SCHEDULED", startsAt: { gt: new Date(now) }, competition: { providerRef: { in: [...leagues] } } },
+    select: { startsAt: true, competition: { select: { providerRef: true } } },
+  });
+  const next = new Map<string, number>();
+  for (const f of upcoming) {
+    const l = f.competition.providerRef!;
+    const t = f.startsAt.getTime() - now;
+    if (!next.has(l) || t < next.get(l)!) next.set(l, t);
+  }
+  return pickDueLeagues(leagues, next, last, now);
+}
+
 /** In play only the match result is offered: every other open market on the match closes. */
 const closeInPlayExtras = (fixtureId: string) =>
   prisma.market.updateMany({ where: { fixtureId, status: "OPEN", type: { notIn: IN_PLAY_MARKET_TYPES } }, data: { status: "SUSPENDED" } });
 
 /**
  * Per-match markets (all over/under and handicap lines, team totals, correct score, odd/even,
- * GG/NG, double chance, draw no bet) for the top `limit` upcoming football fixtures. On a
+ * GG/NG, double chance, draw no bet) for the top `limit` football fixtures kicking off within
+ * ODDS_EXTRA_WINDOW_HOURS (default 48). On a
  * metered feed each match costs up to one credit per market returned, so coverage is capped,
  * and the whole step pauses below ODDS_EXTRA_RESERVE credits so the main odds sync never starves.
  * Matches not refreshed — outside the top set, or paused — have these markets suspended rather
@@ -140,8 +157,15 @@ export async function syncEventMarkets(limit = Number(process.env.ODDS_EXTRA_FIX
     return { fixtures: 0, markets: 0, skipped: `credit reserve: ${left} left` };
   }
 
+  // Only matches close enough for their prices to matter; later ones get them as they come into range.
+  const windowMs = Number(process.env.ODDS_EXTRA_WINDOW_HOURS ?? 48) * 3600_000;
   const upcoming = await prisma.fixture.findMany({
-    where: { sportKey: "football", status: "SCHEDULED", startsAt: { gt: new Date() }, competition: { providerRef: { not: null } } },
+    where: {
+      sportKey: "football",
+      status: "SCHEDULED",
+      startsAt: { gt: new Date(), lt: new Date(Date.now() + windowMs) },
+      competition: { providerRef: { not: null } },
+    },
     include: { competition: true },
   });
   const top = upcoming
