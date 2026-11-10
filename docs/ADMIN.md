@@ -115,7 +115,7 @@ Settings (`.env`):
 | `BONUS_MIN_ODDS` | A leg must be priced at least this high to count towards the bonus (default 1.20). Shorter legs still pay their odds |
 | `DEFAULT_REFERRAL_CODE` | An administrator's code: players who sign up without a code are attributed to them (shown as auto-assigned). A typed or linked code still wins. Blank = unattributed |
 
-First super admin: `npm run db:seed` creates `admin@888soccerbet.com` as `SUPER_ADMIN`; change its
+First super admin: `npm run db:seed` creates `admin@betzone.com.co` as `SUPER_ADMIN`; change its
 password immediately in production. Further admins are created at `/admin/admins`.
 
 Tests: `npm test` (unit, includes the permission engine) and `npm run test:int` (database:

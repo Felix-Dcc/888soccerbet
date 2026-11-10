@@ -12,10 +12,14 @@ async function main() {
   await houseAccountId(prisma, "HOUSE_PNL");
   await houseAccountId(prisma, "PAYMENT_CLEARING");
 
+  // Databases seeded before the Bet Zone rename keep their accounts, moved to the new addresses.
+  for (const who of ["admin", "demo"])
+    await prisma.user.updateMany({ where: { email: `${who}@888soccerbet.com` }, data: { email: `${who}@betzone.com.co` } });
+
   const admin = await prisma.user.upsert({
-    where: { email: "admin@888soccerbet.com" },
+    where: { email: "admin@betzone.com.co" },
     create: {
-      email: "admin@888soccerbet.com",
+      email: "admin@betzone.com.co",
       passwordHash: hashPassword("Admin123!"),
       role: "SUPER_ADMIN",
       displayName: "Bet Zone Admin",
@@ -28,17 +32,17 @@ async function main() {
   });
 
   const demo = await prisma.user.upsert({
-    where: { email: "demo@888soccerbet.com" },
+    where: { email: "demo@betzone.com.co" },
     create: {
-      email: "demo@888soccerbet.com",
+      email: "demo@betzone.com.co",
       passwordHash: hashPassword("Demo1234!"),
       displayName: "Demo Player",
       kycStatus: "VERIFIED",
       dateOfBirth: new Date("1995-06-15"),
       phone: "0240000001",
-      referralCode: "DEMO888",
+      referralCode: "DEMOBZ",
     },
-    update: { phone: "0240000001" },
+    update: { phone: "0240000001", referralCode: "DEMOBZ" },
   });
 
   // Give the demo player a starting balance via a proper DEPOSIT ledger transaction.
@@ -54,7 +58,7 @@ async function main() {
 
   const sync = await syncFixtures();
   console.log("Seeded:", { admin: admin.email, demo: demo.email, ...sync });
-  console.log("Logins -> admin@888soccerbet.com or 0240000002 / Admin123!   demo@888soccerbet.com or 0240000001 / Demo1234!   demo referral: /register?ref=DEMO888");
+  console.log("Logins -> admin@betzone.com.co or 0240000002 / Admin123!   demo@betzone.com.co or 0240000001 / Demo1234!   demo referral: /register?ref=DEMOBZ");
 }
 
 main()

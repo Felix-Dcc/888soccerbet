@@ -35,8 +35,8 @@ npm run dev                     # http://localhost:3000
 npm run worker                  # (separate shell) keeps odds fresh & settles finished games
 ```
 
-Seed logins (phone or email): `admin@888soccerbet.com` / `0240000002` / `Admin123!` ·
-`demo@888soccerbet.com` / `0240000001` / `Demo1234!`. Demo referral link: `/register?ref=DEMO888`.
+Seed logins (phone or email): `admin@betzone.com.co` / `0240000002` / `Admin123!` ·
+`demo@betzone.com.co` / `0240000001` / `Demo1234!`. Demo referral link: `/register?ref=DEMOBZ`.
 
 ### Accounts, matches and booking codes
 
