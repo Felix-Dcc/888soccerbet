@@ -8,7 +8,7 @@ import { EmptyState, Head, Panel, Pill } from "@/components/admin/kit";
 
 export const dynamic = "force-dynamic";
 
-/** Create games: generate a match or add one by hand. Results are entered on the trading desk. */
+/** Create Match: generate a match or add one by hand. Results are entered on Betting Ops. */
 export default async function CreateGamesPage() {
   const gate = await adminPage(["fixtures.manage"]);
   if (!gate.ok) return gate.deny;
@@ -27,7 +27,7 @@ export default async function CreateGamesPage() {
 
   return (
     <>
-      <Head title="Create games" description="Generate a match or add one by hand. Results are entered on the Trading desk." />
+      <Head title="Create Match" description="Generate a match or add one by hand. Results are entered on Betting Ops." />
 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">
         <div className="min-w-0 space-y-6">
@@ -45,7 +45,7 @@ export default async function CreateGamesPage() {
           flush
           actions={
             <Link href="/admin/operations?queue=manual" className="text-xs font-semibold text-lime hover:underline">
-              Settle on Trading desk →
+              Settle on Betting Ops →
             </Link>
           }
         >

@@ -34,7 +34,7 @@ export default async function AuditPage({ searchParams }: { searchParams: Promis
 
   return (
     <>
-      <Head title="Audit trail" />
+      <Head title="Audit Log" />
 
       <div className={`flex items-center gap-3 rounded-xl border px-4 py-3 text-sm ${chain.ok ? "border-lime/20 bg-lime/[0.05]" : "border-danger/40 bg-danger/10"}`} role="status">
         <Light level={chain.ok ? "ok" : "critical"} pulse={!chain.ok} />

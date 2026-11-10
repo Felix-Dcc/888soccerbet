@@ -34,7 +34,7 @@ export default async function TeamPage({ searchParams }: { searchParams: Promise
 
   return (
     <>
-      <Head title="Team">
+      <Head title="Sub-Admins">
         <Range path="/admin/admins" current={range.key} params={{ sort }} />
         {can(u, "reports.export") && (
           <a href={`/api/admin/export?kind=admins&range=${range.key}`} className={btnGhost}>

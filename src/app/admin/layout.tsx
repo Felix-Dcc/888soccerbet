@@ -6,12 +6,12 @@ import { ADMIN_THEME_SCRIPT } from "@/lib/theme";
 
 export const dynamic = "force-dynamic";
 
-/** Group the permitted sections into labelled blocks, and give each a Lucide icon key. */
+/** Flat nav order matching the Bet Prime sidebar style. */
 const GROUPS: { label: string; hrefs: string[] }[] = [
-  { label: "Overview", hrefs: ["/admin"] },
-  { label: "Operations", hrefs: ["/admin/operations", "/admin/games"] },
-  { label: "Growth & Content", hrefs: ["/admin/referrals"] },
-  { label: "Administration", hrefs: ["/admin/users", "/admin/admins", "/admin/roles", "/admin/audit", "/admin/system"] },
+  {
+    label: "Navigation",
+    hrefs: ["/admin", "/admin/users", "/admin/operations", "/admin/games", "/admin/admins", "/admin/roles", "/admin/referrals", "/admin/audit", "/admin/system"],
+  },
 ];
 const ICON_KEY: Record<string, string> = {
   "/admin": "dashboard",
@@ -25,7 +25,7 @@ const ICON_KEY: Record<string, string> = {
   "/admin/system": "system",
 };
 
-/** Console frame: grouped collapsible rail on desktop, slide-in drawer on phones. Each page re-checks access. */
+/** Console frame: flat sidebar on desktop, slide-in drawer on phones. Each page re-checks access. */
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const user = await getCurrentUser();
   if (!user || !isStaff(user)) return <div className="mx-auto max-w-[1280px] px-4 py-8">{children}</div>; // the page redirects or refuses

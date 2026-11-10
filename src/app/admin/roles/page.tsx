@@ -18,7 +18,7 @@ export default async function RolesPage({ searchParams }: { searchParams: Promis
 
   return (
     <>
-      <Head title="Permissions">
+      <Head title="Roles">
         <Link href="/admin/roles?edit=new#editor" className={btnGhost}>
           <Icon name="plus" />
           New role

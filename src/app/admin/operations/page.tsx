@@ -14,7 +14,7 @@ import { BarList, EmptyState, Figure, Head, Panel, Pill, Strip, Tabs, ago, ghs, 
 
 export const dynamic = "force-dynamic";
 
-/** Trading desk: results to enter, withdrawals to pay by hand, verifications to review, open exposure, the odds sync. Each part needs its own permission. Creating games is on /admin/games. */
+/** Betting Ops: results to enter, withdrawals to pay by hand, verifications to review, open exposure, the odds sync. Each part needs its own permission. Creating matches is on /admin/games. */
 export default async function OperationsPage({ searchParams }: { searchParams: Promise<{ queue?: string }> }) {
   const gate = await adminPage(["settlement.manage", "verification.review", "odds.sync", "bets.view", "payments.payout"]);
   if (!gate.ok) return gate.deny;
@@ -53,7 +53,7 @@ export default async function OperationsPage({ searchParams }: { searchParams: P
 
   return (
     <>
-      <Head title="Trading desk">{can(u, "odds.sync") && <SyncButton />}</Head>
+      <Head title="Betting Ops">{can(u, "odds.sync") && <SyncButton />}</Head>
 
       <Strip cols="grid-cols-2 md:grid-cols-4">
         <Figure label="Awaiting result" value={counts ? counts[0] : "—"} note={counts ? `${counts[1]} kicked off · ${counts[2]} manual` : undefined} />

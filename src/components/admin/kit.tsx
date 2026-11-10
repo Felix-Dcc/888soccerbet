@@ -435,6 +435,36 @@ export function Pager({ path, page, pages, params = {} }: { path: string; page: 
 }
 export const pageOf = (raw: string | undefined) => Math.max(1, Math.min(10_000, Number.parseInt(raw ?? "1", 10) || 1));
 
+/** Bet-Prime-style KPI card: coloured icon, optional badge, big number and uppercase label. */
+export function KpiCard({ icon, iconBg, badge, value, label }: { icon: React.ReactNode; iconBg: string; badge?: string; value: React.ReactNode; label: string }) {
+  return (
+    <div className="rounded-2xl border border-line bg-ink-700 p-5 shadow-card">
+      <div className="flex items-start justify-between">
+        <span className={`grid h-12 w-12 shrink-0 place-items-center rounded-xl ${iconBg}`}>{icon}</span>
+        {badge && <span className="rounded-md bg-ink-600 px-2.5 py-1 text-[11px] font-semibold text-fog">{badge}</span>}
+      </div>
+      <div className="mt-4 font-display text-[28px] font-bold leading-none tracking-tight tabular-nums text-white">{value}</div>
+      <div className="mt-2 text-[11px] font-semibold uppercase tracking-[0.1em] text-fog">{label}</div>
+    </div>
+  );
+}
+
+/** Quick-link card matching the Bet Prime dashboard bottom row. */
+export function QuickLink({ href, icon, iconBg, title, desc }: { href: string; icon: IconName; iconBg: string; title: string; desc: string }) {
+  return (
+    <a href={href} className="flex items-center gap-4 rounded-2xl border border-line bg-ink-700 p-5 shadow-card transition-colors hover:bg-ink-600">
+      <span className={`grid h-12 w-12 shrink-0 place-items-center rounded-xl ${iconBg}`}>
+        <Icon name={icon} className="h-5 w-5" />
+      </span>
+      <div className="min-w-0 flex-1">
+        <div className="text-[15px] font-bold text-white">{title}</div>
+        <div className="mt-0.5 truncate text-sm text-fog">{desc}</div>
+      </div>
+      <Icon name="chevron" className="h-5 w-5 shrink-0 text-fog" />
+    </a>
+  );
+}
+
 export const field =
   "h-10 rounded-xl border border-line bg-ink-700 px-3.5 text-sm text-white shadow-card placeholder:text-fog-muted focus:border-lime/60 focus:outline-none focus:ring-4 focus:ring-lime/15";
 export const btnGhost =

@@ -14,7 +14,7 @@ export default async function MyReferralsPage({ searchParams }: { searchParams: 
   const range = parseRange(sp);
   return (
     <>
-      <Head title="My referrals">
+      <Head title="Referrals">
         <Range path="/admin/referrals" current={range.key} params={{ q: sp.q }} />
         {can(gate.user, "reports.export") && (
           <a href={`/api/admin/export?kind=players&range=${range.key}`} className={btnGhost}>

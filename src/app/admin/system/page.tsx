@@ -16,7 +16,7 @@ export default async function SystemPage() {
 
   return (
     <>
-      <Head title="System">
+      <Head title="Settings">
         <span className="flex items-center gap-2 text-sm font-semibold text-white">
           <Light level={worst} pulse={worst !== "ok"} />
           {worst === "ok" ? "All systems normal" : `${bad.length} need attention`}

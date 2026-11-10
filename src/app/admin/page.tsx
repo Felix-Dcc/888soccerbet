@@ -8,14 +8,13 @@ import { verificationQueue } from "@/lib/wallet";
 import { TrendChart } from "@/components/admin/TrendChart";
 import { ActivityFeed } from "@/components/admin/ActivityFeed";
 import { ReferralDashboard } from "@/components/admin/ReferralDashboard";
-import { GgrBreakdown, StatusRail } from "@/components/admin/blocks";
-import { BarList, Delta, EmptyState, Figure, Grid, Head, Icon, Light, Panel, Range, Stack, Strip, ago, btnGhost, ghs, ghsShort, td, tdNum } from "@/components/admin/kit";
+import { StatusRail } from "@/components/admin/blocks";
+import { Head, Icon, KpiCard, Light, Panel, QuickLink, Range, Stack, EmptyState, ago, btnGhost, ghs, ghsShort } from "@/components/admin/kit";
 
 export const dynamic = "force-dynamic";
 
 const num = (p: bigint) => Number(p) / 100;
 
-/** Executive command center (needs reports.view); other admins get their partner desk. */
 export default async function AdminDashboard({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
   const gate = await adminPage();
   if (!gate.ok) return gate.deny;
@@ -54,8 +53,10 @@ export default async function AdminDashboard({ searchParams }: { searchParams: P
     can(u, "verification.review") ? verificationQueue() : Promise.resolve(null),
     can(u, "settlement.manage") ? prisma.fixture.count({ where: { status: { in: ["SCHEDULED", "LIVE"] }, startsAt: { lt: new Date(Date.now() - 2 * 3600_000) } } }) : Promise.resolve(null),
   ]);
-  const net = m.money.deposits.total - m.money.withdrawals.total;
-  const liab = m.money.liabilities;
+
+  const totalBets = m.betting.open.count + m.betting.won.count + m.betting.lost.count + m.betting.void.count + m.betting.cashouts.count;
+  const pct = (n: number) => (totalBets > 0 ? Math.round((n / totalBets) * 100) : 0);
+
   const attention = [
     verifications && verifications.filter((v) => v.complete).length > 0 && { key: "ver", level: "warn" as const, text: `${verifications.filter((v) => v.complete).length} withdrawal verification${verifications.filter((v) => v.complete).length === 1 ? "" : "s"} ready to review`, href: "/admin/operations" },
     unsettled && { key: "uns", level: "warn" as const, text: `${unsettled} match${unsettled === 1 ? "" : "es"} past kick-off without a result`, href: "/admin/operations" },
@@ -66,7 +67,8 @@ export default async function AdminDashboard({ searchParams }: { searchParams: P
 
   return (
     <>
-      <Head title="Command center" description="Users, money and betting across Bet Zone at a glance.">
+      {/* ── Title area ── */}
+      <Head title="Super Admin Command Center" description="Live overview of users, active bets, deposits, and platform performance metrics.">
         <Range path="/admin" current={range.key} />
         {can(u, "reports.export") && (
           <details className="relative">
@@ -87,159 +89,132 @@ export default async function AdminDashboard({ searchParams }: { searchParams: P
 
       {health && <StatusRail alerts={health.alerts} lastSync={ago(health.lastSync)} />}
 
-      <Strip>
-        <Figure label="New users" value={m.players.newInRange} delta={<Delta cur={m.players.newInRange} prev={prev?.players.newInRange ?? null} />} note={`${m.players.total} total`} />
-        <Figure label="Active bettors" value={m.players.activeBettors} delta={<Delta cur={m.players.activeBettors} prev={prev?.players.activeBettors ?? null} />} />
-        <Figure label="Depositors" value={m.players.depositors} delta={<Delta cur={m.players.depositors} prev={prev?.players.depositors ?? null} />} />
-        <Figure label="Bets placed" value={m.betting.placed.count} delta={<Delta cur={m.betting.placed.count} prev={prev?.betting.placed.count ?? null} />} />
-        <Figure label="Stakes placed" value={ghsShort(m.betting.placed.stakes)} delta={<Delta cur={m.betting.placed.stakes} prev={prev?.betting.placed.stakes ?? null} />} title="Total staked. Not revenue." />
-        <Figure label="Open bets" value={m.betting.open.count} note={ghsShort(m.betting.open.stakes)} />
-      </Strip>
+      {/* ── 4 KPI cards (Bet Prime style) ── */}
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+        <KpiCard
+          icon={<Icon name="players" className="h-5 w-5" />}
+          iconBg="bg-[#7C3AED]/10 text-[#8B5CF6]"
+          badge="Active"
+          value={m.players.total.toLocaleString()}
+          label="Total registered users"
+        />
+        <KpiCard
+          icon={<Icon name="desk" className="h-5 w-5" />}
+          iconBg="bg-[#EA580C]/10 text-[#EA580C]"
+          badge="Live"
+          value={m.betting.open.count.toLocaleString()}
+          label="Active open bets"
+        />
+        <KpiCard
+          icon={<Icon name="ticket" className="h-5 w-5" />}
+          iconBg="bg-[#2563EB]/10 text-[#3B82F6]"
+          badge={range.key === "today" ? "Today" : range.key}
+          value={m.betting.placed.count.toLocaleString()}
+          label="Bets placed"
+        />
+        <KpiCard
+          icon={<Icon name="coins" className="h-5 w-5" />}
+          iconBg="bg-lime/10 text-lime"
+          badge="Real-time"
+          value={ghs(m.money.deposits.total)}
+          label="Total deposits (revenue)"
+        />
+      </div>
 
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,1.45fr)_minmax(0,1fr)]">
-        <Panel title="House result" icon="coins">
-          <GgrBreakdown m={m} prev={prev} spark={series.map((p) => num(p.ggr))} />
+      {/* ── Chart + Bet Distribution ── */}
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
+        <Panel title="Deposit & Revenue Growth" icon="coins">
+          <TrendChart points={series.map((p) => ({ bucket: p.bucket, registrations: p.registrations, deposits: num(p.deposits), withdrawals: num(p.withdrawals), stakes: num(p.stakes), ggr: num(p.ggr) }))} />
+          <div className="mt-3 flex items-center justify-between border-t border-line pt-3 text-sm">
+            <span className="text-fog">Account volume: <b className="text-white">{ghs(m.money.deposits.total)}</b></span>
+            <Link href="/admin/system" className="font-semibold text-lime hover:underline">View Ledger →</Link>
+          </div>
         </Panel>
-        <Panel title="Cash position" icon="coins">
-          <dl className="grid grid-cols-2 gap-x-4 gap-y-4 text-sm">
-            <div>
-              <dt className="text-fog">Deposits</dt>
-              <dd className="mt-1 font-display text-2xl font-bold tracking-tight tabular-nums text-white">{ghs(m.money.deposits.total)}</dd>
-              <dd className="mt-2 flex items-center gap-2 text-xs text-fog">
-                <Delta cur={m.money.deposits.total} prev={prev?.money.deposits.total ?? null} /> {m.money.deposits.count} payments
-              </dd>
-            </div>
-            <div>
-              <dt className="text-fog">Withdrawals</dt>
-              <dd className="mt-1 font-display text-2xl font-bold tracking-tight tabular-nums text-white">{ghs(m.money.withdrawals.total)}</dd>
-              <dd className="mt-2 flex items-center gap-2 text-xs text-fog">
-                <Delta cur={m.money.withdrawals.total} prev={prev?.money.withdrawals.total ?? null} invert /> {m.money.withdrawals.count} payments
-              </dd>
-            </div>
-            <div className="col-span-2 flex items-baseline justify-between border-t border-line pt-4">
-              <dt className="text-fog">Net cash flow</dt>
-              <dd className={`font-display text-lg font-bold tabular-nums ${net < 0n ? "text-danger" : "text-white"}`}>{ghs(net)}</dd>
-            </div>
-          </dl>
-          <div className="mt-4 border-t border-line pt-4">
-            <div className="mb-2 flex items-baseline justify-between text-sm">
-              <span className="text-fog">Owed to users now</span>
-              <span className="font-display font-bold tabular-nums text-white">{ghs(liab.total)}</span>
-            </div>
-            <Stack
-              parts={[
-                { label: "Balances", value: num(liab.cash), color: "rgb(var(--lime))", display: ghsShort(liab.cash) },
-                { label: "Open stakes", value: num(liab.escrow), color: "rgb(var(--warn))", display: ghsShort(liab.escrow) },
-                { label: "Verification held", value: num(liab.held), color: "rgb(var(--fog))", display: ghsShort(liab.held) },
-              ]}
-            />
+
+        <Panel title="Bet Distribution" icon="ticket">
+          <p className="mb-5 text-sm text-fog">Open vs Settled Bets</p>
+          <div className="space-y-5">
+            <DistRow label="Open / Pending Bets" count={m.betting.open.count} pct={pct(m.betting.open.count)} color="bg-[#F59E0B]" />
+            <DistRow label="Won Bets" count={m.betting.won.count} pct={pct(m.betting.won.count)} color="bg-lime" />
+            <DistRow label="Lost Bets" count={m.betting.lost.count} pct={pct(m.betting.lost.count)} color="bg-danger" />
+          </div>
+          <div className="mt-6 border-t border-line pt-4">
+            <Link href="/admin/operations" className="flex items-center justify-center gap-2 rounded-xl border border-line bg-ink-800 py-3 text-sm font-semibold text-white transition-colors hover:bg-ink-600">
+              Manage All Bets <Icon name="chevron" className="h-4 w-4" />
+            </Link>
           </div>
         </Panel>
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,1.7fr)_minmax(0,1fr)]">
-        <Panel title="Trend" icon="system">
-          <TrendChart points={series.map((p) => ({ bucket: p.bucket, registrations: p.registrations, deposits: num(p.deposits), withdrawals: num(p.withdrawals), stakes: num(p.stakes), ggr: num(p.ggr) }))} />
-        </Panel>
+      {/* ── Needs attention ── */}
+      {attention.length > 0 && (
         <Panel title="Needs attention" icon="alert" flush>
-          {attention.length === 0 ? (
-            <EmptyState icon="check" title="Nothing waiting" />
-          ) : (
-            <ul className="divide-y divide-line">
-              {attention.map((a) => (
-                <li key={a.key}>
-                  <Link href={a.href} className="flex items-start gap-3 px-5 py-3.5 text-sm transition-colors hover:bg-ink-600">
-                    <span className="mt-1.5">
-                      <Light level={a.level} />
-                    </span>
-                    <span className="min-w-0 flex-1 text-white">{a.text}</span>
-                    <Icon name="chevron" className="mt-0.5 h-4 w-4 shrink-0 text-fog" />
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          )}
+          <ul className="divide-y divide-line">
+            {attention.map((a) => (
+              <li key={a.key}>
+                <Link href={a.href} className="flex items-start gap-3 px-5 py-3.5 text-sm transition-colors hover:bg-ink-600">
+                  <span className="mt-1.5"><Light level={a.level} /></span>
+                  <span className="min-w-0 flex-1 text-white">{a.text}</span>
+                  <Icon name="chevron" className="mt-0.5 h-4 w-4 shrink-0 text-fog" />
+                </Link>
+              </li>
+            ))}
+          </ul>
         </Panel>
+      )}
+
+      {/* ── Quick-link cards (Bet Prime style) ── */}
+      <div className="grid gap-4 sm:grid-cols-3">
+        <QuickLink href="/admin/users" icon="players" iconBg="bg-[#7C3AED]/10 text-[#8B5CF6]" title="User Management" desc={`View ${m.players.total.toLocaleString()} registered players`} />
+        <QuickLink href="/admin/games" icon="plus" iconBg="bg-[#2563EB]/10 text-[#3B82F6]" title="Match Management" desc="Score & settlement controls" />
+        <QuickLink href="/admin/system" icon="coins" iconBg="bg-lime/10 text-lime" title="Finance & Withdrawals" desc={`Payouts & ${ghs(m.money.deposits.total)} deposits`} />
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-3">
-        <Panel title="Settled bets" icon="ticket">
-          <Stack
-            parts={[
-              { label: "Won", value: m.betting.won.count, color: "rgb(var(--teal))" },
-              { label: "Lost", value: m.betting.lost.count, color: "rgb(var(--danger))" },
-              { label: "Void", value: m.betting.void.count, color: "rgb(var(--fog))" },
-              { label: "Cash outs", value: m.betting.cashouts.count, color: "rgb(var(--warn))" },
-            ]}
-          />
-          <dl className="mt-4 space-y-1.5 border-t border-line pt-3 text-sm">
-            <div className="flex justify-between">
-              <dt className="text-fog">Winnings paid</dt>
-              <dd className="tabular-nums text-white">{ghs(m.betting.won.paid)}</dd>
-            </div>
-            <div className="flex justify-between">
-              <dt className="text-fog">Losing stakes</dt>
-              <dd className="tabular-nums text-white">{ghs(m.betting.lost.stakes)}</dd>
-            </div>
-            <div className="flex justify-between">
-              <dt className="text-fog">Cash outs paid</dt>
-              <dd className="tabular-nums text-white">{ghs(m.betting.cashouts.paid)}</dd>
-            </div>
-          </dl>
-        </Panel>
-        <Panel title="Where users bet" icon="ticket">
-          <BarList rows={comps.map((c) => ({ key: c.id, label: c.name, value: c.legs, display: `${c.legs} sel · ${c.bets} bets` }))} empty="No bets in this range" />
-        </Panel>
-        {admins ? (
-          <Panel title="Team leaderboard" icon="team" actions={<Link href="/admin/admins" className="text-xs font-semibold text-lime hover:underline">Team →</Link>}>
-            <BarList
-              rows={[...admins]
-                .sort((a, b) => b.metrics.players.total - a.metrics.players.total)
-                .slice(0, 6)
-                .map((a) => ({ key: a.id, label: a.displayName ?? a.email, value: a.metrics.players.total, display: `${a.metrics.players.total} users · ${ghsShort(a.metrics.revenue.ggr)} revenue`, href: `/admin/admins/${a.id}` }))}
-              color="rgb(var(--lime))"
-              empty="No administrators"
-            />
-          </Panel>
-        ) : (
-          <Panel title="Payments" icon="coins">
-            <Stack
-              parts={[
-                { label: "Pending", value: m.money.pending.count, color: "rgb(var(--warn))" },
-                { label: "Failed", value: m.money.failed.count, color: "rgb(var(--danger))" },
-              ]}
-            />
-          </Panel>
-        )}
-      </div>
-
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)]">
+      {/* ── Activity + Top users ── */}
+      <div className="grid gap-6 xl:grid-cols-2">
         <Panel title="Live activity" icon="clock" flush>
           <ActivityFeed items={activity.map((a) => ({ at: a.at.toISOString(), kind: a.kind, text: a.text, href: a.href && can(u, a.kind === "admin" ? "audit_logs.view" : "users.view") ? a.href : undefined }))} />
         </Panel>
-        {top && (
+        {top && top.length > 0 && (
           <Panel title="Top users by stake" icon="players" flush>
-            {top.length === 0 ? (
-              <EmptyState icon="players" title="No bets in this range" />
-            ) : (
-              <Grid head={["User", "Bets", "Staked"]} right={[1, 2]} minWidth="22rem">
+            <table className="w-full text-left text-sm">
+              <thead>
+                <tr className="border-b border-line text-xs text-fog">
+                  <th className="px-5 py-2 font-semibold">User</th>
+                  <th className="px-5 py-2 text-right font-semibold">Bets</th>
+                  <th className="px-5 py-2 text-right font-semibold">Staked</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-line">
                 {top.map((p, i) => (
-                  <tr key={p.id}>
-                    <td className={td}>
+                  <tr key={p.id} className="transition-colors hover:bg-ink-600">
+                    <td className="px-5 py-3">
                       <span className="mr-2 tabular-nums text-fog">{i + 1}</span>
-                      <Link href={`/admin/users/${p.id}`} className="font-medium text-white hover:text-lime">
-                        {p.email}
-                      </Link>
+                      <Link href={`/admin/users/${p.id}`} className="font-medium text-white hover:text-lime">{p.email}</Link>
                     </td>
-                    <td className={`${tdNum} text-fog`}>{p.bets}</td>
-                    <td className={`${tdNum} text-white`}>{ghs(p.stakes)}</td>
+                    <td className="px-5 py-3 text-right tabular-nums text-fog">{p.bets}</td>
+                    <td className="px-5 py-3 text-right tabular-nums text-white">{ghs(p.stakes)}</td>
                   </tr>
                 ))}
-              </Grid>
-            )}
+              </tbody>
+            </table>
           </Panel>
         )}
       </div>
     </>
+  );
+}
+
+function DistRow({ label, count, pct, color }: { label: string; count: number; pct: number; color: string }) {
+  return (
+    <div>
+      <div className="mb-1.5 flex items-baseline justify-between text-sm">
+        <span className="text-fog">{label}</span>
+        <span className="font-bold tabular-nums text-white">{count.toLocaleString()} <span className="font-normal text-fog">({pct}%)</span></span>
+      </div>
+      <div className="h-2.5 overflow-hidden rounded-full bg-ink-600">
+        <div className={`h-full rounded-full ${color}`} style={{ width: `${Math.max(pct, 1)}%` }} />
+      </div>
+    </div>
   );
 }
