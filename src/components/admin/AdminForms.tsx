@@ -223,9 +223,10 @@ export function AdminAccessEditor({
 /** Super admin: suspend/reactivate an admin, or issue a password reset link. */
 export function AdminActions({ adminId, email, status }: { adminId: string; email: string; status: string }) {
   const router = useRouter();
-  const [action, setAction] = useState<"status" | "reset" | null>(null);
+  const [action, setAction] = useState<"status" | "reset" | "remove" | null>(null);
   const [link, setLink] = useState<string | null>(null);
   const suspending = status === "ACTIVE";
+  if (status === "CLOSED") return <p className="text-sm text-fog">This administrator has been removed. They can&apos;t sign in, and their access can&apos;t be changed.</p>;
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap gap-2">
@@ -234,6 +235,9 @@ export function AdminActions({ adminId, email, status }: { adminId: string; emai
         </button>
         <button type="button" onClick={() => setAction("reset")} className="btn-ghost px-4 py-2 text-sm">
           Reset password link
+        </button>
+        <button type="button" onClick={() => setAction("remove")} className="btn border border-danger/50 px-4 py-2 text-sm text-danger hover:bg-danger/10">
+          Remove admin
         </button>
       </div>
       {link && (
@@ -263,6 +267,27 @@ export function AdminActions({ adminId, email, status }: { adminId: string; emai
           const { error } = await send(`/api/admin/admins/${adminId}`, "PATCH", { action: "status", status: suspending ? "SUSPENDED" : "ACTIVE", password });
           if (error) return error;
           setAction(null);
+          router.refresh();
+          return null;
+        }}
+      />
+      <ConfirmDialog
+        open={action === "remove"}
+        danger
+        title="Remove administrator"
+        message={
+          <>
+            <b className="text-white">{email}</b> loses all admin access for good: signed out everywhere, can&apos;t sign in, their links and invites stop working and they leave
+            the roster. Their history, referred users and audit trail are kept. This can&apos;t be undone.
+          </>
+        }
+        confirmLabel="Remove"
+        onClose={() => setAction(null)}
+        onConfirm={async (password) => {
+          const { error } = await send(`/api/admin/admins/${adminId}`, "PATCH", { action: "remove", password });
+          if (error) return error;
+          setAction(null);
+          router.push("/admin/admins");
           router.refresh();
           return null;
         }}

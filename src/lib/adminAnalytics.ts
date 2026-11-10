@@ -276,6 +276,7 @@ const ACTION_TEXT: Record<string, string> = {
   ADMIN_INVITE: "created an admin invite link",
   ADMIN_SUSPEND: "suspended an administrator",
   ADMIN_REACTIVATE: "reactivated an administrator",
+  ADMIN_REMOVE: "removed an administrator",
   ADMIN_ACCESS_CHANGE: "changed an administrator's access",
   ADMIN_PROFILE_CHANGE: "edited an administrator's profile",
   ADMIN_RESET_LINK: "sent a password reset link",

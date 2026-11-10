@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { confirmPassword, requirePermission } from "@/lib/session";
-import { issueResetLink, setAdminStatus, updateAdminAccess, updateAdminProfile } from "@/lib/admins";
+import { issueResetLink, removeAdmin, setAdminStatus, updateAdminAccess, updateAdminProfile } from "@/lib/admins";
 import { json, errorResponse, clientIp } from "@/lib/http";
 
 export const dynamic = "force-dynamic";
@@ -23,9 +23,10 @@ const schema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("status"), status: z.enum(["ACTIVE", "SUSPENDED"]), password: z.string() }),
   z.object({ action: z.literal("profile"), displayName: z.string().trim().min(2).max(60).optional(), username: username.optional(), password: z.string() }),
   z.object({ action: z.literal("reset"), password: z.string() }),
+  z.object({ action: z.literal("remove"), password: z.string() }),
 ]);
 
-/** Change an administrator's access, status or profile, or issue a reset link. Super admin only. */
+/** Change an administrator's access, status or profile, issue a reset link, or remove them. Super admin only. */
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const actor = await requirePermission("admins.manage");
@@ -37,6 +38,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       await updateAdminAccess(actor, id, { role: input.role, adminRoleId: input.adminRoleId, permGrants: input.permGrants, permDenials: input.permDenials }, ip);
       return json({ ok: true });
     }
+    if (input.action === "remove") return json({ ok: true, status: (await removeAdmin(actor, id, ip)).status });
     if (input.action === "status") return json({ ok: true, status: (await setAdminStatus(actor, id, input.status, ip)).status });
     if (input.action === "profile") {
       await updateAdminProfile(actor, id, { displayName: input.displayName, username: input.username }, ip);

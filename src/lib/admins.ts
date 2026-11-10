@@ -54,6 +54,7 @@ async function lockUser(tx: Prisma.TransactionClient, id: string) {
   await tx.$queryRaw`SELECT id FROM "User" WHERE id = ${id} FOR UPDATE`;
   const u = await tx.user.findUnique({ where: { id } });
   if (!u || (u.role !== "ADMIN" && u.role !== "SUPER_ADMIN")) throw new AdminError("NOT_FOUND", "Administrator not found", 404);
+  if (u.status === "CLOSED") throw new AdminError("REMOVED", "This administrator has been removed", 410);
   return u;
 }
 
@@ -241,6 +242,26 @@ export async function setAdminStatus(actor: User, targetId: string, status: "ACT
     const after = await tx.user.update({ where: { id: targetId }, data: { status } });
     if (status === "SUSPENDED") await tx.session.deleteMany({ where: { userId: targetId } }); // signed out everywhere, now
     await audit({ actorUserId: actor.id, action: status === "SUSPENDED" ? "ADMIN_SUSPEND" : "ADMIN_REACTIVATE", targetType: "User", targetId, before: { status: target.status }, after: { status: after.status }, ip }, tx);
+    return after;
+  });
+}
+
+/**
+ * Remove an administrator for good. Nothing is deleted (the audit trail points at them and is
+ * append-only): the account is closed, so it can't sign in, its sessions and links stop working,
+ * its referral code stops accepting sign-ups, and it leaves the roster. It can't be undone here.
+ */
+export async function removeAdmin(actor: User, targetId: string, ip?: string) {
+  if (actor.id === targetId) throw new AdminError("SELF_EDIT", "You can't remove yourself", 403);
+  return prisma.$transaction(async (tx) => {
+    const target = await lockUser(tx, targetId);
+    if (target.role === "SUPER_ADMIN" && target.status === "ACTIVE" && (await activeSuperAdmins(tx)) <= 1)
+      throw new AdminError("LAST_SUPER_ADMIN", "This is the last active super admin; promote someone else first");
+    const after = await tx.user.update({ where: { id: targetId }, data: { status: "CLOSED", adminRoleId: null, permGrants: [], permDenials: [] } });
+    await tx.session.deleteMany({ where: { userId: targetId } });
+    await tx.accountToken.updateMany({ where: { userId: targetId, usedAt: null }, data: { usedAt: new Date() } });
+    await tx.adminInvite.updateMany({ where: { createdById: targetId, usedAt: null }, data: { usedAt: new Date() } });
+    await audit({ actorUserId: actor.id, action: "ADMIN_REMOVE", targetType: "User", targetId, before: accessSnapshot(target), after: accessSnapshot(after), ip }, tx);
     return after;
   });
 }
