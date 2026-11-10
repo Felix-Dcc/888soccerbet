@@ -63,35 +63,29 @@ export function DraggableSupportFab({ url }: { url: string }) {
       onClick={(e) => { if (wasDragged.current) e.preventDefault(); }}
       onMouseDown={(e) => { e.preventDefault(); onDown(e.clientX, e.clientY); }}
       onTouchStart={(e) => { if (e.touches[0]) onDown(e.touches[0].clientX, e.touches[0].clientY); }}
-      className="fixed z-50 flex cursor-grab flex-col items-center gap-1 active:cursor-grabbing"
+      className="fixed z-50 flex cursor-grab flex-col items-center active:cursor-grabbing"
       style={{ left: pos.x, top: pos.y, touchAction: "none" }}
     >
+      <span className="relative mb-1.5 rounded-full bg-lime px-3 py-1 text-[11px] font-bold text-white shadow-lg shadow-lime/30">
+        Need help?
+        <span className="absolute -bottom-1 left-1/2 h-2 w-2 -translate-x-1/2 rotate-45 bg-lime" />
+      </span>
       <span className="flex h-14 w-14 items-center justify-center rounded-full bg-lime shadow-lg shadow-lime/30">
         <svg width="32" height="32" viewBox="0 0 100 100" fill="white" xmlns="http://www.w3.org/2000/svg" aria-hidden>
-          {/* Head circle */}
           <circle cx="40" cy="36" r="16" />
-          {/* Headset band */}
           <path d="M18 44V36a22 22 0 0 1 44 0v8" fill="none" stroke="white" strokeWidth="4" />
-          {/* Left ear cup */}
           <rect x="12" y="38" width="8" height="14" rx="3" />
-          {/* Right ear cup */}
           <rect x="60" y="38" width="8" height="14" rx="3" />
-          {/* Mic arm from left cup curving down */}
           <path d="M16 52c0 6 5 10 12 10h4" fill="none" stroke="white" strokeWidth="3.5" />
-          {/* Mic ball */}
           <circle cx="33" cy="62" r="3.5" />
-          {/* Shoulders/body */}
           <path d="M10 92c0-14 13-22 30-22s30 8 30 22z" />
-          {/* Speech bubble */}
           <rect x="60" y="4" width="34" height="24" rx="6" />
           <polygon points="66,28 72,36 78,28" />
-          {/* Dots */}
           <circle cx="70" cy="16" r="2.5" fill="rgb(var(--lime))" />
           <circle cx="77" cy="16" r="2.5" fill="rgb(var(--lime))" />
           <circle cx="84" cy="16" r="2.5" fill="rgb(var(--lime))" />
         </svg>
       </span>
-      <span className="rounded-full bg-black/70 px-2.5 py-0.5 text-[11px] font-semibold text-white backdrop-blur-sm">Need help?</span>
     </a>
   );
 }
