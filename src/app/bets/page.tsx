@@ -2,7 +2,6 @@ import Link from "next/link";
 import { BallOrbit } from "@/components/BallOrbit";
 import { getCurrentUser } from "@/lib/session";
 import { prisma } from "@/lib/db";
-import { userCashBalance } from "@/lib/ledger";
 import { formatMilliOdds, formatPesewas } from "@/lib/money";
 import { formatStamp, kickoffShortDate, kickoffTime } from "@/lib/time";
 import { SignedOut } from "@/components/SignedOut";
@@ -44,7 +43,7 @@ function legState(status: string, f: LegFixture, now: Date): LegState {
 }
 
 /**
- * My bets, laid out like a sportsbook's bet list: a dark band with the balance and two tabs
+ * My bets, laid out like a sportsbook's bet list: a white band with the title and two tabs
  * (open bets / history), quick filters for open bets, then each bet as a card listing every
  * pick (selection @ odds, market, match, kick-off or score), its stake and potential win, and
  * cash out when it's offered.
@@ -58,7 +57,7 @@ export default async function BetsPage({ searchParams }: { searchParams: Promise
   const filter: Filter = FILTERS.find((x) => x.key === sp.f)?.key ?? "all";
   const now = new Date();
 
-  const [bets, openCount, balance] = await Promise.all([
+  const [bets, openCount] = await Promise.all([
     prisma.bet.findMany({
       where: { userId: user.id, status: history ? { not: "PENDING" } : "PENDING" },
       orderBy: { placedAt: "desc" },
@@ -79,7 +78,6 @@ export default async function BetsPage({ searchParams }: { searchParams: Promise
       },
     }),
     prisma.bet.count({ where: { userId: user.id, status: "PENDING" } }),
-    userCashBalance(prisma, user.id),
   ]);
   const quotes = await quotesFor(history ? [] : bets.map((b) => b.id));
   const shown = bets.filter((b) =>
@@ -87,18 +85,13 @@ export default async function BetsPage({ searchParams }: { searchParams: Promise
   );
 
   const tabCls = (on: boolean) =>
-    `flex-1 rounded-t-xl px-3 py-3 text-center text-[15px] font-semibold transition-colors ${on ? "bg-ink-900 text-white" : "bg-white/10 text-snow/80 hover:bg-white/15 hover:text-snow"}`;
+    `-mb-px flex-1 border-b-2 px-3 py-3 text-center text-[15px] font-semibold transition-colors ${on ? "border-lime text-white" : "border-transparent text-fog hover:text-white"}`;
 
   return (
     <div className="space-y-4">
-      {/* Dark band: title and balance, then the two tabs sitting on the page like folder tabs. */}
-      <div className="-mx-4 -mt-5 bg-[#0C1421] px-4 pt-4 sm:mx-0 sm:mt-0 sm:rounded-t-xl">
-        <div className="flex items-center justify-between gap-3 pb-4">
-          <h1 className="font-display text-lg font-extrabold text-snow">My Bets</h1>
-          <span className="text-sm font-semibold text-snow/70">
-            Balance <span className="font-extrabold tabular-nums text-[#00BA3B]">GHS {formatPesewas(balance)}</span>
-          </span>
-        </div>
+      {/* White band: the title, then the two tabs underlined in green when active. */}
+      <div className="-mx-4 -mt-5 border-b border-line bg-ink-800 px-4 pt-4 sm:mx-0 sm:mt-0 sm:rounded-t-xl sm:border sm:border-b-line">
+        <h1 className="pb-2 font-display text-lg font-extrabold text-white">My Bets</h1>
         <nav aria-label="Bets" className="flex gap-2">
           <Link href="/bets" aria-current={!history ? "page" : undefined} className={tabCls(!history)}>
             Open Bets ({openCount})
