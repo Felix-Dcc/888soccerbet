@@ -103,7 +103,7 @@ export async function placeBet(userId: string, input: PlaceBetInput): Promise<Pl
           if (s.status !== "OPEN" || market.status !== "OPEN")
             throw new BetError("MARKET_CLOSED", "A market on your slip is closed");
           if (!isBettable(fixture, now))
-            throw new BetError("MATCH_STARTED", `${fixture.homeTeam} v ${fixture.awayTeam} ${fixture.status === "LIVE" && process.env.LIVE_BETTING === "true" ? "is in play; betting is paused until prices update" : "has started; betting is closed"}`, {
+            throw new BetError("MATCH_STARTED", `${fixture.homeTeam} v ${fixture.awayTeam} ${fixture.status === "LIVE" && (process.env.LIVE_BETTING === "true" || fixture.script !== null) ? "is in play; betting is paused until prices update" : "has started; betting is closed"}`, {
               selectionId: s.id,
             });
           const before = inPlay.find((h) => h.id === s.id);

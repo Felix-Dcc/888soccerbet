@@ -10,6 +10,8 @@ export interface Pick {
   selectionName: string;
   marketName: string;
   fixtureName: string;
+  score?: { home: number; away: number } | null; // set while the match is in play
+  suspended?: boolean; // in play and paused after a goal: shown, not placeable until it reprices
 }
 
 /** Window event that opens the betslip (drawer on mobile, focus on desktop). */

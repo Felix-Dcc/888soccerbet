@@ -5,6 +5,7 @@ import Image from "next/image";
 import { sportPhoto } from "@/lib/photos";
 import { kickoffLong } from "@/lib/time";
 import { OddsButton } from "@/components/betslip/OddsButton";
+import { liveScore } from "@/lib/markets";
 import { Crest } from "@/components/Crest";
 import { Countdown } from "@/components/Countdown";
 import { LivePill } from "@/components/MatchTable";
@@ -146,6 +147,7 @@ export default async function FixturePage({ params, searchParams }: { params: Pr
                 selectionName: sel.name,
                 marketName: m.name,
                 fixtureName,
+                score: liveScore(f),
               });
               // Label left, price right in one compact tile, so three outcomes fit side by side on a phone.
               const rowButton =

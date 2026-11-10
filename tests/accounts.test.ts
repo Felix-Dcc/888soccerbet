@@ -42,13 +42,16 @@ describe("isBettable", () => {
     expect(isBettable({ status: "SCHEDULED", startsAt: earlier, oddsAt: null }, now)).toBe(false);
     expect(isBettable({ status: "LIVE", startsAt: earlier, oddsAt: null }, now)).toBe(false);
   });
-  it("allows LIVE fixtures only when LIVE_BETTING=true and their odds are fresh", () => {
-    process.env.LIVE_BETTING = "true";
+  it("allows LIVE fixtures only while their in-play odds are fresh", () => {
     const ago = (s: number) => new Date(now.getTime() - s * 1000);
     expect(isBettable({ status: "LIVE", startsAt: earlier, oddsAt: ago(30) }, now)).toBe(true);
     expect(isBettable({ status: "LIVE", startsAt: earlier, oddsAt: ago(91) }, now)).toBe(false); // older than 90s default
     expect(isBettable({ status: "LIVE", startsAt: earlier, oddsAt: null }, now)).toBe(false); // cleared by a goal
     expect(isBettable({ status: "SCHEDULED", startsAt: earlier, oddsAt: null }, now)).toBe(false);
+  });
+  it("opens a priced in-play fixture without the feed switch (generated matches)", () => {
+    process.env.LIVE_BETTING = "false";
+    expect(isBettable({ status: "LIVE", startsAt: earlier, oddsAt: new Date(now.getTime() - 10_000) }, now)).toBe(true);
   });
   it("never allows finished or cancelled fixtures", () => {
     process.env.LIVE_BETTING = "true";

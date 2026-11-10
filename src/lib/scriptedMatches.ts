@@ -142,9 +142,9 @@ async function priceInPlay(f: Running, home: number, away: number, elapsed: numb
 
 /**
  * Walk every running generated match to the score its script says it should be on now, and settle
- * the ones that have finished. Safe to run as often as you like: it only writes on a change. With
- * LIVE_BETTING on, generated football matches are also priced in play: a goal suspends every market
- * for GOAL_SUSPEND_MS, then they reopen at prices for the new score.
+ * the ones that have finished. Safe to run as often as you like: it only writes on a change.
+ * Generated football matches are priced in play from kick-off: a goal suspends every market for
+ * GOAL_SUSPEND_MS, then they reopen at prices for the new score.
  */
 export async function advanceScriptedMatches(now = new Date()): Promise<{ updated: number; settled: number }> {
   const running = await prisma.fixture.findMany({
@@ -163,22 +163,24 @@ export async function advanceScriptedMatches(now = new Date()): Promise<{ update
       if (finished) {
         await settleFixture(f.id, home, away); // final whistle: grade and pay out
         settled++;
-      } else if (home !== f.homeScore || away !== f.awayScore) {
-        const goal = home !== (f.homeScore ?? 0) || away !== (f.awayScore ?? 0); // kick-off (no score -> 0-0) isn't one
-        // Guarded on status so a result an admin entered meanwhile is never overwritten. Clearing
-        // oddsAt closes live bets at once; the markets are then suspended until the next pricing.
-        const r = await prisma.fixture.updateMany({
-          where: { id: f.id, status: { in: ["SCHEDULED", "LIVE"] } },
-          data: { homeScore: home, awayScore: away, status: "LIVE", lastSyncedAt: now, ...(goal && { scoreChangedAt: now, oddsAt: null }) },
-        });
-        if (goal && r.count) await prisma.market.updateMany({ where: { fixtureId: f.id, status: "OPEN" }, data: { status: "SUSPENDED" } });
-        updated += r.count;
-      } else if (
-        f.sportKey === "football" && // basketball scores ramp toward the pre-set final: never priced in play
-        process.env.LIVE_BETTING === "true" &&
-        (!f.scoreChangedAt || now.getTime() - f.scoreChangedAt.getTime() >= GOAL_SUSPEND_MS)
-      ) {
-        await priceInPlay(f, home, away, elapsed, now);
+      } else {
+        let goal = false;
+        if (home !== f.homeScore || away !== f.awayScore) {
+          goal = home !== (f.homeScore ?? 0) || away !== (f.awayScore ?? 0); // kick-off (no score -> 0-0) isn't one
+          // Guarded on status so a result an admin entered meanwhile is never overwritten. Clearing
+          // oddsAt closes live bets at once; the markets are then suspended until the next pricing.
+          const r = await prisma.fixture.updateMany({
+            where: { id: f.id, status: { in: ["SCHEDULED", "LIVE"] } },
+            data: { homeScore: home, awayScore: away, status: "LIVE", lastSyncedAt: now, ...(goal && { scoreChangedAt: now, oddsAt: null }) },
+          });
+          if (goal && r.count) await prisma.market.updateMany({ where: { fixtureId: f.id, status: "OPEN" }, data: { status: "SUSPENDED" } });
+          updated += r.count;
+          if (!r.count) continue;
+        }
+        // Priced from kick-off (0-0 included) and again once a goal's suspension has passed. Basketball
+        // scores ramp toward the pre-set final, so it is never priced in play.
+        if (!goal && f.sportKey === "football" && (!f.scoreChangedAt || now.getTime() - f.scoreChangedAt.getTime() >= GOAL_SUSPEND_MS))
+          await priceInPlay(f, home, away, elapsed, now);
       }
     } catch (e) {
       console.error(`[scripted] ${f.id} failed:`, e instanceof Error ? e.message : e);

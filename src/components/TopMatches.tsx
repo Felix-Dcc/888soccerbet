@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { UiFixture } from "@/lib/queries";
 import { kickoffShortDate, kickoffTime } from "@/lib/time";
 import { OddsButton } from "./betslip/OddsButton";
+import { liveScore } from "@/lib/markets";
 import { Crest } from "./Crest";
 
 /**
@@ -48,7 +49,7 @@ export function TopMatches({ fixtures }: { fixtures: UiFixture[] }) {
                     <OddsButton
                       key={s.id}
                       label={s.code === "1" || s.code === "X" || s.code === "2" ? s.code : s.name}
-                      pick={{ selectionId: s.id, fixtureId: f.id, milliOdds: s.milliOdds, selectionName: s.name, marketName: m.name, fixtureName: `${f.homeTeam} v ${f.awayTeam}` }}
+                      pick={{ selectionId: s.id, fixtureId: f.id, milliOdds: s.milliOdds, selectionName: s.name, marketName: m.name, fixtureName: `${f.homeTeam} v ${f.awayTeam}`, score: liveScore(f) }}
                     />
                   ))}
                 </div>

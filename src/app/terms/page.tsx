@@ -46,7 +46,7 @@ export default async function TermsPage() {
           Stakes are {ghs(stake.min)} to {ghs(stake.max)} per bet, and the most one bet can pay out is {ghs(stake.maxPayout)}.
         </li>
         <li>A bet is placed at the odds shown when you confirm it. If the odds change first, you are asked to accept the new odds before the bet goes through.</li>
-        <li>{process.env.LIVE_BETTING === "true" ? "" : "Bets close at kick-off. "}A confirmed bet cannot be cancelled.</li>
+        <li>Most matches close for bets at kick-off. Matches marked live stay open in play at prices that follow the score, and pause briefly after each goal. A confirmed bet cannot be cancelled.</li>
         <li>A multiple wins only if every selection wins; it loses as soon as one selection loses.</li>
         <li>Booking codes copy a betslip at the current odds; selections no longer available are left out.</li>
       </ul>

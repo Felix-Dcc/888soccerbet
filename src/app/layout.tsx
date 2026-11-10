@@ -23,6 +23,8 @@ export const metadata: Metadata = {
   formatDetection: { telephone: false, email: false, address: false, date: false },
 };
 export const viewport: Viewport = { themeColor: "#F8FBF9", width: "device-width", initialScale: 1 };
+// The slip's minimum stake comes from Platform Settings (DB), so no page may be pre-rendered at build time.
+export const dynamic = "force-dynamic";
 
 /** Navigation data for the rail. A database outage degrades to an empty nav, not a broken page. */
 async function navData(): Promise<NavData> {

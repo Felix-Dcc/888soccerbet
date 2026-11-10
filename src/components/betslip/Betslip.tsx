@@ -33,6 +33,7 @@ export function Betslip({ bare = false }: { bare?: boolean } = {}) {
     }
   })();
   const tooLow = stakeP < toPesewas(minStake); // the engine rejects it too; this just says so up front
+  const paused = picks.some((p) => p.suspended); // a live match repricing after a goal: back in seconds
   const payout = singles ? picks.reduce((sum, p) => sum + potentialPayout(stakeP, p.milliOdds), 0n) : picks.length ? potentialPayout(stakeP, combined) : 0n;
   const totalStake = singles ? stakeP * BigInt(picks.length) : stakeP;
   // Only a multiple that lands in full earns the bonus, so singles never show one.
@@ -204,7 +205,19 @@ export function Betslip({ bare = false }: { bare?: boolean } = {}) {
                       {pick.name && <span className="truncate text-sm font-bold text-white">{pick.name}</span>}
                     </div>
                     <div className="mt-1 truncate text-xs text-fog">{p.marketName}</div>
-                    <div className="mt-0.5 truncate text-xs text-fog-muted">{p.fixtureName}</div>
+                    <div className="mt-0.5 flex min-w-0 items-center gap-1.5 text-xs text-fog-muted">
+                      {p.score && (
+                        <span className="inline-flex shrink-0 items-center gap-1 rounded bg-danger/15 px-1.5 py-0.5 text-[10px] font-extrabold uppercase text-danger">
+                          <span aria-hidden className="h-1.5 w-1.5 animate-pulse rounded-full bg-danger" />
+                          Live
+                          <span className="tabular-nums text-white">
+                            {p.score.home}–{p.score.away}
+                          </span>
+                        </span>
+                      )}
+                      <span className="truncate">{p.fixtureName}</span>
+                    </div>
+                    {p.suspended && <div className="mt-1 text-[11px] font-semibold text-warn">Suspended — odds updating after a goal</div>}
                   </div>
                   <div className="flex shrink-0 flex-col items-end gap-2">
                     <button
@@ -216,7 +229,7 @@ export function Betslip({ bare = false }: { bare?: boolean } = {}) {
                         <path d="M6 6l12 12M18 6 6 18" />
                       </svg>
                     </button>
-                    <span className="rounded-lg bg-gold/15 px-2.5 py-1 text-sm font-extrabold tabular-nums text-gold">{formatMilliOdds(p.milliOdds)}</span>
+                    <span className={`rounded-lg bg-gold/15 px-2.5 py-1 text-sm font-extrabold tabular-nums text-gold ${p.suspended ? "opacity-40 line-through" : ""}`}>{formatMilliOdds(p.milliOdds)}</span>
                   </div>
                 </div>
               </li>
@@ -314,10 +327,10 @@ export function Betslip({ bare = false }: { bare?: boolean } = {}) {
             ) : (
               <button
                 onClick={() => (singles ? placeSingles : place)(status.k === "oddschanged")}
-                disabled={status.k === "placing" || tooLow}
+                disabled={status.k === "placing" || tooLow || paused}
                 className="btn-lime w-full py-3.5 text-base"
               >
-                {status.k === "placing" ? "Placing…" : status.k === "oddschanged" ? "Accept & place" : singles ? `Place ${picks.length} bets` : "Place bet"}
+                {paused ? "Waiting for live odds…" : status.k === "placing" ? "Placing…" : status.k === "oddschanged" ? "Accept & place" : singles ? `Place ${picks.length} bets` : "Place bet"}
               </button>
             )}
           </div>
