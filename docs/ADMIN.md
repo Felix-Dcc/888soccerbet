@@ -118,6 +118,11 @@ Settings (`.env`):
 First super admin: `npm run db:seed` creates `admin@betzone.com.co` as `SUPER_ADMIN`; change its
 password immediately in production. Further admins are created at `/admin/admins`.
 
+Locked out of every super admin? Set `SUPER_ADMIN_EMAIL` and `SUPER_ADMIN_PASSWORD` (Railway > web >
+Variables). Each time the web app starts, that account is created as an active `SUPER_ADMIN`, or its
+role, status and password are put back to these values. Remove the password variable once you are back
+in, or later password changes are undone on every restart. `npm run db:seed` does the same locally.
+
 Tests: `npm test` (unit, includes the permission engine) and `npm run test:int` (database:
 admin creation and links, self-edit and last-super-admin guards, referral attribution, per-admin
 isolation, GGR reconciliation, ledger adjustments, audit chain and append-only trigger).

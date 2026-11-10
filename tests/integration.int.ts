@@ -27,6 +27,7 @@ vi.mock("../src/lib/email", async (load) => {
 import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { hashPassword, verifyPassword } from "../src/lib/auth";
+import { ensureSuperAdmin } from "../src/lib/superAdmin";
 import type { MarketType, Prisma } from "@prisma/client";
 import { prisma } from "../src/lib/db";
 import { houseAccountId, userAccountId, postTransaction, userCashBalance, ledgerIsBalanced } from "../src/lib/ledger";
@@ -2034,6 +2035,32 @@ describe("betzone seed logins migration", () => {
       expect(await prisma.user.count({ where: { email: { in: emails } } })).toBe(3);
     } finally {
       await clear();
+    }
+  });
+});
+
+describe("super admin from environment", () => {
+  it("creates the account, then leaves it alone, then puts back its password and access", async () => {
+    const email = `sa_env_${randomUUID()}@t.gh`;
+    try {
+      expect(await ensureSuperAdmin(` ${email.toUpperCase()} `, "First-pass1")).toBe("created");
+      const user = await findUserByIdentifier(email);
+      expect(user).toMatchObject({ role: "SUPER_ADMIN", status: "ACTIVE" });
+      expect(verifyPassword("First-pass1", user!.passwordHash)).toBe(true);
+      expect(await ensureSuperAdmin(email, "First-pass1")).toBe("unchanged");
+
+      await prisma.user.update({ where: { id: user!.id }, data: { role: "USER", status: "SUSPENDED" } });
+      expect(await ensureSuperAdmin(email, "Second-pass2")).toBe("updated");
+      const after = await prisma.user.findUniqueOrThrow({ where: { id: user!.id } });
+      expect(after).toMatchObject({ role: "SUPER_ADMIN", status: "ACTIVE" });
+      expect(verifyPassword("Second-pass2", after.passwordHash)).toBe(true);
+      expect(verifyPassword("First-pass1", after.passwordHash)).toBe(false);
+
+      await expect(ensureSuperAdmin(email, "short")).rejects.toThrow(/at least 8/);
+      await expect(ensureSuperAdmin("not-an-email", "Long-enough1")).rejects.toThrow(/valid email/);
+      expect(await verifyAuditChain()).toMatchObject({ ok: true });
+    } finally {
+      await prisma.user.updateMany({ where: { email }, data: { email: `gone_${randomUUID()}@t.gh`, adminUsername: null, role: "USER" } });
     }
   });
 });

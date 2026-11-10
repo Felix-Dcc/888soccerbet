@@ -5,6 +5,7 @@ import { houseAccountId, userAccountId, postTransaction } from "../src/lib/ledge
 import { toPesewas } from "../src/lib/money";
 import { syncFixtures } from "../src/lib/sync";
 import { newAdminReferralCode } from "../src/lib/admins";
+import { ensureSuperAdmin } from "../src/lib/superAdmin";
 
 async function main() {
   // House singleton accounts.
@@ -44,6 +45,10 @@ async function main() {
     },
     update: { phone: "0240000001", referralCode: "DEMOBZ" },
   });
+
+  // A second super admin whose password comes from the environment, never from this file.
+  if (process.env.SUPER_ADMIN_EMAIL && process.env.SUPER_ADMIN_PASSWORD)
+    console.log("Super admin:", process.env.SUPER_ADMIN_EMAIL, await ensureSuperAdmin(process.env.SUPER_ADMIN_EMAIL, process.env.SUPER_ADMIN_PASSWORD));
 
   // Give the demo player a starting balance via a proper DEPOSIT ledger transaction.
   const already = await prisma.ledgerTransaction.findUnique({ where: { reference: "seed_deposit:demo" } });

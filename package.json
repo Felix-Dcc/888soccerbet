@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "prisma generate && next build",
-    "start": "if [ \"$SERVICE_ROLE\" = worker ]; then tsx src/worker.ts; else prisma migrate deploy && next start; fi",
+    "start": "if [ \"$SERVICE_ROLE\" = worker ]; then tsx src/worker.ts; else prisma migrate deploy && tsx scripts/ensure-super-admin.ts && next start; fi",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",

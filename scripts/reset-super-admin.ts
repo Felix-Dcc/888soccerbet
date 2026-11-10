@@ -4,10 +4,12 @@
  *   npx tsx scripts/reset-super-admin.ts [email]            # check only: shows what it finds, changes nothing
  *   npx tsx scripts/reset-super-admin.ts [email] --confirm  # asks for a new password and sets it
  *
- * Against the LIVE site, run it through Railway's Postgres service, whose public address it uses
- * (the app's own address only resolves inside Railway):
- *   railway run --service Postgres npx tsx scripts/reset-super-admin.ts
- *   railway run --service Postgres npx tsx scripts/reset-super-admin.ts --confirm
+ * Against the LIVE site, run it inside the web container, the only place the database is reachable
+ * (it has no public address):
+ *   railway ssh --service web
+ *   npx tsx scripts/reset-super-admin.ts --confirm
+ * If the database is ever given a public address (DATABASE_PUBLIC_URL), the script uses that instead,
+ * so `railway run --service Postgres npx tsx scripts/reset-super-admin.ts` works from your machine too.
  *
  * The email defaults to admin@betzone.com.co. With --confirm the account is made an active
  * SUPER_ADMIN with the new password: an account still on the old 888soccerbet.com address is moved
