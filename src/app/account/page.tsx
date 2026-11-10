@@ -7,6 +7,8 @@ import { formatPesewas } from "@/lib/money";
 import { monthYear } from "@/lib/time";
 import { LogoutButton, ResponsibleGamblingForm } from "@/components/AccountPanel";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { getPlatformSettings } from "@/lib/platformSettings";
+import { telegramSupport } from "@/lib/support";
 
 export const dynamic = "force-dynamic";
 
@@ -18,9 +20,10 @@ export default async function AccountPage() {
   const user = await getCurrentUser();
   if (!user) return <SignedOut title="Account" />;
 
-  const [balance, byStatus] = await Promise.all([
+  const [balance, byStatus, telegram] = await Promise.all([
     userCashBalance(prisma, user.id),
     prisma.bet.groupBy({ by: ["status"], where: { userId: user.id }, _count: { _all: true } }),
+    getPlatformSettings().then((s) => telegramSupport(s.telegramSupport), () => null),
   ]);
   const count = (s: string) => byStatus.find((b) => b.status === s)?._count._all ?? 0;
   const total = byStatus.reduce((n, b) => n + b._count._all, 0);
@@ -110,11 +113,20 @@ export default async function AccountPage() {
           <section className="card flex flex-wrap items-center justify-between gap-4 p-5">
             <div>
               <h2 className="font-semibold text-white">Need help?</h2>
-              <p className="mt-0.5 text-sm text-fog-muted">Our support team answers by email.</p>
+              <p className="mt-0.5 text-sm text-fog-muted">
+                {telegram ? <>Customer care answers on Telegram at {telegram.label}, or by email.</> : "Our support team answers by email."}
+              </p>
             </div>
-            <a href="mailto:support@betzone.com.co" className="btn-ghost px-4 py-2 text-sm">
-              Contact support
-            </a>
+            <div className="flex flex-wrap gap-2">
+              {telegram && (
+                <a href={telegram.url} target="_blank" rel="noopener noreferrer" className="btn-lime px-4 py-2 text-sm">
+                  Chat on Telegram
+                </a>
+              )}
+              <a href="mailto:support@betzone.com.co" className="btn-ghost px-4 py-2 text-sm">
+                {telegram ? "Email us" : "Contact support"}
+              </a>
+            </div>
           </section>
         </div>
 
