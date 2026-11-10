@@ -4,7 +4,7 @@ import { Sora, Manrope } from "next/font/google";
 import "./globals.css";
 import { AppShell } from "@/components/AppShell";
 import { SideNav, type NavData } from "@/components/SideNav";
-import { Footer } from "@/components/Footer";
+import { Footer, SupportFab } from "@/components/Footer";
 import { Splash, SPLASH_SCRIPT } from "@/components/Splash";
 import { THEME_SCRIPT } from "@/lib/theme";
 import { minStakeGhs } from "@/lib/betEngine";
@@ -87,6 +87,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         >
           {children}
         </AppShell>
+        <SupportFab />
       </body>
     </html>
   );

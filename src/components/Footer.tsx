@@ -2,6 +2,7 @@ import { Suspense } from "react";
 import { Send } from "lucide-react";
 import { Logo } from "./Logo";
 import { GhanaFlag } from "./GhanaFlag";
+import { DraggableSupportFab } from "./DraggableSupportFab";
 import { getPlatformSettings } from "@/lib/platformSettings";
 import { telegramSupport } from "@/lib/support";
 
@@ -20,6 +21,17 @@ async function SupportContact() {
       </span>
     </a>
   );
+}
+
+/** Floating "Need help?" button — fetches the Telegram URL server-side, renders a draggable client component. */
+async function SupportFabInner() {
+  const tg = await getPlatformSettings().then((s) => telegramSupport(s.telegramSupport), () => null);
+  if (!tg) return null;
+  return <DraggableSupportFab url={tg.url} />;
+}
+
+export function SupportFab() {
+  return <Suspense><SupportFabInner /></Suspense>;
 }
 
 export function Footer() {
