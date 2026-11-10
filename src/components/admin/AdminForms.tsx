@@ -34,9 +34,14 @@ function PermissionPicker({ all, value, onChange, idPrefix }: { all: PermInfo[];
 }
 
 /** Super admin: create an administrator, then hand them their single-use setup link. */
-export function CreateAdminForm({ perms, roles }: { perms: PermInfo[]; roles: RoleInfo[] }) {
+export function CreateAdminForm({ perms, roles, defaultCommissionBp }: { perms: PermInfo[]; roles: RoleInfo[]; defaultCommissionBp: number }) {
   const router = useRouter();
   const [f, setF] = useState({ role: "ADMIN" as "ADMIN" | "SUPER_ADMIN", adminRoleId: "" });
+  const [useDefaultRate, setUseDefaultRate] = useState(true);
+  const [rate, setRate] = useState(String(defaultCommissionBp / 100));
+  // 0 to 100 with at most 2 decimals, or null when invalid.
+  const ratePct = /^\d{1,3}(\.\d{1,2})?$/.test(rate.trim()) && Number(rate) <= 100 ? Number(rate) : null;
+  const rateLabel = useDefaultRate ? `the default rate (${defaultCommissionBp / 100}%)` : `${ratePct ?? 0}% commission`;
   const [grants, setGrants] = useState<string[]>(["dashboard.view", "referrals.view"]);
   const [confirm, setConfirm] = useState(false);
   const [link, setLink] = useState<string | null>(null);
@@ -96,11 +101,34 @@ export function CreateAdminForm({ perms, roles }: { perms: PermInfo[]; roles: Ro
           <PermissionPicker all={perms} value={grants} onChange={setGrants} idPrefix="na" />
         </fieldset>
       )}
-      <button className="btn-lime px-5 py-2.5 text-sm">Add admin</button>
+      <fieldset className="rounded-xl border border-line p-3">
+        <legend className="label px-1">Commission rate</legend>
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex items-center gap-2">
+            <input
+              id="na-rate"
+              aria-label="Commission rate (%)"
+              inputMode="decimal"
+              disabled={useDefaultRate}
+              className="input w-24 tabular-nums disabled:opacity-50"
+              value={useDefaultRate ? String(defaultCommissionBp / 100) : rate}
+              onChange={(e) => setRate(e.target.value.replace(/[^\d.]/g, ""))}
+            />
+            <span className="text-sm text-fog">%</span>
+          </div>
+          <label className="flex items-center gap-2 text-sm text-white">
+            <input type="checkbox" checked={useDefaultRate} onChange={(e) => setUseDefaultRate(e.target.checked)} />
+            Use the default rate ({defaultCommissionBp / 100}%)
+          </label>
+        </div>
+        {!useDefaultRate && ratePct === null && <p className="mt-2 text-xs text-danger">Enter 0 to 100, up to 2 decimal places.</p>}
+        <p className="mt-2 text-xs text-fog">What they earn on the net deposits of players who sign up with their code. You can change it later on the Commission page.</p>
+      </fieldset>
+      <button disabled={!useDefaultRate && ratePct === null} className="btn-lime px-5 py-2.5 text-sm">Add admin</button>
       <ConfirmDialog
         open={confirm}
         title="Generate admin invite link"
-        message={<>Create a single-use link that makes whoever opens it {f.role === "SUPER_ADMIN" ? "a super admin with full access" : "an admin with the access above"}?</>}
+        message={<>Create a single-use link that makes whoever opens it {f.role === "SUPER_ADMIN" ? "a super admin with full access" : "an admin with the access above"}, earning {rateLabel}?</>}
         confirmLabel="Generate link"
         onClose={() => setConfirm(false)}
         onConfirm={async (password) => {
@@ -108,6 +136,7 @@ export function CreateAdminForm({ perms, roles }: { perms: PermInfo[]; roles: Ro
             role: f.role,
             adminRoleId: f.role === "ADMIN" ? f.adminRoleId || null : null,
             permGrants: f.role === "ADMIN" ? grants : [],
+            commissionPct: useDefaultRate ? null : ratePct,
             password,
           });
           if (error) return error;

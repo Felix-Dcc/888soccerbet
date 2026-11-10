@@ -20,7 +20,12 @@ export default async function TeamPage({ searchParams }: { searchParams: Promise
   const sp = await searchParams;
   const range = parseRange(sp);
   const sort: Sort = (Object.keys(SORTS) as Sort[]).find((s) => s === sp.sort) ?? "players";
-  const [rows, roles, players] = await Promise.all([adminComparison(range), prisma.adminRole.findMany({ orderBy: { name: "asc" } }), prisma.user.count({ where: { role: "USER" } })]);
+  const [rows, roles, players, settings] = await Promise.all([
+    adminComparison(range),
+    prisma.adminRole.findMany({ orderBy: { name: "asc" } }),
+    prisma.user.count({ where: { role: "USER" } }),
+    prisma.platformSettings.findUnique({ where: { id: "singleton" }, select: { defaultCommissionBp: true } }),
+  ]);
   const by: Record<Sort, (a: (typeof rows)[number]) => number> = {
     players: (a) => a.metrics.players.total,
     ggr: (a) => Number(a.metrics.revenue.ggr),
@@ -61,7 +66,7 @@ export default async function TeamPage({ searchParams }: { searchParams: Promise
             <Icon name="chevron" className="h-4 w-4 transition group-open:rotate-90" />
           </summary>
           <div className="border-t border-line p-4">
-            <CreateAdminForm perms={Object.entries(PERMISSIONS).map(([key, label]) => ({ key, label }))} roles={roles} />
+            <CreateAdminForm perms={Object.entries(PERMISSIONS).map(([key, label]) => ({ key, label }))} roles={roles} defaultCommissionBp={settings?.defaultCommissionBp ?? 0} />
           </div>
         </details>
       )}

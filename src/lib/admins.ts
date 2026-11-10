@@ -118,12 +118,15 @@ export interface InviteAccess {
   adminRoleId?: string | null;
   permGrants?: string[];
   permDenials?: string[];
+  commissionBp?: number | null; // basis points; null or missing = the default rate
 }
 
 /** A single-use invite link (raw token returned once, only its hash stored) for a new administrator with this access. */
 export async function createAdminInvite(actor: User, access: InviteAccess, ip?: string) {
   return prisma.$transaction(async (tx) => {
     if (access.adminRoleId && !(await tx.adminRole.findUnique({ where: { id: access.adminRoleId } }))) throw new AdminError("BAD_ROLE", "That role doesn't exist", 422);
+    const bp = access.commissionBp ?? null;
+    if (bp !== null && (!Number.isInteger(bp) || bp < 0 || bp > 10_000)) throw new AdminError("BAD_RATE", "Enter a commission rate from 0% to 100%, up to 2 decimal places", 422);
     const admin = access.role === "ADMIN";
     const token = randomBytes(32).toString("base64url");
     const invite = await tx.adminInvite.create({
@@ -133,12 +136,13 @@ export async function createAdminInvite(actor: User, access: InviteAccess, ip?: 
         adminRoleId: admin ? (access.adminRoleId ?? null) : null,
         permGrants: admin ? cleanPermissions(access.permGrants ?? []) : [],
         permDenials: admin ? cleanPermissions(access.permDenials ?? []) : [],
+        commissionBp: bp,
         createdById: actor.id,
         expiresAt: new Date(Date.now() + SETUP_TTL_MS),
       },
     });
     await audit(
-      { actorUserId: actor.id, action: "ADMIN_INVITE", targetType: "AdminInvite", targetId: invite.id, after: { role: invite.role, adminRoleId: invite.adminRoleId, permGrants: invite.permGrants, permDenials: invite.permDenials, expiresAt: invite.expiresAt }, ip },
+      { actorUserId: actor.id, action: "ADMIN_INVITE", targetType: "AdminInvite", targetId: invite.id, after: { role: invite.role, adminRoleId: invite.adminRoleId, permGrants: invite.permGrants, permDenials: invite.permDenials, commissionBp: invite.commissionBp, expiresAt: invite.expiresAt }, ip },
       tx,
     );
     return { token, expiresAt: invite.expiresAt };
@@ -182,13 +186,14 @@ export async function acceptAdminInvite(token: string, email: string, password: 
           adminRoleId: invite.adminRoleId,
           permGrants: invite.permGrants,
           permDenials: invite.permDenials,
+          commissionBp: invite.commissionBp,
           passwordHash: hashPassword(password),
           referralCode: code,
         },
       });
       await tx.adminInvite.update({ where: { id: invite.id }, data: { usedById: user.id } });
       await audit(
-        { actorUserId: invite.createdById, action: "ADMIN_CREATE", targetType: "User", targetId: user.id, after: { email: user.email, ...accessSnapshot(user), referralCode: user.referralCode, inviteId: invite.id }, ip },
+        { actorUserId: invite.createdById, action: "ADMIN_CREATE", targetType: "User", targetId: user.id, after: { email: user.email, ...accessSnapshot(user), commissionBp: user.commissionBp, referralCode: user.referralCode, inviteId: invite.id }, ip },
         tx,
       );
       await audit({ actorUserId: user.id, action: "ADMIN_SETUP_COMPLETE", targetType: "User", targetId: user.id, ip }, tx);

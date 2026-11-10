@@ -15,6 +15,7 @@ const DEFAULTS: Omit<PlatformSettings, "id" | "updatedAt"> = {
   withdrawalCapMultiplier: 10,
   telegramSupport: "",
   emailSupport: "",
+  defaultCommissionBp: 0,
 };
 
 let cached: PlatformSettings | null = null;

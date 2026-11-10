@@ -13,7 +13,7 @@ import { Avatar, EmptyState, Figure, Grid, Light, Panel, Pill, Strip, Tabs, betT
 export const dynamic = "force-dynamic";
 
 /** Read-only balance: a missing account is 0 (viewing never creates ledger rows). */
-async function balanceOf(userId: string, kind: "USER_CASH" | "BET_ESCROW" | "VERIFICATION_HOLD") {
+async function balanceOf(userId: string, kind: "USER_CASH" | "BET_ESCROW" | "VERIFICATION_HOLD" | "NTT_HOLD") {
   const acct = await prisma.ledgerAccount.findUnique({ where: { userId_kind_currency: { userId, kind, currency: "GHS" } }, select: { id: true } });
   return acct ? accountBalance(prisma, acct.id) : 0n;
 }
@@ -39,7 +39,7 @@ export default async function PlayerPage({ params, searchParams }: { params: Pro
   const [cash, escrow, held, life, bets, payments, history] = await Promise.all([
     balanceOf(p.id, "USER_CASH"),
     balanceOf(p.id, "BET_ESCROW"),
-    balanceOf(p.id, "VERIFICATION_HOLD"),
+    Promise.all([balanceOf(p.id, "VERIFICATION_HOLD"), balanceOf(p.id, "NTT_HOLD")]).then(([kyc, ntt]) => kyc + ntt),
     scopeMetrics({ kind: "player", userId: p.id }, parseRange({ range: "all" })),
     tab === "bets" ? prisma.bet.findMany({ where: { userId: p.id }, orderBy: { placedAt: "desc" }, take: 30 }) : Promise.resolve(null),
     tab === "payments"

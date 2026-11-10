@@ -58,6 +58,7 @@ model User {
   adminRole         AdminRole? @relation(fields: [adminRoleId], references: [id])
   permGrants        String[]   @default([]) // extra permissions on top of the role
   permDenials       String[]   @default([]) // permissions removed from the role for this admin
+  commissionBp      Int? // this admin's own commission rate in basis points; null = the default rate
   lastLoginAt       DateTime?
   emailVerifiedAt   DateTime? // set when the player enters the code we emailed (or resets their password by email)
   country           String     @default("GH")
@@ -99,6 +100,19 @@ model AdminRole {
  */
 // A single-use link a super admin hands out: whoever opens it chooses their own email and password
 // and becomes an administrator with this access. Only the token's hash is stored.
+// A commission payment a super admin recorded as paid to an administrator (paid outside the site).
+model CommissionPayout {
+  id             String   @id @default(cuid())
+  adminId        String
+  amount         BigInt // pesewas
+  note           String?
+  idempotencyKey String   @unique
+  createdById    String
+  createdAt      DateTime @default(now())
+
+  @@index([adminId])
+}
+
 model AdminInvite {
   id          String    @id @default(cuid())
   tokenHash   String    @unique
@@ -106,6 +120,7 @@ model AdminInvite {
   adminRoleId String?
   permGrants  String[]  @default([])
   permDenials String[]  @default([])
+  commissionBp Int? // the new admin's commission rate in basis points; null = the default rate
   createdById String
   expiresAt   DateTime
   usedAt      DateTime?
@@ -535,6 +550,7 @@ model PlatformSettings {
   withdrawalCapMultiplier Int      @default(10)
   telegramSupport         String   @default("")
   emailSupport            String   @default("")
+  defaultCommissionBp     Int      @default(0) // admin commission, basis points of net deposits (100 = 1%)
   updatedAt               DateTime @updatedAt
 }
 

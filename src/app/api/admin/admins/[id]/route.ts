@@ -2,6 +2,7 @@ import { z } from "zod";
 import { confirmPassword, requirePermission } from "@/lib/session";
 import { issueResetLink, removeAdmin, setAdminStatus, updateAdminAccess, updateAdminProfile } from "@/lib/admins";
 import { json, errorResponse, clientIp } from "@/lib/http";
+import { siteUrl } from "@/lib/siteUrl";
 
 export const dynamic = "force-dynamic";
 
@@ -45,8 +46,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       return json({ ok: true });
     }
     const token = await issueResetLink(actor, id, ip);
-    const origin = req.headers.get("origin") ?? new URL(req.url).origin;
-    return json({ ok: true, resetUrl: `${origin}/account/setup/${token}` });
+    return json({ ok: true, resetUrl: `${siteUrl()}/account/setup/${token}` });
   } catch (e) {
     return errorResponse(e);
   }

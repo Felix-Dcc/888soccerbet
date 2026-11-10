@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { headers } from "next/headers";
+import { siteUrl } from "@/lib/siteUrl";
 import { prisma } from "@/lib/db";
 import { previousRange, referralFunnel, scopeMetrics, scopeSeries, type Range } from "@/lib/adminAnalytics";
 import { formatReferralCode } from "@/lib/admins";
@@ -10,12 +10,6 @@ import { Delta, EmptyState, Figure, Funnel, Grid, Icon, Panel, Pill, Strip, fiel
 
 const num = (p: bigint) => Number(p) / 100;
 
-/** This site's public address, for referral links (SITE_URL in production, else the request's host). */
-export async function siteOrigin() {
-  if (process.env.SITE_URL) return process.env.SITE_URL.replace(/\/$/, "");
-  const h = await headers();
-  return `${h.get("x-forwarded-proto")?.split(",")[0] ?? "http"}://${h.get("x-forwarded-host") ?? h.get("host")}`;
-}
 
 /**
  * Partner desk: one administrator's referral network. Deposits and stakes are player activity,
@@ -37,7 +31,7 @@ export async function ReferralDashboard({
   const scope = { kind: "referrer" as const, adminId: admin.id };
   const prevR = previousRange(range);
   const search = q.trim().slice(0, 80);
-  const [m, prev, funnel, series, players, origin] = await Promise.all([
+  const [m, prev, funnel, series, players] = await Promise.all([
     scopeMetrics(scope, range),
     prevR ? scopeMetrics(scope, prevR) : Promise.resolve(null),
     referralFunnel(admin.id),
@@ -48,7 +42,6 @@ export async function ReferralDashboard({
       take: 30,
       select: { id: true, email: true, status: true, kycStatus: true, createdAt: true, referralSource: true },
     }),
-    siteOrigin(),
   ]);
   const ids = players.map((p) => p.id);
   const [deps, stakes] = ids.length
@@ -56,7 +49,7 @@ export async function ReferralDashboard({
         // COALESCE: a JSON filter on a missing "purpose" key would silently drop normal deposits.
         prisma.$queryRaw<{ userId: string; amount: bigint }[]>`
           SELECT p."userId", COALESCE(SUM(p.amount),0)::bigint AS amount FROM "PaymentIntent" p
-          WHERE p."userId" = ANY(${ids}) AND p.direction = 'DEPOSIT' AND p.status = 'SUCCEEDED' AND COALESCE(p.metadata->>'purpose','') <> 'VERIFICATION'
+          WHERE p."userId" = ANY(${ids}) AND p.direction = 'DEPOSIT' AND p.status = 'SUCCEEDED' AND COALESCE(p.metadata->>'purpose','') NOT IN ('VERIFICATION','NTT')
           GROUP BY p."userId"`,
         prisma.bet.groupBy({ by: ["userId"], where: { userId: { in: ids } }, _sum: { stake: true }, _count: true }),
       ])
@@ -64,7 +57,7 @@ export async function ReferralDashboard({
   const depOf = new Map(deps.map((d) => [d.userId, d.amount]));
   const stakeOf = new Map(stakes.map((s) => [s.userId, { stake: s._sum.stake ?? 0n, n: s._count }]));
   const code = formatReferralCode(admin.referralCode, true);
-  const url = `${origin}/register?ref=${encodeURIComponent(code)}`;
+  const url = `${siteUrl()}/register?ref=${encodeURIComponent(admin.referralCode)}`;
 
   return (
     <>
@@ -94,7 +87,9 @@ export async function ReferralDashboard({
               { label: "Bet in 30 days", value: funnel.bettors30 },
             ]}
           />
-          <p className="mt-3 text-xs text-fog">Commission: no programme configured. Bonuses: none issued.</p>
+          <p className="mt-3 text-xs text-fog">
+            Commission: see the <Link href="/admin/commission" className="font-semibold text-lime hover:underline">Commission page</Link>. Bonuses: none issued.
+          </p>
         </Panel>
       </div>
 

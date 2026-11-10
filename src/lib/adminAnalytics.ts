@@ -85,12 +85,12 @@ export async function scopeMetrics(scope: Scope, range: Range): Promise<Metrics>
         (SELECT COUNT(DISTINCT p."userId")::int FROM "PaymentIntent" p WHERE p."userId" IN (${S}) AND p.direction = 'DEPOSIT' AND p.status = 'SUCCEEDED'
            AND COALESCE(p.metadata->>'purpose','') NOT IN ('VERIFICATION','NTT') AND p."createdAt" >= ${from} AND p."createdAt" < ${to}) AS depositors`,
     prisma.$queryRaw<{ direction: string; status: string; verification: boolean; count: number; total: bigint }[]>`
-      SELECT p.direction::text, p.status::text, COALESCE(p.metadata->>'purpose','') = 'VERIFICATION' AS verification, COUNT(*)::int AS count, COALESCE(SUM(p.amount),0)::bigint AS total
+      SELECT p.direction::text, p.status::text, COALESCE(p.metadata->>'purpose','') IN ('VERIFICATION','NTT') AS verification, COUNT(*)::int AS count, COALESCE(SUM(p.amount),0)::bigint AS total
       FROM "PaymentIntent" p WHERE p."userId" IN (${S}) AND p."createdAt" >= ${from} AND p."createdAt" < ${to}
       GROUP BY 1, 2, 3`,
     prisma.$queryRaw<{ kind: string; total: bigint }[]>`
       SELECT a.kind::text, COALESCE(SUM(e.amount),0)::bigint AS total FROM "LedgerAccount" a JOIN "LedgerEntry" e ON e."accountId" = a.id
-      WHERE a."userId" IN (${S}) AND a.kind IN ('USER_CASH','BET_ESCROW','VERIFICATION_HOLD') GROUP BY 1`,
+      WHERE a."userId" IN (${S}) AND a.kind IN ('USER_CASH','BET_ESCROW','VERIFICATION_HOLD','NTT_HOLD') GROUP BY 1`,
     prisma.$queryRaw<{ count: number; stakes: bigint }[]>`
       SELECT COUNT(*)::int AS count, COALESCE(SUM(b.stake + COALESCE((SELECT SUM(c."stakePortion") FROM "Cashout" c WHERE c."betId" = b.id AND NOT c.full),0)),0)::bigint AS stakes
       FROM "Bet" b WHERE b."userId" IN (${S}) AND b."placedAt" >= ${from} AND b."placedAt" < ${to}`,
@@ -126,7 +126,7 @@ export async function scopeMetrics(scope: Scope, range: Range): Promise<Metrics>
   const st = (s: string) => settled.find((r) => r.status === s);
   const cashL = liabOf("USER_CASH");
   const escrow = liabOf("BET_ESCROW");
-  const held = liabOf("VERIFICATION_HOLD");
+  const held = liabOf("VERIFICATION_HOLD") + liabOf("NTT_HOLD");
   const ggrOf = (k: string) => n(ggr.find((r) => r.kind === k)?.ggr ?? 0n);
   const ggrV = ggr.reduce((acc, r) => acc + n(r.ggr), 0n);
 
@@ -205,7 +205,7 @@ export async function scopeSeries(scope: Scope, range: Range): Promise<SeriesPoi
     SELECT bk.bucket,
       (SELECT COUNT(*)::int FROM "User" u WHERE u.id IN (${S}) AND date_trunc(${U}, u."createdAt") = bk.bucket) AS registrations,
       (SELECT COALESCE(SUM(p.amount),0)::bigint FROM "PaymentIntent" p WHERE p."userId" IN (${S}) AND p.direction = 'DEPOSIT' AND p.status = 'SUCCEEDED'
-         AND COALESCE(p.metadata->>'purpose','') <> 'VERIFICATION' AND date_trunc(${U}, p."createdAt") = bk.bucket) AS deposits,
+         AND COALESCE(p.metadata->>'purpose','') NOT IN ('VERIFICATION','NTT') AND date_trunc(${U}, p."createdAt") = bk.bucket) AS deposits,
       (SELECT COALESCE(SUM(p.amount),0)::bigint FROM "PaymentIntent" p WHERE p."userId" IN (${S}) AND p.direction = 'WITHDRAWAL' AND p.status = 'SUCCEEDED'
          AND date_trunc(${U}, p."createdAt") = bk.bucket) AS withdrawals,
       (SELECT COALESCE(SUM(b.stake + COALESCE((SELECT SUM(c."stakePortion") FROM "Cashout" c WHERE c."betId" = b.id AND NOT c.full),0)),0)::bigint
@@ -277,6 +277,9 @@ const ACTION_TEXT: Record<string, string> = {
   ADMIN_SUSPEND: "suspended an administrator",
   ADMIN_REACTIVATE: "reactivated an administrator",
   ADMIN_REMOVE: "removed an administrator",
+  COMMISSION_DEFAULT_RATE: "changed the default commission rate",
+  COMMISSION_RATE: "changed an admin's commission rate",
+  COMMISSION_PAYOUT: "recorded a commission payout",
   ADMIN_ACCESS_CHANGE: "changed an administrator's access",
   ADMIN_PROFILE_CHANGE: "edited an administrator's profile",
   ADMIN_RESET_LINK: "sent a password reset link",
@@ -319,7 +322,7 @@ export async function referralFunnel(adminId: string) {
     WITH mine AS (SELECT id, "createdAt" FROM "User" WHERE role = 'USER' AND "referredById" = ${adminId}),
     deps AS (
       SELECT p."userId", COUNT(*) AS n FROM "PaymentIntent" p
-      WHERE p."userId" IN (SELECT id FROM mine) AND p.direction = 'DEPOSIT' AND p.status = 'SUCCEEDED' AND COALESCE(p.metadata->>'purpose','') <> 'VERIFICATION'
+      WHERE p."userId" IN (SELECT id FROM mine) AND p.direction = 'DEPOSIT' AND p.status = 'SUCCEEDED' AND COALESCE(p.metadata->>'purpose','') NOT IN ('VERIFICATION','NTT')
       GROUP BY p."userId")
     SELECT
       (SELECT COUNT(*)::int FROM mine WHERE "createdAt" >= ${today}) AS today,
