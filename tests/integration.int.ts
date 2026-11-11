@@ -764,9 +764,9 @@ describe("admin: manual games, void and final results", () => {
     const { id } = await createManualFixture(input, script);
 
     // Bet on the home win while it is still upcoming.
-    const user = await fundedUser(100);
+    const user = await fundedUser(1000);
     const home = await prisma.selection.findFirstOrThrow({ where: { market: { fixtureId: id, type: "MATCH_RESULT" }, code: "1" } });
-    await placeBet(user.id, { idempotencyKey: randomUUID(), stakeGhs: 10, acceptOddsChange: true, selections: [{ selectionId: home.id, expectedMilliOdds: home.milliOdds }] });
+    await placeBet(user.id, { idempotencyKey: randomUUID(), stakeGhs: 250, acceptOddsChange: true, selections: [{ selectionId: home.id, expectedMilliOdds: home.milliOdds }] });
 
     const kickOff = new Date();
     await rescheduleManualFixture(id, kickOff.toISOString());
@@ -780,18 +780,20 @@ describe("admin: manual games, void and final results", () => {
     // Half time: exactly the scripted half-time score, still unsettled.
     await advanceScriptedMatches(at(script.halfMin));
     expect(await read()).toMatchObject({ status: "LIVE", homeScore: 1, awayScore: 0 });
-    expect(await userCashBalance(prisma, user.id)).toBe(toPesewas(90)); // staked, not paid
+    expect(await userCashBalance(prisma, user.id)).toBe(toPesewas(750)); // staked, not paid
 
-    // Full time: the script settles it and the home win pays out, once.
-    expect(await advanceScriptedMatches(at(scriptLengthMin(script)))).toMatchObject({ settled: 1 });
+    // Full time (after this match's own added time): the script settles it and the home win pays out, once.
+    const ko = (await read()).startsAt.getTime();
+    expect(await advanceScriptedMatches(at(scriptLengthMin(script, ko) - 0.5))).toMatchObject({ settled: 0 }); // still in added time
+    expect(await advanceScriptedMatches(at(scriptLengthMin(script, ko)))).toMatchObject({ settled: 1 });
     expect(await read()).toMatchObject({ status: "FINISHED", homeScore: 2, awayScore: 1 });
     const bet = await prisma.bet.findFirstOrThrow({ where: { userId: user.id } });
     expect(bet.status).toBe("WON");
-    expect(await userCashBalance(prisma, user.id)).toBe(toPesewas(90) + bet.potentialPayout);
+    expect(await userCashBalance(prisma, user.id)).toBe(toPesewas(750) + bet.potentialPayout);
 
     // A later tick finds nothing to do: no second payout.
-    expect(await advanceScriptedMatches(at(scriptLengthMin(script) + 30))).toEqual({ updated: 0, settled: 0 });
-    expect(await userCashBalance(prisma, user.id)).toBe(toPesewas(90) + bet.potentialPayout);
+    expect(await advanceScriptedMatches(at(scriptLengthMin(script, ko) + 30))).toEqual({ updated: 0, settled: 0 });
+    expect(await userCashBalance(prisma, user.id)).toBe(toPesewas(750) + bet.potentialPayout);
     expect(await ledgerIsBalanced()).toBe(true);
   });
 

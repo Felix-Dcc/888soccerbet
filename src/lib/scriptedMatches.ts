@@ -11,7 +11,7 @@ import { prisma } from "./db";
 import { settleFixture } from "./settlement";
 import { bookMarket, inPlayFootballOdds } from "./matchGenerator";
 import { toMilliOdds } from "./money";
-import { MATCH_TIMING } from "./liveClock";
+import { stoppageFor } from "./liveClock";
 
 export type Side = "H" | "A";
 export interface MatchScript {
@@ -29,15 +29,14 @@ const TIMING = {
   basketball: { halfMin: 24, breakMin: 10, fullMin: 48 },
 } as const;
 
-// Real stoppage minutes added to each half. Football only (keyed off its full-time length), and the
-// same figures the on-screen clock uses, so the clock and the score/settlement never drift apart.
-const stoppageFor = (fullMin: number) =>
-  fullMin === TIMING.football.fullMin ? { first: MATCH_TIMING.football.add1, second: MATCH_TIMING.football.add2 } : { first: 0, second: 0 };
+// Real stoppage minutes added to each half (football only, keyed off its full-time length): the same
+// per-match figures the on-screen clock uses, so the clock and the score/settlement never drift apart.
+const addedTime = (s: { fullMin: number }, startsAtMs: number) => stoppageFor(s.fullMin === TIMING.football.fullMin ? "football" : "basketball", startsAtMs);
 
 /** Whole match, kick-off to settlement, in real minutes (both halves' stoppage and the interval included). */
-export const scriptLengthMin = (s: MatchScript) => {
-  const st = stoppageFor(s.fullMin);
-  return s.fullMin + s.breakMin + st.first + st.second;
+export const scriptLengthMin = (s: MatchScript, startsAtMs: number) => {
+  const st = addedTime(s, startsAtMs);
+  return s.fullMin + s.breakMin + st.add1 + st.add2;
 };
 
 const spread = (count: number, from: number, to: number): number[] =>
@@ -61,17 +60,17 @@ export function buildScript(sport: "football" | "basketball", ht: [number, numbe
 const lerp = (from: number, to: number, t: number) => Math.round(from + (to - from) * Math.min(1, Math.max(0, t)));
 
 /** Real minutes since kick-off -> minutes of play: the clock stops during first-half stoppage and the interval. */
-const playedMin = (t: { halfMin: number; breakMin: number; fullMin: number }, elapsed: number) => {
-  const breakEnd = t.halfMin + stoppageFor(t.fullMin).first + t.breakMin; // play resumes after stoppage + interval
+const playedMin = (t: { halfMin: number; breakMin: number; fullMin: number }, elapsed: number, startsAtMs: number) => {
+  const breakEnd = t.halfMin + addedTime(t, startsAtMs).add1 + t.breakMin; // play resumes after stoppage + interval
   return elapsed <= t.halfMin ? Math.max(0, elapsed)
     : elapsed <= breakEnd ? t.halfMin // all first-half goals are in; score holds through stoppage and the break
     : Math.min(t.fullMin, t.halfMin + (elapsed - breakEnd)); // second half; holds at full once play reaches 90
 };
 
 /** The score to show `elapsed` real minutes after kick-off, and whether the match is over. */
-export function scoreAt(s: MatchScript, elapsed: number): { home: number; away: number; finished: boolean } {
-  if (elapsed >= scriptLengthMin(s)) return { home: s.ft[0], away: s.ft[1], finished: true };
-  const played = playedMin(s, elapsed);
+export function scoreAt(s: MatchScript, elapsed: number, startsAtMs: number): { home: number; away: number; finished: boolean } {
+  if (elapsed >= scriptLengthMin(s, startsAtMs)) return { home: s.ft[0], away: s.ft[1], finished: true };
+  const played = playedMin(s, elapsed, startsAtMs);
 
   if (s.goals.length || (s.ft[0] === 0 && s.ft[1] === 0))
     return { home: s.goals.filter((g) => g.side === "H" && g.m <= played).length, away: s.goals.filter((g) => g.side === "A" && g.m <= played).length, finished: false };
@@ -110,7 +109,7 @@ const runningSelect = {
  */
 async function priceInPlay(f: Running, home: number, away: number, elapsed: number, now: Date) {
   const t = TIMING.football;
-  const left = Math.round(t.fullMin - playedMin(t, elapsed)); // whole minutes: prices move once a minute
+  const left = Math.round(t.fullMin - playedMin(t, elapsed, f.startsAt.getTime())); // whole minutes: prices move once a minute
   const markets = await prisma.market.findMany({
     where: { fixtureId: f.id },
     select: { id: true, type: true, line: true, status: true, selections: { select: { id: true, code: true, milliOdds: true, status: true } } },
@@ -158,7 +157,7 @@ export async function advanceScriptedMatches(now = new Date()): Promise<{ update
     const script = readScript(f.script);
     if (!script) continue;
     const elapsed = (now.getTime() - f.startsAt.getTime()) / 60_000;
-    const { home, away, finished } = scoreAt(script, elapsed);
+    const { home, away, finished } = scoreAt(script, elapsed, f.startsAt.getTime());
     try {
       if (finished) {
         await settleFixture(f.id, home, away); // final whistle: grade and pay out
