@@ -7,16 +7,17 @@ import { manualPayoutQueue, verificationQueue } from "@/lib/wallet";
 import { formatPesewas } from "@/lib/money";
 import { kickoffDay, kickoffTime } from "@/lib/time";
 import { Crest } from "@/components/Crest";
-import { SyncButton, SettleForm, ManualGameForm, GenerateMatchForm, VerificationReview } from "@/components/AdminTools";
+import { SyncButton, SettleForm, VerificationReview } from "@/components/AdminTools";
 import { readScript } from "@/lib/scriptedMatches";
+import { payoutTo } from "@/components/admin/payoutTo";
 import { PayoutActions } from "@/components/admin/PayoutActions";
-import { BarList, EmptyState, Figure, Head, Icon, Panel, Pill, Strip, Tabs, ago, ghs, ghsShort } from "@/components/admin/kit";
+import { BarList, EmptyState, Figure, Head, Panel, Pill, Strip, Tabs, ago, ghs, ghsShort } from "@/components/admin/kit";
 
 export const dynamic = "force-dynamic";
 
-/** Trading desk: results to enter, withdrawals to pay by hand, verifications to review, open exposure, manual games, the odds sync. Each part needs its own permission. */
+/** Betting Ops: results to enter, withdrawals to pay by hand, verifications to review, open exposure, the odds sync. Each part needs its own permission. Creating matches is on /admin/games. */
 export default async function OperationsPage({ searchParams }: { searchParams: Promise<{ queue?: string }> }) {
-  const gate = await adminPage(["settlement.manage", "fixtures.manage", "verification.review", "odds.sync", "bets.view", "payments.payout"]);
+  const gate = await adminPage(["settlement.manage", "verification.review", "odds.sync", "bets.view", "payments.payout"]);
   if (!gate.ok) return gate.deny;
   const u = gate.user;
   const want = (await searchParams).queue;
@@ -27,7 +28,7 @@ export default async function OperationsPage({ searchParams }: { searchParams: P
     status: { in: ["SCHEDULED", "LIVE"] },
     OR: queue === "manual" ? [{ providerRef: null }] : queue === "started" ? [{ startsAt: { lte: now } }] : [{ providerRef: null }, { startsAt: { lte: now } }],
   };
-  const [toSettle, counts, competitions, verifications, exposure, lastSync, payouts] = await Promise.all([
+  const [toSettle, counts, verifications, exposure, lastSync, payouts] = await Promise.all([
     can(u, "settlement.manage")
       ? prisma.fixture.findMany({
           where: settleWhere,
@@ -43,7 +44,6 @@ export default async function OperationsPage({ searchParams }: { searchParams: P
           prisma.fixture.count({ where: { status: { in: ["SCHEDULED", "LIVE"] }, providerRef: null } }),
         ])
       : null,
-    can(u, "fixtures.manage") ? prisma.competition.findMany({ select: { sportKey: true, name: true }, orderBy: { name: "asc" } }) : [],
     can(u, "verification.review") ? verificationQueue() : null,
     can(u, "bets.view") ? openExposure() : null,
     prisma.fixture.aggregate({ where: { providerRef: { not: null } }, _max: { lastSyncedAt: true } }),
@@ -54,7 +54,7 @@ export default async function OperationsPage({ searchParams }: { searchParams: P
 
   return (
     <>
-      <Head title="Trading desk">{can(u, "odds.sync") && <SyncButton />}</Head>
+      <Head title="Betting Ops">{can(u, "odds.sync") && <SyncButton />}</Head>
 
       <Strip cols="grid-cols-2 md:grid-cols-4">
         <Figure label="Awaiting result" value={counts ? counts[0] : "—"} note={counts ? `${counts[1]} kicked off · ${counts[2]} manual` : undefined} />
@@ -65,22 +65,22 @@ export default async function OperationsPage({ searchParams }: { searchParams: P
 
       {payouts && payouts.length > 0 && (
         <Panel title="Withdrawals to pay" icon="coins" flush actions={<span className="text-xs text-fog">{ghs(payouts.reduce((n, p) => n + p.amount, 0n))} total</span>}>
-          <ul className="divide-y divide-white/[0.05]">
+          <ul className="divide-y divide-line">
             {payouts.map((p) => {
-              const m = (p.metadata ?? {}) as { msisdn?: string; network?: string; accountName?: string };
+              const m = payoutTo(p.metadata);
               return (
                 <li key={p.id} className="flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3">
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-sm font-semibold text-white">
-                      {ghs(p.amount)} <span className="font-normal text-fog">to</span> <span className="font-mono">{m.msisdn ?? "—"}</span> <span className="text-fog">{m.network ?? ""}</span>
+                      {m.naira ? <>{m.naira} <span className="font-normal text-fog">({ghs(p.amount)})</span></> : ghs(p.amount)} <span className="font-normal text-fog">to</span> <span className="font-mono">{m.to}</span>
                     </span>
                     <span className="block truncate text-xs text-fog">
-                      {m.accountName ? <span className="text-white">{m.accountName}</span> : null}
-                      {m.accountName ? " · " : ""}
+                      {m.name ? <span className="text-white">{m.name}</span> : null}
+                      {m.name ? " · " : ""}
                       {p.user.displayName ?? p.user.email} · {p.ref} · asked {ago(p.createdAt)}
                     </span>
                   </span>
-                  <PayoutActions refCode={p.ref} amount={formatPesewas(p.amount)} msisdn={m.msisdn ?? "?"} network={m.network ?? "?"} accountName={m.accountName} />
+                  <PayoutActions refCode={p.ref} amount={formatPesewas(p.amount)} to={m.to} naira={m.naira} accountName={m.name} />
                 </li>
               );
             })}
@@ -103,7 +103,7 @@ export default async function OperationsPage({ searchParams }: { searchParams: P
               {toSettle.length === 0 ? (
                 <EmptyState icon="check" title="Nothing waiting for a result" />
               ) : (
-                <ul className="divide-y divide-white/[0.05]">
+                <ul className="divide-y divide-line">
                   {toSettle.map((f) => (
                     <li key={f.id} className="px-4 py-3">
                       <div className="flex items-center gap-3">
@@ -132,25 +132,6 @@ export default async function OperationsPage({ searchParams }: { searchParams: P
               )}
             </Panel>
           )}
-          {can(u, "fixtures.manage") && (
-            <Panel title="Generate a match" icon="plus">
-              <GenerateMatchForm />
-            </Panel>
-          )}
-          {can(u, "fixtures.manage") && (
-            <details className="group rounded-md border border-white/[0.07] bg-[#10151C]">
-              <summary className="flex cursor-pointer list-none items-center justify-between px-4 py-3 text-[13px] font-semibold uppercase tracking-[0.08em] text-fog [&::-webkit-details-marker]:hidden">
-                <span className="flex items-center gap-2">
-                  <Icon name="plus" className="h-4 w-4 text-lime" />
-                  Add a manual game
-                </span>
-                <Icon name="chevron" className="h-4 w-4 transition group-open:rotate-90" />
-              </summary>
-              <div className="border-t border-white/[0.06] p-4">
-                <ManualGameForm competitions={competitions} />
-              </div>
-            </details>
-          )}
         </div>
 
         <div className="min-w-0 space-y-5">
@@ -159,15 +140,18 @@ export default async function OperationsPage({ searchParams }: { searchParams: P
               {verifications.length === 0 ? (
                 <EmptyState icon="check" title="No verifications waiting" />
               ) : (
-                <ul className="divide-y divide-white/[0.05]">
+                <ul className="divide-y divide-line">
                   {verifications.map((v) => (
                     <li key={v.userId} className="space-y-2 px-4 py-3">
                       <div className="flex items-baseline justify-between gap-3">
                         <span className="min-w-0 truncate text-sm font-semibold text-white">{v.email}</span>
-                        {v.complete ? <Pill tone="warn">ready</Pill> : <Pill tone="neutral">1 of 2</Pill>}
+                        <span className="flex items-center gap-1.5">
+                          <Pill tone="neutral">{v.stage === "ntt" ? "NTT" : "KYC"}</Pill>
+                          {v.complete ? <Pill tone="warn">ready</Pill> : <Pill tone="neutral">part-paid</Pill>}
+                        </span>
                       </div>
-                      <div className="text-xs text-fog">{ghs(v.held)} held</div>
-                      <VerificationReview userId={v.userId} email={v.email} heldGhs={formatPesewas(v.held)} complete={v.complete} />
+                      <div className="text-xs text-fog">{v.stage === "ntt" ? ghs(v.nttHeld) : ghs(v.kycHeld)} held</div>
+                      <VerificationReview userId={v.userId} email={v.email} heldGhs={formatPesewas(v.stage === "ntt" ? v.nttHeld : v.kycHeld)} complete={v.complete} stage={v.stage} />
                     </li>
                   ))}
                 </ul>
@@ -184,7 +168,7 @@ export default async function OperationsPage({ searchParams }: { searchParams: P
                   display: `${ghsShort(e.openStake)} · ${e.openLegs} sel`,
                   href: `/fixture/${e.fixtureId}`,
                 }))}
-                color="#F5C451"
+                color="rgb(var(--warn))"
                 empty="No open bets"
               />
             </Panel>

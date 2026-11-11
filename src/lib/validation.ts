@@ -16,8 +16,7 @@ export const registerSchema = z
     email,
     password: z.string().min(8, "Password must be at least 8 characters").max(200),
     confirmPassword: z.string(),
-    phone: z.string().trim().min(1, "Enter your mobile number").max(20),
-    dateOfBirth: z.string().refine((s) => !Number.isNaN(Date.parse(s)), "Enter your date of birth"),
+    country: z.enum(["GH", "NG"]).default("GH"),
     referralCode: optionalText(24),
     referralSource: z.enum(["LINK", "CODE"]).optional(),
     acceptTerms: z.literal(true, { errorMap: () => ({ message: "Accept the Terms & Conditions and Privacy Policy to continue" }) }),
@@ -62,6 +61,18 @@ export const depositSchema = z.object({
   idempotencyKey: z.string().min(8).max(100),
   msisdn,
   network,
+});
+
+/** Nigerian players pay on Flutterwave's checkout: no mobile money number. */
+export const ngDepositSchema = z.object({ amountGhs, idempotencyKey: z.string().min(8).max(100) });
+
+/** Nigerian withdrawals: paid by hand to a bank account (10-digit NUBAN account number). */
+export const ngWithdrawSchema = z.object({
+  amountGhs,
+  idempotencyKey: z.string().min(8).max(100),
+  bankName: z.string().trim().min(2, "Enter your bank").max(60),
+  accountNumber: z.string().trim().regex(/^\d{10}$/, "Enter your 10-digit account number"),
+  accountName: z.string().trim().min(2, "Enter the name on the account").max(60),
 });
 
 export const withdrawSchema = z.object({
@@ -145,6 +156,16 @@ export const generateFixtureSchema = z.object({
 export const rescheduleFixtureSchema = z
   .object({ fixtureId: z.string().min(1), startsAt: z.string().datetime({ offset: true, message: "Enter a valid kick-off time" }) })
   .refine((f) => new Date(f.startsAt).getTime() < Date.now() + MAX_AHEAD_MS, { message: "Kick-off must be within 60 days", path: ["startsAt"] });
+
+export const deleteFixtureSchema = z.object({ fixtureId: z.string().min(1) });
+
+export const editFixtureSchema = z.object({
+  fixtureId: z.string().min(1),
+  homeTeam: z.string().min(1).max(60).optional(),
+  awayTeam: z.string().min(1).max(60).optional(),
+  venue: z.string().max(100).optional(),
+  startsAt: z.string().datetime({ offset: true }).optional(),
+}).refine((f) => !f.startsAt || new Date(f.startsAt).getTime() < Date.now() + MAX_AHEAD_MS, { message: "Kick-off must be within 60 days", path: ["startsAt"] });
 
 /** Money in pesewas as a digit string, so no float rounding on the way in. */
 const pesewas = z.string().regex(/^\d{1,13}$/, "Invalid amount").transform((s) => BigInt(s));

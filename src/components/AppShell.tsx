@@ -4,44 +4,83 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { BetslipProvider, OPEN_SLIP_EVENT, useBetslip } from "./betslip/BetslipContext";
 import type { BonusRules } from "@/lib/bonus";
-import { Betslip } from "./betslip/Betslip";
+import { BetslipRail } from "./BetslipRail";
 import { Header } from "./Header";
 import { WinningPopup } from "./WinningPopup";
 import { SportIcon } from "./SportIcon";
-import { LiveRefresh } from "./LiveRefresh";
+import { DATA_CHANGED_EVENT, LiveRefresh } from "./LiveRefresh";
+import { CurrencyProvider } from "./CurrencyContext";
+import type { Currency } from "@/lib/currency";
 import { FlashNotice } from "./FlashNotice";
+
+/**
+ * The signed-in player's open (unsettled) bets, for the My Bets badge; 0 when signed out. Re-read on
+ * every page change, when a bet is placed or cashed out (sb:refresh), when match data changes
+ * (settlement) and when the player comes back to the tab.
+ */
+function useOpenBets(path: string): number {
+  const [count, setCount] = useState(0);
+  useEffect(() => {
+    let alive = true;
+    const load = () => {
+      fetch("/api/me", { cache: "no-store" })
+        .then((r) => r.json())
+        .then((d) => alive && setCount(Number(d?.openBets) || 0))
+        .catch(() => {}); // offline for a moment: keep the last count
+    };
+    const onVisible = () => document.visibilityState === "visible" && load();
+    load();
+    window.addEventListener("sb:refresh", load);
+    window.addEventListener(DATA_CHANGED_EVENT, load);
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      alive = false;
+      window.removeEventListener("sb:refresh", load);
+      window.removeEventListener(DATA_CHANGED_EVENT, load);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, [path]);
+  return count;
+}
 
 /** Mobile tab bar with the betslip in the centre, as on native sportsbook apps. */
 function BottomNav({ onSlip }: { onSlip: () => void }) {
   const { picks } = useBetslip();
   const path = usePathname();
-  const tab = (href: string, label: string, icon: string, active: boolean) => (
+  const openBets = useOpenBets(path);
+  const tab = (href: string, label: string, icon: string, active: boolean, badge = 0) => (
     <Link
       href={href}
       aria-current={active ? "page" : undefined}
-      className={`flex flex-1 flex-col items-center gap-0.5 py-2 text-[10px] font-semibold ${active ? "text-lime" : "text-fog"}`}
+      aria-label={badge ? `${label}, ${badge} open` : undefined}
+      className={`relative flex flex-1 flex-col items-center gap-0.5 py-2 text-[10px] font-semibold ${active ? "text-lime" : "text-fog"}`}
     >
       <SportIcon sport={icon} />
       {label}
+      {badge > 0 && (
+        <span key={badge} aria-hidden className="absolute left-1/2 top-0.5 ml-1.5 grid h-[18px] min-w-[18px] animate-pop place-items-center rounded-full bg-danger px-1 text-[10px] font-bold leading-none text-white ring-2 ring-ink-900">
+          {badge > 99 ? "99+" : badge}
+        </span>
+      )}
     </Link>
   );
   return (
-    <nav aria-label="App" className="fixed inset-x-0 bottom-0 z-40 border-t border-white/[0.06] bg-ink-900/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl lg:hidden">
+    <nav aria-label="App" className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-ink-900/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl lg:hidden">
       <div className="mx-auto flex max-w-md items-end">
         {tab("/", "Home", "all", path === "/")}
         {tab("/live", "Live", "live", path === "/live")}
         <button onClick={onSlip} aria-label={`Open betslip, ${picks.length} selections`} className="relative -mt-5 flex flex-1 flex-col items-center gap-0.5 pb-2 text-[10px] font-semibold text-fog">
-          <span className={`grid h-12 w-12 place-items-center rounded-full ring-4 ring-ink-900 ${picks.length ? "bg-lime text-lime-ink shadow-lime" : "bg-ink-600 text-white"}`}>
+          <span className={`grid h-12 w-12 place-items-center rounded-full ring-4 ring-ink-900 ${picks.length ? "bg-lime text-lime-ink" : "bg-ink-600 text-white"}`}>
             <SportIcon sport="bets" className="h-6 w-6" />
           </span>
           Betslip
           {picks.length > 0 && (
-            <span key={picks.length} className="absolute right-[calc(50%-26px)] top-0 grid h-5 min-w-5 animate-pop place-items-center rounded-full bg-gold px-1 text-[10px] font-bold text-black">
+            <span key={picks.length} className="absolute right-[calc(50%-26px)] top-0 grid h-5 min-w-5 animate-pop place-items-center rounded-full bg-gold px-1 text-[10px] font-bold text-gold-ink">
               {picks.length}
             </span>
           )}
         </button>
-        {tab("/bets", "My Bets", "bets", path.startsWith("/bets"))}
+        {tab("/bets", "My Bets", "bets", path.startsWith("/bets"), openBets)}
         {tab("/account", "Account", "account", path.startsWith("/account"))}
       </div>
     </nav>
@@ -61,13 +100,13 @@ function MobileSlip({ open, onClose }: { open: boolean; onClose: () => void }) {
   return (
     <div className="fixed inset-0 z-50 lg:hidden" role="dialog" aria-modal="true" aria-label="Betslip">
       <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
-      <div className="absolute inset-x-0 bottom-0 max-h-[88vh] animate-slide-up overflow-auto rounded-t-3xl border-t border-white/10 bg-ink-800 p-3 pb-[calc(env(safe-area-inset-bottom)+12px)]">
-        <div className="mx-auto mb-2 h-1 w-10 rounded-full bg-white/20" />
+      <div className="absolute inset-x-0 bottom-0 max-h-[88vh] animate-slide-up overflow-auto rounded-t-3xl border-t border-line bg-ink-800 p-3 pb-[calc(env(safe-area-inset-bottom)+12px)]">
+        <div className="mx-auto mb-2 h-1 w-10 rounded-full bg-fog/30" />
         <button onClick={onClose} className="absolute right-4 top-3 text-sm font-semibold text-fog hover:text-white">
           Close
         </button>
         <div className="pt-4">
-          <Betslip />
+          <BetslipRail />
         </div>
       </div>
     </div>
@@ -76,7 +115,25 @@ function MobileSlip({ open, onClose }: { open: boolean; onClose: () => void }) {
 
 export { OPEN_SLIP_EVENT };
 
-export function AppShell({ sidebar, minStakeGhs, bonus, children }: { sidebar: React.ReactNode; minStakeGhs: number; bonus: BonusRules; children: React.ReactNode }) {
+export function AppShell({
+  sidebar,
+  rail,
+  footer,
+  minStakeGhs,
+  bonus,
+  siteUrl,
+  currency,
+  children,
+}: {
+  sidebar: React.ReactNode;
+  rail?: React.ReactNode; // sits under the betslip on desktop (e.g. the most-backed list)
+  footer?: React.ReactNode;
+  minStakeGhs: number;
+  bonus: BonusRules;
+  siteUrl: string; // the public address shared links use (betzone.com.co in production)
+  currency: Currency; // what the signed-in player sees money in (Naira for Nigerian players)
+  children: React.ReactNode;
+}) {
   const [slipOpen, setSlipOpen] = useState(false);
   const close = () => setSlipOpen(false);
   // Focused pages (admin console, sign-in, sign-up) get the full width: no sports menu or betslip rails.
@@ -101,7 +158,8 @@ export function AppShell({ sidebar, minStakeGhs, bonus, children }: { sidebar: R
     return () => window.removeEventListener(OPEN_SLIP_EVENT, onOpen);
   }, []);
   return (
-    <BetslipProvider minStake={minStakeGhs} bonus={bonus}>
+    <CurrencyProvider value={currency}>
+    <BetslipProvider minStake={minStakeGhs} bonus={bonus} siteUrl={siteUrl}>
       {/* Keyboard users jump past the header, sports row and menu straight to the page. */}
       <a
         href="#main"
@@ -114,7 +172,7 @@ export function AppShell({ sidebar, minStakeGhs, bonus, children }: { sidebar: R
       </Suspense>
       {staffArea ? (
         // The admin console is its own dark workspace: full width, no player navigation.
-        <main id="main" tabIndex={-1} className="theme-dark min-h-[calc(100vh-56px)] min-w-0 bg-[#0A0E13] text-white outline-none">
+        <main id="main" tabIndex={-1} className="min-w-0 outline-none">
           {children}
         </main>
       ) : adminView ? (
@@ -131,16 +189,20 @@ export function AppShell({ sidebar, minStakeGhs, bonus, children }: { sidebar: R
             {children}
           </main>
           <aside className="hidden lg:block" aria-label="Betslip">
-            <div className="sticky top-[76px] max-h-[calc(100vh-92px)] overflow-y-auto overscroll-contain pb-4 [scrollbar-width:thin]">
-              <Betslip />
+            <div className="sticky top-[76px] max-h-[calc(100vh-92px)] space-y-4 overflow-y-auto overscroll-contain pb-4 [scrollbar-width:thin]">
+              <BetslipRail />
+              {rail}
             </div>
           </aside>
         </div>
       )}
+      {/* The console is its own workspace: the player footer and tab bar don't belong in it. */}
+      {!staffArea && footer}
       {!staffArea && <BottomNav onSlip={() => setSlipOpen(true)} />}
       <MobileSlip open={slipOpen} onClose={close} />
       <WinningPopup />
       {!adminView && <LiveRefresh />}
     </BetslipProvider>
+    </CurrencyProvider>
   );
 }

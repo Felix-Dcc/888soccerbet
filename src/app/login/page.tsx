@@ -27,7 +27,7 @@ export default function LoginPage() {
         body: JSON.stringify({ identifier, password, remember, turnstileToken: token }),
       });
       if (res.ok) {
-        window.dispatchEvent(new Event("stakra:refresh"));
+        window.dispatchEvent(new Event("sb:refresh"));
         router.push("/");
         router.refresh();
         return;
@@ -42,12 +42,23 @@ export default function LoginPage() {
   }
 
   return (
-    <AuthShell title="Log in">
-      <form onSubmit={submit} className="space-y-4" noValidate>
+    <AuthShell
+      title="Welcome back"
+      subtitle="Log in to your Bet Zone account."
+      footer={
+        <>
+          New to Bet Zone?{" "}
+          <Link href="/register" className="font-semibold text-lime hover:underline">
+            Create an account
+          </Link>
+        </>
+      }
+    >
+      <form onSubmit={submit} className="space-y-5" noValidate>
         {err && <div role="alert" className="rounded-lg border border-danger/40 bg-danger/10 p-3 text-sm text-danger">{err}</div>}
         <div>
           <label className="label" htmlFor="identifier">Phone or email</label>
-          <input id="identifier" required autoComplete="username" className="input" value={identifier} onChange={(e) => setIdentifier(e.target.value)} />
+          <input id="identifier" required autoComplete="username" placeholder="024 123 4567 or you@example.com" className="input" value={identifier} onChange={(e) => setIdentifier(e.target.value)} />
         </div>
         <div>
           <label className="label" htmlFor="password">Password</label>
@@ -64,11 +75,8 @@ export default function LoginPage() {
         </div>
         <Turnstile onToken={setToken} resetKey={attempt} />
         <button className="btn-lime w-full py-3" disabled={busy || (turnstileRequired && !token)}>
-          {busy ? "Signing in…" : "Log in"}
+          {busy ? "Logging in…" : "Log in"}
         </button>
-        <Link href="/register" className="btn-ghost w-full py-3">
-          Create account
-        </Link>
       </form>
     </AuthShell>
   );

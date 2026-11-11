@@ -7,8 +7,10 @@ export type Network = (typeof NETWORKS)[number];
 export interface ChargeRequest {
   ref: string; // our PaymentIntent.ref (also the PSP's tx_ref / transfer reference)
   amountPesewas: bigint;
-  msisdn: string; // 0XXXXXXXXX
-  network: Network;
+  msisdn?: string; // 0XXXXXXXXX; Ghana mobile money only
+  network?: Network; // Ghana mobile money only
+  /** Nigerian checkout: the Naira amount (kobo) the player pays for amountPesewas. */
+  ngnKobo?: bigint;
   direction: "DEPOSIT" | "WITHDRAWAL";
   email: string;
   name?: string | null;
@@ -29,7 +31,9 @@ export interface NormalisedEvent {
   providerEventId: string;
   ourRef: string; // PaymentIntent.ref this event concerns
   status: "SUCCEEDED" | "FAILED";
+  /** What the PSP says was paid, in minor units of `currency` (pesewas; kobo when NGN). */
   amountPesewas: bigint;
+  currency?: "GHS" | "NGN"; // absent = GHS
   /** Which kind of payment the PSP says this was; checked against the intent when present. */
   direction?: "DEPOSIT" | "WITHDRAWAL";
 }
@@ -47,7 +51,7 @@ export interface PaymentProvider {
   /** Authenticate a webhook and return the normalised event, confirmed with the PSP where it allows. */
   verifyWebhook(rawBody: string, headers: Headers): Promise<WebhookResult>;
   /** Ask the PSP for a deposit's final outcome by its id (catches a missed webhook). null = not final yet. */
-  checkDeposit?(providerRef: string): Promise<{ status: "SUCCEEDED" | "FAILED"; amountPesewas: bigint } | null>;
+  checkDeposit?(providerRef: string): Promise<{ status: "SUCCEEDED" | "FAILED"; amountPesewas: bigint; currency?: "GHS" | "NGN" } | null>;
 }
 
 /** The network a number was issued on, from its prefix. Only a default: numbers can be ported, so players can change it. */

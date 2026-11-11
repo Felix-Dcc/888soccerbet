@@ -1,5 +1,8 @@
 "use client";
-import { createContext, useContext, useEffect, useMemo, useState, useCallback } from "react";
+import { createContext, useContext, useEffect, useMemo, useRef, useState, useCallback } from "react";
+import { useCurrency } from "../CurrencyContext";
+import { numberIn, unitOf } from "@/lib/currency";
+import { toPesewas } from "@/lib/money";
 import { DATA_CHANGED_EVENT } from "../LiveRefresh";
 import type { BonusRules } from "@/lib/bonus";
 
@@ -10,16 +13,19 @@ export interface Pick {
   selectionName: string;
   marketName: string;
   fixtureName: string;
+  score?: { home: number; away: number } | null; // set while the match is in play
+  suspended?: boolean; // in play and paused after a goal: shown, not placeable until it reprices
 }
 
 /** Window event that opens the betslip (drawer on mobile, focus on desktop). */
-export const OPEN_SLIP_EVENT = "kingzbet:open-slip";
+export const OPEN_SLIP_EVENT = "betzone:open-slip";
 
 interface BetslipState {
   picks: Pick[];
   stake: number;
-  minStake: number; // GHS, from the server setting the bet engine enforces
+  minStake: number; // in the player's currency (₦ for Nigerians), from the GHS setting the bet engine enforces
   bonus: BonusRules; // multiple-bonus rates, so the slip can show the bonus before the bet is placed
+  siteUrl: string; // public address for shared booking links
   open: boolean;
   add: (p: Pick) => void;
   remove: (selectionId: string) => void;
@@ -33,11 +39,22 @@ interface BetslipState {
 }
 
 const Ctx = createContext<BetslipState | null>(null);
-const KEY = "stakra.betslip.v1";
+const KEY = "sb.betslip.v1";
 
-export function BetslipProvider({ minStake, bonus, children }: { minStake: number; bonus: BonusRules; children: React.ReactNode }) {
+/** minStake: the engine's minimum in GHS. The slip's stake is kept in the player's currency, as typed. */
+export function BetslipProvider({ minStake: minStakeGhs, bonus, siteUrl, children }: { minStake: number; bonus: BonusRules; siteUrl: string; children: React.ReactNode }) {
+  const currency = useCurrency();
+  const unit = unitOf(currency);
+  const minStake = numberIn(currency, toPesewas(minStakeGhs));
   const [picks, setPicks] = useState<Pick[]>([]);
   const [stake, setStake] = useState(minStake);
+  // Logging in or out can switch the currency (GHS <-> ₦): a stake typed in the old one would mean something else.
+  const shownUnit = useRef(unit);
+  useEffect(() => {
+    if (shownUnit.current === unit) return;
+    shownUnit.current = unit;
+    setStake(minStake);
+  }, [unit, minStake]);
   const [open, setOpen] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
@@ -49,7 +66,8 @@ export function BetslipProvider({ minStake, bonus, children }: { minStake: numbe
       if (raw) {
         const d = JSON.parse(raw);
         if (Array.isArray(d.picks)) saved = d.picks;
-        if (typeof d.stake === "number") setStake(Math.max(d.stake, minStake)); // a slip saved under an older, lower minimum
+        // Only a stake saved in the same currency (slips saved before Naira have none: GHS); never below today's minimum.
+        if (typeof d.stake === "number" && (d.unit ?? "GHS") === unit) setStake(Math.max(d.stake, minStake));
       }
     } catch {
       /* ignore */
@@ -113,11 +131,11 @@ export function BetslipProvider({ minStake, bonus, children }: { minStake: numbe
   useEffect(() => {
     if (!loaded) return;
     try {
-      localStorage.setItem(KEY, JSON.stringify({ picks, stake }));
+      localStorage.setItem(KEY, JSON.stringify({ picks, stake, unit }));
     } catch {
       /* ignore */
     }
-  }, [picks, stake, loaded]);
+  }, [picks, stake, unit, loaded]);
 
   const add = useCallback((p: Pick) => {
     setPicks((cur) => {
@@ -132,8 +150,8 @@ export function BetslipProvider({ minStake, bonus, children }: { minStake: numbe
   const replace = useCallback((next: Pick[]) => setPicks(next), []);
 
   const value = useMemo<BetslipState>(
-    () => ({ picks, stake, minStake, bonus, open, add, remove, has, clear, replace, setStake, setOpen, notice, setNotice }),
-    [picks, stake, minStake, bonus, open, add, remove, has, clear, replace, notice],
+    () => ({ picks, stake, minStake, bonus, siteUrl, open, add, remove, has, clear, replace, setStake, setOpen, notice, setNotice }),
+    [picks, stake, minStake, bonus, siteUrl, open, add, remove, has, clear, replace, notice],
   );
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

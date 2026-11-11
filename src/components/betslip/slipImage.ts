@@ -1,28 +1,56 @@
 /**
  * Draws a booked slip as a shareable PNG, laid out like a printed betslip: brand bar with the
- * booking time, booking code and total odds on a dark panel, then a white card with an
- * example bet (GHS 100 at the slip's real total odds — no invented bonus) and each selection.
+ * booking time, booking code and total odds on a panel, then a card with an example bet
+ * (GHS 100 at the slip's real total odds — no invented bonus) and each selection. Drawn in the
+ * site's white or dark palette, whichever the page is showing (System follows the device).
  * Canvas in the browser, so it uses the page's own fonts and needs no server work.
  */
-import { combineMilliOdds, formatMilliOdds, formatPesewas, potentialPayout } from "@/lib/money";
+import { combineMilliOdds, formatMilliOdds, potentialPayout } from "@/lib/money";
+import { amountIn, GHS_CURRENCY, type Currency } from "@/lib/currency";
 import { formatStamp } from "@/lib/time";
 import type { Pick } from "./BetslipContext";
 
 const W = 1080;
 const PAD = 48; // dark margin around the white card
 const IN = 48; // text inset inside the white card
-const C = {
-  brand: "#0F8A3C",
-  brandDark: "#0B6B2F",
-  panel: "#131A24",
-  code: "#C6F24E",
-  ink: "#0B1220",
-  fog: "#4B5565",
-  line: "#E2E7EE",
-  band: "#E7F4EC",
-  bandText: "#0C7C36",
-  gold: "#F5C451",
+// The Bet Zone site's two palettes (globals.css tokens), so the picture matches the page it was saved from.
+const DARK = {
+  barFrom: "#17202E",
+  barTo: "#040913",
+  onBar: "#FFFFFF", // headings on the bar and panel
+  onBarMuted: "rgba(255,255,255,.7)",
+  panel: "#0C1421",
+  code: "#00BA3B",
+  box: "rgba(255,255,255,.06)",
+  gold: "#8EF39E", // value: total odds
+  card: "#171F2E",
+  cardBorder: "#1F2733",
+  ink: "#F5F9FB",
+  fog: "#8C9AAB",
+  line: "#1F2733",
+  band: "#10301D",
+  bandText: "#8EF39E",
 };
+const LIGHT: typeof DARK = {
+  barFrom: "#FFFFFF",
+  barTo: "#EEF5F0",
+  onBar: "#040C06",
+  onBarMuted: "rgba(4,12,6,.6)",
+  panel: "#F8FBF9",
+  code: "#00A01B",
+  box: "rgba(4,12,6,.05)",
+  gold: "#005600",
+  card: "#FFFFFF",
+  cardBorder: "#D2DAD4",
+  ink: "#040C06",
+  fog: "#556159",
+  line: "#D2DAD4",
+  band: "#D6F5D9",
+  bandText: "#005600",
+};
+type Palette = typeof DARK;
+/** The palette of the mode the page is in right now (the <html> attribute the theme script sets). */
+const palette = (): Palette => (document.documentElement.dataset.theme === "light" ? LIGHT : DARK);
 const EXAMPLE_STAKE = 10_000n; // GHS 100 in pesewas
 
 /** Resolve the hashed next/font family names from the CSS variables the layout sets. */
@@ -48,61 +76,58 @@ function pickLabel(p: Pick): string {
   return p.selectionName;
 }
 
-function crown(ctx: CanvasRenderingContext2D, x: number, y: number, s: number) {
-  ctx.save();
-  ctx.translate(x, y);
-  ctx.scale(s / 32, s / 32);
-  ctx.fillStyle = C.gold;
+/** The Bet Zone logo, drawn: the green tile with its rising-trend arrow, the name and SPORTSBOOK. */
+function drawLogo(ctx: CanvasRenderingContext2D, x: number, cy: number, display: string, C: Palette) {
+  const T = 96;
+  const y = cy - T / 2;
+  const g = ctx.createLinearGradient(x, y, x + T, y + T);
+  g.addColorStop(0, C.code);
+  g.addColorStop(1, "rgba(0,186,59,.8)");
+  ctx.fillStyle = g;
   ctx.beginPath();
-  ctx.moveTo(7.5, 21.2); ctx.lineTo(6, 11.2); ctx.lineTo(11.6, 15.5); ctx.lineTo(16, 7.8);
-  ctx.lineTo(20.4, 15.5); ctx.lineTo(26, 11.2); ctx.lineTo(24.5, 21.2); ctx.closePath();
+  ctx.roundRect(x, y, T, T, 24);
   ctx.fill();
-  ctx.fillRect(7.5, 22.2, 17, 3);
-  for (const [cx, cy, r] of [[6, 10.6, 1.5], [26, 10.6, 1.5], [16, 6.9, 1.8]] as const) {
+  // lucide "trending-up" (24-unit box), centred in the tile
+  const k = (T * 0.58) / 24;
+  const ox = x + (T - 24 * k) / 2;
+  const oy = y + (T - 24 * k) / 2;
+  ctx.strokeStyle = "#FAFCFB";
+  ctx.lineWidth = 2 * k;
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+  for (const pts of [[[16, 7], [22, 7], [22, 13]], [[22, 7], [13.5, 15.5], [8.5, 10.5], [2, 17]]]) {
     ctx.beginPath();
-    ctx.arc(cx, cy, r, 0, Math.PI * 2);
-    ctx.fill();
+    pts.forEach(([px, py], i) => (i ? ctx.lineTo(ox + px! * k, oy + py! * k) : ctx.moveTo(ox + px! * k, oy + py! * k)));
+    ctx.stroke();
   }
-  ctx.restore();
+  ctx.textAlign = "left";
+  ctx.fillStyle = C.onBar;
+  ctx.font = `800 56px ${display}`;
+  ctx.fillText("Bet Zone", x + T + 24, cy - 12);
+  ctx.fillStyle = C.code;
+  ctx.font = `800 20px ${display}`;
+  ctx.fillText("S P O R T S B O O K", x + T + 26, cy + 32);
 }
 
-/** The wordmark's little crown, centred at x with its base at y, `w` pixels wide. */
-function wordmarkCrown(ctx: CanvasRenderingContext2D, x: number, y: number, w: number) {
-  const k = w / 24; // drawn in the same 24x16 box as the site's SVG
-  ctx.save();
-  ctx.translate(x - 12 * k, y - 15 * k);
-  ctx.scale(k, k);
-  ctx.beginPath();
-  ctx.moveTo(2, 14); ctx.lineTo(1, 4); ctx.lineTo(7, 8.5); ctx.lineTo(12, 1);
-  ctx.lineTo(17, 8.5); ctx.lineTo(23, 4); ctx.lineTo(22, 14); ctx.closePath();
-  ctx.fillStyle = C.gold;
-  ctx.fill();
-  ctx.lineWidth = 1;
-  ctx.strokeStyle = "#B9831A";
-  ctx.stroke();
-  ctx.beginPath();
-  ctx.arc(12, 1.8, 1.6, 0, Math.PI * 2);
-  ctx.fillStyle = "#FFE7A3";
-  ctx.fill();
-  ctx.restore();
-}
-
-export async function drawSlipImage(code: string, picks: Pick[], bookedAt: Date = new Date()): Promise<Blob> {
+/** currency: the player's (Naira for Nigerians), for the example bet's amounts. */
+export async function drawSlipImage(code: string, picks: Pick[], bookedAt: Date = new Date(), currency: Currency = GHS_CURRENCY): Promise<Blob> {
   const f = fonts();
+  const C = palette();
   // Weights the canvas uses may not be on screen yet; load them before drawing.
   await Promise.all(
     [`800 40px ${f.display}`, `800 36px ${f.body}`, `700 30px ${f.body}`, `600 30px ${f.body}`, `500 30px ${f.body}`].map((x) => document.fonts.load(x).catch(() => [])),
   );
 
   const combined = combineMilliOdds(picks.map((p) => p.milliOdds));
-  const BAR = 150;
+  const BAR = 190;
   const PANEL = 400;
   const BAND = 68;
   const ROW = 60;
   const SEL = 196;
   const cardTop = BAR + PANEL;
   const cardH = BAND + ROW * 2 + 24 + BAND + picks.length * SEL;
-  const H = cardTop + cardH + PAD;
+  const FOOT = 110; // domain + 18+ line under the card
+  const H = cardTop + cardH + FOOT;
 
   const canvas = document.createElement("canvas");
   canvas.width = W;
@@ -110,32 +135,37 @@ export async function drawSlipImage(code: string, picks: Pick[], bookedAt: Date 
   const ctx = canvas.getContext("2d")!;
   ctx.textBaseline = "middle";
 
-  // Brand bar: logo left, "Betslip" + booking time right.
+  // Brand bar: the logo left, "BETSLIP" + booking time right, with a soft green swoosh behind it.
   const grad = ctx.createLinearGradient(0, 0, W, BAR);
-  grad.addColorStop(0, C.brand);
-  grad.addColorStop(1, C.brandDark);
+  grad.addColorStop(0, C.barFrom);
+  grad.addColorStop(1, C.barTo);
   ctx.fillStyle = grad;
   ctx.fillRect(0, 0, W, BAR);
-  crown(ctx, PAD, BAR / 2 - 34, 68);
-  ctx.fillStyle = "#FFFFFF";
-  ctx.font = `800 46px ${f.display}`;
-  ctx.fillText("Kingz Bet", PAD + 84, BAR / 2);
-  // Small crown on the "z", as in the site's wordmark.
-  const sx = PAD + 84 + ctx.measureText("King").width + ctx.measureText("z").width / 2;
-  wordmarkCrown(ctx, sx, BAR / 2 - 46 * 0.44, 46 * 0.6);
+  ctx.fillStyle = "rgba(0,186,59,.12)";
+  ctx.beginPath();
+  ctx.moveTo(W * 0.35, BAR);
+  ctx.quadraticCurveTo(W * 0.62, BAR * 0.2, W + 20, BAR * 0.05);
+  ctx.quadraticCurveTo(W * 0.66, BAR * 0.5, W * 0.42, BAR);
+  ctx.closePath();
+  ctx.fill();
+  ctx.fillStyle = C.code;
+  ctx.fillRect(0, BAR - 4, W, 4);
+  drawLogo(ctx, PAD, BAR / 2, f.display, C);
   ctx.textAlign = "right";
-  ctx.font = `700 30px ${f.body}`;
-  ctx.fillText("Betslip", W - PAD, BAR / 2 - 20);
-  ctx.font = `600 30px ${f.body}`;
-  ctx.fillText(formatStamp(bookedAt), W - PAD, BAR / 2 + 22);
+  ctx.fillStyle = C.onBar;
+  ctx.font = `800 34px ${f.display}`;
+  ctx.fillText("BETSLIP", W - PAD, BAR / 2 - 20);
+  ctx.fillStyle = C.onBarMuted;
+  ctx.font = `600 28px ${f.body}`;
+  ctx.fillText(formatStamp(bookedAt), W - PAD, BAR / 2 + 24);
 
-  // Dark panel: booking code and total odds.
+  // Panel: booking code and total odds.
   ctx.fillStyle = C.panel;
   ctx.fillRect(0, BAR, W, H - BAR);
   ctx.textAlign = "center";
-  ctx.fillStyle = "#FFFFFF";
-  ctx.font = `600 32px ${f.body}`;
-  ctx.fillText("Booking Code", W / 2, BAR + 64);
+  ctx.fillStyle = C.onBarMuted;
+  ctx.font = `700 28px ${f.body}`;
+  ctx.fillText("BOOKING CODE", W / 2, BAR + 64);
   ctx.fillStyle = C.code;
   ctx.font = `800 104px ${f.display}`;
   ctx.fillText(code, W / 2, BAR + 160);
@@ -143,25 +173,29 @@ export async function drawSlipImage(code: string, picks: Pick[], bookedAt: Date 
   const boxW = 620;
   const boxX = (W - boxW) / 2;
   const boxY = BAR + 236;
-  ctx.fillStyle = "rgba(255,255,255,.06)";
+  ctx.fillStyle = C.box;
   ctx.beginPath();
   ctx.roundRect(boxX, boxY, boxW, 104, 12);
   ctx.fill();
-  ctx.fillStyle = C.code;
+  ctx.fillStyle = C.gold;
   ctx.fillRect(boxX, boxY + 100, boxW, 4);
   ctx.textAlign = "left";
-  ctx.fillStyle = "#FFFFFF";
+  ctx.fillStyle = C.onBar;
   ctx.font = `600 32px ${f.body}`;
-  ctx.fillText("Odds", boxX + 32, boxY + 52);
+  ctx.fillText("Total odds", boxX + 32, boxY + 52);
   ctx.textAlign = "right";
+  ctx.fillStyle = C.gold;
   ctx.font = `800 52px ${f.display}`;
   ctx.fillText(formatMilliOdds(combined), boxX + boxW - 32, boxY + 52);
 
-  // White card.
+  // Card, outlined so it stands off the panel in either palette.
   const cx = PAD;
   const cw = W - PAD * 2;
-  ctx.fillStyle = "#FFFFFF";
+  ctx.fillStyle = C.card;
   ctx.fillRect(cx, cardTop, cw, cardH);
+  ctx.strokeStyle = C.cardBorder;
+  ctx.lineWidth = 2;
+  ctx.strokeRect(cx + 1, cardTop + 1, cw - 2, cardH - 2);
   let y = cardTop;
 
   const band = (label: string) => {
@@ -184,8 +218,8 @@ export async function drawSlipImage(code: string, picks: Pick[], bookedAt: Date 
   };
 
   band("Example Bet");
-  row("Stake", formatPesewas(EXAMPLE_STAKE));
-  row("Payout", formatPesewas(potentialPayout(EXAMPLE_STAKE, combined)));
+  row("Stake", amountIn(currency, EXAMPLE_STAKE));
+  row("Payout", amountIn(currency, potentialPayout(EXAMPLE_STAKE, combined)));
   y += 24;
   band("Selections");
 
@@ -211,6 +245,17 @@ export async function drawSlipImage(code: string, picks: Pick[], bookedAt: Date 
     ctx.fillText(fit(ctx, p.marketName, cw - IN * 2), cx + IN - 16, y + 156);
     y += SEL;
   });
+
+  // Footer: where the code works, and the age/harm line a shared betting picture should carry.
+  const fy = cardTop + cardH + FOOT / 2;
+  ctx.textAlign = "left";
+  ctx.fillStyle = C.onBar;
+  ctx.font = `800 30px ${f.display}`;
+  ctx.fillText(location.host, PAD, fy); // the address the slip was booked on
+  ctx.textAlign = "right";
+  ctx.fillStyle = C.onBarMuted;
+  ctx.font = `600 26px ${f.body}`;
+  ctx.fillText("18+ · Play responsibly", W - PAD, fy);
 
   return new Promise((resolve, reject) => canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("toBlob failed"))), "image/png"));
 }

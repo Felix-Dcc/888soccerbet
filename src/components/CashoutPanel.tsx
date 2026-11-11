@@ -1,7 +1,8 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { formatPesewas, toPesewas } from "@/lib/money";
+import { amountIn, localizeMessage, moneyIn, pesewasFrom, unitOf } from "@/lib/currency";
+import { useCurrency } from "./CurrencyContext";
 import { newId } from "@/lib/clientId";
 
 export interface CashoutQuote {
@@ -15,7 +16,6 @@ interface AutoRule {
 }
 
 const MIN = 100n; // GHS 1.00, as the server enforces
-const ghs = (p: bigint | string) => `GHS ${formatPesewas(BigInt(p))}`;
 
 async function send(url: string, body?: object, method = "POST") {
   try {
@@ -26,7 +26,7 @@ async function send(url: string, body?: object, method = "POST") {
   }
 }
 
-const gold = "btn h-11 w-full bg-gold text-sm font-bold text-black hover:bg-gold-600";
+const gold = "btn h-11 w-full bg-gold text-sm font-bold text-gold-ink hover:bg-gold-600";
 const ghost = "btn h-11 border border-line text-sm text-white hover:bg-ink-600";
 
 /**
@@ -49,6 +49,8 @@ export function CashoutPanel({
   options?: boolean;
 }) {
   const router = useRouter();
+  const currency = useCurrency();
+  const ghs = (p: bigint | string) => moneyIn(currency, BigInt(p)); // the player's currency (₦ for Nigerians)
   const [offer, setOffer] = useState<bigint | null>(quote.available && quote.offer ? BigInt(quote.offer) : null);
   const [mode, setMode] = useState<"idle" | "confirm" | "partial" | "auto">("idle");
   const [part, setPart] = useState<bigint>(0n);
@@ -74,7 +76,7 @@ export function CashoutPanel({
       key.current = newId();
       setMode("idle");
       setMsg({ ok: true, text: `Cashed out ${ghs(d.cashout.amount)}` });
-      window.dispatchEvent(new Event("stakra:refresh")); // header balance
+      window.dispatchEvent(new Event("sb:refresh")); // header balance
       router.refresh();
       return;
     }
@@ -86,20 +88,20 @@ export function CashoutPanel({
       return;
     }
     if (d.code === "UNAVAILABLE") setOffer(null);
-    setMsg({ ok: false, text: d.error ?? "Cash out failed" });
+    setMsg({ ok: false, text: localizeMessage(currency, d.error ?? "Cash out failed") });
   }
 
   async function saveAuto() {
     let p: bigint;
     try {
-      p = toPesewas(target);
+      p = pesewasFrom(currency, target);
     } catch {
       return setMsg({ ok: false, text: "Enter an amount, e.g. 150" });
     }
     setBusy(true);
     const { ok, d } = await send(`${base}/auto-cashout`, { targetPesewas: p.toString() });
     setBusy(false);
-    setMsg({ ok, text: ok ? `Auto cash out set at ${ghs(p)}` : (d.error ?? "Couldn't set auto cash out") });
+    setMsg({ ok, text: ok ? `Auto cash out set at ${ghs(p)}` : localizeMessage(currency, d.error ?? "Couldn't set auto cash out") });
     if (ok) {
       setMode("idle");
       router.refresh();
@@ -115,7 +117,7 @@ export function CashoutPanel({
   }
 
   const note = msg && (
-    <p role="status" className={`mt-2 text-center text-sm font-medium ${msg.ok ? "text-lime" : "text-[#8a6100]"}`}>
+    <p role="status" className={`mt-2 text-center text-sm font-medium ${msg.ok ? "text-lime" : "text-warn"}`}>
       {msg.text}
     </p>
   );
@@ -189,7 +191,7 @@ export function CashoutPanel({
             step={1}
             value={Number(part)}
             onChange={(e) => setPart(BigInt(e.target.value))}
-            className="w-full accent-[#F5C451]"
+            className="w-full accent-[rgb(var(--lime))]"
           />
           <div className="grid grid-cols-2 gap-2">
             <button type="button" onClick={() => setMode("confirm")} className={ghost}>
@@ -205,14 +207,14 @@ export function CashoutPanel({
       {mode === "auto" && (
         <div className="space-y-2">
           <label htmlFor={`auto-${betRef}`} className="block text-sm text-fog">
-            Auto cash out at (GHS)
+            Auto cash out at ({unitOf(currency)})
           </label>
           <input
             id={`auto-${betRef}`}
             inputMode="decimal"
             value={target}
             onChange={(e) => setTarget(e.target.value.replace(/[^\d.]/g, ""))}
-            placeholder={formatPesewas((offer * 12n) / 10n).replace(/,/g, "")}
+            placeholder={amountIn(currency, (offer * 12n) / 10n).replace(/,/g, "")}
             className="input w-full"
           />
           <div className="grid grid-cols-2 gap-2">

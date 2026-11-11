@@ -2,11 +2,12 @@ import { SignedOut } from "@/components/SignedOut";
 import { getCurrentUser } from "@/lib/session";
 import { prisma } from "@/lib/db";
 import { userCashBalance } from "@/lib/ledger";
-import { formatPesewas } from "@/lib/money";
+import { moneyIn } from "@/lib/currency";
+import { WalletCard } from "@/components/WalletCard";
 import { WalletPanel } from "@/components/WalletPanel";
-import { minDeposit, reconcilePendingDeposits, verificationState } from "@/lib/wallet";
-import { PageHero } from "@/components/PageHero";
-import { photos } from "@/lib/photos";
+import { depositShortfall, minDeposit, playerCurrency, reconcilePendingDeposits, verificationState } from "@/lib/wallet";
+import { telegramSupport } from "@/lib/support";
+import { getPlatformSettings } from "@/lib/platformSettings";
 
 export const dynamic = "force-dynamic";
 
@@ -16,33 +17,39 @@ export default async function WalletPage() {
   // Settle any deposit whose webhook never came, before showing the balance. Never blocks the page.
   await reconcilePendingDeposits(user.id).catch((e) => console.error("[wallet] reconcile failed:", e instanceof Error ? e.message : e));
 
-  const [balance, intents, verification] = await Promise.all([
+  const [balance, intents, verification, settings, currency, shortfall] = await Promise.all([
     userCashBalance(prisma, user.id),
     prisma.paymentIntent.findMany({ where: { userId: user.id }, orderBy: { createdAt: "desc" }, take: 20 }),
     verificationState(user.id),
+    getPlatformSettings(),
+    playerCurrency(user),
+    depositShortfall(user.id),
   ]);
 
   return (
-    <div className="space-y-6">
-      <PageHero title="Wallet" photo={photos.footballStadiumBlue} position="center 60%">
-        <span aria-label="Balance" className="ml-auto rounded-xl bg-black/50 px-4 py-2 font-display text-2xl font-extrabold tabular-nums text-lime backdrop-blur sm:text-3xl">
-          GHS {formatPesewas(balance)}
-        </span>
-      </PageHero>
+    <div className="space-y-5">
+      <h1 className="section-title text-2xl">Wallet</h1>
 
-      <div className="grid gap-6 lg:grid-cols-2">
-        <WalletPanel
-          minDepositGhs={Number(minDeposit()) / 100}
+      {/* The card sits on top of the deposit form it funds; transactions run alongside. */}
+      <div className="grid items-start gap-6 lg:grid-cols-2">
+        <div className="space-y-6">
+          <WalletCard balance={balance} holder={user.displayName ?? user.email.split("@")[0] ?? user.email} phone={user.phone} since={user.createdAt} currency={currency} />
+          <WalletPanel
+          minDepositGhs={Number(await minDeposit()) / 100}
+          minWithdrawalGhs={settings.minWithdrawalGhs}
+          nigerian={user.country === "NG"}
+          depositRule={{ requiredGhs: settings.minDepositToWithdrawGhs, shortfall: shortfall.toString() }}
+          support={telegramSupport(settings.telegramSupport)}
           isAdmin={user.role !== "USER"}
           verification={{
             required: verification.required,
-            paid: verification.paid,
-            needed: verification.needed,
-            perPaymentGhs: Number(verification.perPayment) / 100,
-            heldGhs: Number(verification.held) / 100,
+            stage: verification.stage,
+            kyc: verification.kyc,
+            ntt: verification.ntt,
             status: verification.status,
           }}
-        />
+          />
+        </div>
 
         <section className="card p-5">
           <h2 className="mb-3 font-semibold text-white">Transactions</h2>
@@ -61,7 +68,7 @@ export default async function WalletPage() {
                   </div>
                   <div className="text-right">
                     <div className={`font-bold tabular-nums ${i.direction === "DEPOSIT" ? "text-win" : "text-fog"}`}>
-                      {i.direction === "DEPOSIT" ? "+" : "−"}GHS {formatPesewas(i.amount)}
+                      {i.direction === "DEPOSIT" ? "+" : "−"}{moneyIn(currency, i.amount)}
                     </div>
                     <StatusTag status={i.status} />
                   </div>

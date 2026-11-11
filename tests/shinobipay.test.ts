@@ -5,7 +5,7 @@ import { PspError } from "../src/lib/providers/payments/types";
 
 const NOW = 1_800_000_000;
 const SECRET = "whsec_test123";
-const sp = () => new ShinobiPayProvider("sk_test_abc", SECRET, "https://api.shinobi.test", "https://kingzbet.live", () => NOW);
+const sp = () => new ShinobiPayProvider("sk_test_abc", SECRET, "https://api.shinobi.test", "https://888soccerbet.com", () => NOW);
 const reply = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status });
 function stubFetch(...replies: Response[]) {
   const f = vi.fn(async (..._args: unknown[]) => replies.shift() ?? reply({}, 500));
@@ -79,10 +79,12 @@ describe("ShinobiPay webhooks", () => {
     expect(f).not.toHaveBeenCalled();
   });
 
-  it("applies nothing unless the API agrees, and asks for a retry when it's down", async () => {
+  it("applies nothing unless the API agrees, and asks for a retry when it's down or not final yet", async () => {
     const body = event();
     stubFetch(reply({ status: "processing", amount: 5050, currency: "GHS" }));
-    expect(await sp().verifyWebhook(body, sign(body))).toEqual({ ok: true, event: null });
+    await expect(sp().verifyWebhook(body, sign(body))).rejects.toThrow(PspError); // retried, not dropped
+    stubFetch(reply({ status: "failed", amount: 5050, currency: "GHS" }));
+    expect(await sp().verifyWebhook(body, sign(body))).toEqual({ ok: true, event: null }); // says succeeded, API says failed: ignored
     stubFetch(reply({ status: "succeeded", amount: 5050, currency: "GHS", reference: "DEP-OTHER" }));
     expect(await sp().verifyWebhook(body, sign(body))).toEqual({ ok: true, event: null });
     stubFetch(reply({}, 503));

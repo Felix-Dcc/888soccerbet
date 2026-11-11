@@ -5,6 +5,7 @@ import { houseAccountId, userAccountId, postTransaction } from "../src/lib/ledge
 import { toPesewas } from "../src/lib/money";
 import { syncFixtures } from "../src/lib/sync";
 import { newAdminReferralCode } from "../src/lib/admins";
+import { ensureSuperAdmin } from "../src/lib/superAdmin";
 
 async function main() {
   // House singleton accounts.
@@ -12,13 +13,17 @@ async function main() {
   await houseAccountId(prisma, "HOUSE_PNL");
   await houseAccountId(prisma, "PAYMENT_CLEARING");
 
+  // Databases seeded before the Bet Zone rename keep their accounts, moved to the new addresses.
+  for (const who of ["admin", "demo"])
+    await prisma.user.updateMany({ where: { email: `${who}@888soccerbet.com` }, data: { email: `${who}@betzone.com.co` } });
+
   const admin = await prisma.user.upsert({
-    where: { email: "admin@kingsbet.gh" },
+    where: { email: "admin@betzone.com.co" },
     create: {
-      email: "admin@kingsbet.gh",
+      email: "admin@betzone.com.co",
       passwordHash: hashPassword("Admin123!"),
       role: "SUPER_ADMIN",
-      displayName: "Kingz Bet Admin",
+      displayName: "Bet Zone Admin",
       kycStatus: "VERIFIED",
       dateOfBirth: new Date("1990-01-01"),
       phone: "0240000002",
@@ -28,18 +33,22 @@ async function main() {
   });
 
   const demo = await prisma.user.upsert({
-    where: { email: "demo@kingsbet.gh" },
+    where: { email: "demo@betzone.com.co" },
     create: {
-      email: "demo@kingsbet.gh",
+      email: "demo@betzone.com.co",
       passwordHash: hashPassword("Demo1234!"),
       displayName: "Demo Player",
       kycStatus: "VERIFIED",
       dateOfBirth: new Date("1995-06-15"),
       phone: "0240000001",
-      referralCode: "DEMOKING",
+      referralCode: "DEMOBZ",
     },
-    update: { phone: "0240000001" },
+    update: { phone: "0240000001", referralCode: "DEMOBZ" },
   });
+
+  // A second super admin whose password comes from the environment, never from this file.
+  if (process.env.SUPER_ADMIN_EMAIL && process.env.SUPER_ADMIN_PASSWORD)
+    console.log("Super admin:", process.env.SUPER_ADMIN_EMAIL, await ensureSuperAdmin(process.env.SUPER_ADMIN_EMAIL, process.env.SUPER_ADMIN_PASSWORD));
 
   // Give the demo player a starting balance via a proper DEPOSIT ledger transaction.
   const already = await prisma.ledgerTransaction.findUnique({ where: { reference: "seed_deposit:demo" } });
@@ -54,7 +63,7 @@ async function main() {
 
   const sync = await syncFixtures();
   console.log("Seeded:", { admin: admin.email, demo: demo.email, ...sync });
-  console.log("Logins -> admin@kingsbet.gh or 0240000002 / Admin123!   demo@kingsbet.gh or 0240000001 / Demo1234!   demo referral: /register?ref=DEMOKING");
+  console.log("Logins -> admin@betzone.com.co or 0240000002 / Admin123!   demo@betzone.com.co or 0240000001 / Demo1234!   demo referral: /register?ref=DEMOBZ");
 }
 
 main()

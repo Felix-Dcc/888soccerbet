@@ -1,9 +1,10 @@
 /**
  * Clearing the demo data left over from building and testing, keeping real money.
  *
- * Demo money = payments through the "sandbox" provider, plus everything done by players who never put
- * real money in (their bets, cash outs, verification releases). That fake money is removed from whoever
- * holds it, real sign-up or not. A player with a real payment keeps every bet; only their sandbox payments go.
+ * Real money = a SUCCEEDED ShinobiPay deposit, or any ShinobiPay withdrawal (money already left); nothing else is proof. Demo money = every other payment
+ * (sandbox, other providers), every admin balance adjustment, plus everything done by players without a
+ * real deposit (their bets, cash outs, verification releases). That fake money is removed from whoever
+ * holds it, real sign-up or not. A player with a real deposit keeps every bet; only their non-ShinobiPay money goes.
  * Demo accounts = only the ones built for testing, recognised by their address. Somebody who signed
  * up for real and never deposited keeps their account; they just lose the fake money.
  * A real payment (any live provider) and the ledger behind it is never touched.
@@ -19,17 +20,25 @@
  */
 import { Prisma } from "@prisma/client";
 import { prisma } from "./db";
+import { NG_BANK_PROVIDER } from "./nigeria";
 
 /** Addresses only ever used for testing. A real sign-up never matches, so it is never removed. */
 const TEST_ACCOUNT = /@(example\.test|t\.gh|test\.gh)$|^(verifytest|refplayer|partner\.e2e|local\.tester|demo@)|^(gggg|ron)@gmail\.com$/i; // last two: the owner's own test sign-ups on live
 export const isTestAccount = (email: string) => TEST_ACCOUNT.test(email);
+
+/** The payment providers whose payments count as real money: ShinobiPay (Ghana), Flutterwave Naira deposits and Nigerian bank payouts. */
+const REAL_PROVIDERS = ["shinobipay", "flutterwave_ng", NG_BANK_PROVIDER];
 
 export interface CleanupPlan {
   realPayments: { provider: string; direction: string; status: string; amount: bigint; email: string }[];
   keptPlayers: { email: string; balanceAfter: bigint; realPaymentsTotal: bigint }[];
   keptStaff: string[];
   keptPlayersWithoutDeposits: string[];
-  keptAdjustments: { email: string; amount: bigint }[];
+  removedAdjustments: { email: string; amount: bigint }[];
+  /** ShinobiPay payments by players with no successful deposit: kept (they are the provider's record), shown for review. */
+  unprovenShinobi: { direction: string; status: string; amount: bigint; email: string }[];
+  /** Commission payouts recorded to admins (outside the ledger): shown for review, not removed. */
+  commissionPayouts: { email: string; amount: bigint }[];
   demoPayments: { count: number; total: bigint };
   bets: { remove: number; keep: number };
   ledger: { remove: number; keep: number };
@@ -58,9 +67,10 @@ async function assess(): Promise<Doomed> {
   const bets = await prisma.bet.findMany({ select: { id: true, userId: true } });
   const email = (id: string) => users.find((u) => u.id === id)?.email ?? id;
 
-  const realPays = pays.filter((p) => p.provider !== "sandbox");
-  const demoPays = pays.filter((p) => p.provider === "sandbox");
-  const realPlayers = new Set(realPays.map((p) => p.userId));
+  const realPays = pays.filter((p) => REAL_PROVIDERS.includes(p.provider));
+  const demoPays = pays.filter((p) => !REAL_PROVIDERS.includes(p.provider));
+  // A ShinobiPay withdrawal moved real money out, so its ledger can't be unwound: that player is kept too.
+  const realPlayers = new Set(realPays.filter((p) => p.direction === "WITHDRAWAL" || p.status === "SUCCEEDED").map((p) => p.userId));
   // Only test accounts go. Never a super admin, and never anyone who has put real money in.
   const demoUsers = users.filter((u) => isTestAccount(u.email) && u.role !== "SUPER_ADMIN" && !realPlayers.has(u.id));
   const demoUserIds = new Set(demoUsers.map((u) => u.id));
@@ -71,17 +81,17 @@ async function assess(): Promise<Doomed> {
   const noRealMoney = new Set(users.filter((u) => !realPlayers.has(u.id)).map((u) => u.id));
   const demoBets = bets.filter((b) => noRealMoney.has(b.userId));
 
-  // Every ledger transaction that touches a demo account or a player with no real money, or came from a
-  // sandbox payment. An admin's balance adjustment to a kept account is a deliberate decision: it stays, and is listed.
+  // Every ledger transaction that touches a demo account or a player with no real money, came from a
+  // non-ShinobiPay payment, or is an admin balance adjustment (money that never came through ShinobiPay).
   const entries = await prisma.ledgerEntry.findMany({ select: { transactionId: true, amount: true, account: { select: { userId: true, kind: true } } } });
   const touching = (ids: Set<string>) => new Set(entries.filter((e) => e.account.userId && ids.has(e.account.userId)).map((e) => e.transactionId));
   const byDemoAccount = touching(demoUserIds);
   const byNoRealMoney = touching(noRealMoney);
   const demoRefs = new Set(demoPays.flatMap((p) => [`deposit:${p.ref}`, `wdr_hold:${p.ref}`, `wdr_reverse:${p.ref}`, `manual:${p.ref}`, `refused:${p.ref}`]));
   const txs = await prisma.ledgerTransaction.findMany({ select: { id: true, reference: true, kind: true } });
-  const doomed = txs.filter((t) => byDemoAccount.has(t.id) || demoRefs.has(t.reference) || (byNoRealMoney.has(t.id) && t.kind !== "ADMIN_ADJUSTMENT"));
-  const keptAdjustments = txs
-    .filter((t) => t.kind === "ADMIN_ADJUSTMENT" && !byDemoAccount.has(t.id))
+  const doomed = txs.filter((t) => byDemoAccount.has(t.id) || demoRefs.has(t.reference) || byNoRealMoney.has(t.id) || t.kind === "ADMIN_ADJUSTMENT");
+  const removedAdjustments = txs
+    .filter((t) => t.kind === "ADMIN_ADJUSTMENT")
     .flatMap((t) => entries.filter((e) => e.transactionId === t.id && e.account.userId).map((e) => ({ email: email(e.account.userId!), amount: e.amount })));
   const doomedIds = new Set(doomed.map((t) => t.id));
   const removedCash = (userId: string) =>
@@ -97,8 +107,11 @@ async function assess(): Promise<Doomed> {
   );
 
   const actors = new Set((await prisma.auditLog.findMany({ where: { actorUserId: { not: null } }, select: { actorUserId: true }, distinct: ["actorUserId"] })).map((a) => a.actorUserId!));
-  const toDelete = demoUsers.filter((u) => !actors.has(u.id));
-  const toClose = demoUsers.filter((u) => actors.has(u.id) && u.status !== "CLOSED");
+  // ShinobiPay payment rows are the provider's record and stay, so their owner can only be closed too.
+  const hasRealPay = new Set(realPays.map((p) => p.userId));
+  const mustClose = (id: string) => actors.has(id) || hasRealPay.has(id);
+  const toDelete = demoUsers.filter((u) => !mustClose(u.id));
+  const toClose = demoUsers.filter((u) => mustClose(u.id) && u.status !== "CLOSED");
 
   return {
     txIds: doomed.map((t) => t.id),
@@ -118,14 +131,16 @@ async function assess(): Promise<Doomed> {
         })),
       keptStaff: staff.map((u) => u.email),
       keptPlayersWithoutDeposits: users.filter((u) => u.role === "USER" && !realPlayers.has(u.id) && !demoUserIds.has(u.id)).map((u) => u.email),
-      keptAdjustments,
+      removedAdjustments,
+      unprovenShinobi: realPays.filter((p) => !realPlayers.has(p.userId)).map((p) => ({ direction: p.direction, status: p.status, amount: p.amount, email: email(p.userId) })),
+      commissionPayouts: (await prisma.commissionPayout.findMany({ select: { adminId: true, amount: true } })).map((c) => ({ email: email(c.adminId), amount: c.amount })),
       demoPayments: { count: demoPays.length, total: demoPays.reduce((n, p) => n + p.amount, 0n) },
       bets: { remove: demoBets.length, keep: bets.length - demoBets.length },
       ledger: { remove: doomed.length, keep: txs.length - doomed.length },
       deleteAccounts: toDelete.map((u) => u.email),
       closeAccounts: toClose.map((u) => u.email),
       manualFixtures: await prisma.fixture.count({ where: demoFixtures(demoBets.map((b) => b.id)) }),
-      sandboxWebhooks: await prisma.webhookEvent.count({ where: { provider: "sandbox" } }),
+      sandboxWebhooks: await prisma.webhookEvent.count({ where: { provider: { notIn: REAL_PROVIDERS } } }),
     },
   };
 }
@@ -138,11 +153,13 @@ export async function runDemoCleanup(): Promise<CleanupPlan> {
   const d = await assess();
   await prisma.$transaction(
     async (tx) => {
+      const refsNow = async () => new Set((await tx.ledgerTransaction.findMany({ select: { reference: true } })).map((t) => t.reference));
+      const refsBefore = await refsNow();
       await tx.ledgerEntry.deleteMany({ where: { transactionId: { in: d.txIds } } });
       await tx.ledgerTransaction.deleteMany({ where: { id: { in: d.txIds } } });
       await tx.bet.deleteMany({ where: { id: { in: d.demoBetIds } } }); // their selections and cash outs cascade
-      await tx.paymentIntent.deleteMany({ where: { provider: "sandbox" } });
-      await tx.webhookEvent.deleteMany({ where: { provider: "sandbox" } });
+      await tx.paymentIntent.deleteMany({ where: { provider: { notIn: REAL_PROVIDERS } } });
+      await tx.webhookEvent.deleteMany({ where: { provider: { notIn: REAL_PROVIDERS } } });
       await tx.fixture.deleteMany({ where: demoFixtures(d.demoBetIds) });
       await tx.ledgerAccount.deleteMany({ where: { userId: { in: d.demoUserIds } } });
       await tx.user.updateMany({ where: { id: { in: d.closeIds } }, data: { status: "CLOSED" } });
@@ -159,8 +176,9 @@ export async function runDemoCleanup(): Promise<CleanupPlan> {
       if (negative) throw new Error(`a player would be left owing money (${negative.bal}) — their stake came from demo funds`);
 
       // Real money is never touched: every real payment keeps the ledger transaction behind it.
-      const keptRefs = new Set((await tx.ledgerTransaction.findMany({ select: { reference: true } })).map((t) => t.reference));
-      const lost = d.realPays.find((p) => p.status === "SUCCEEDED" && !keptRefs.has(p.direction === "DEPOSIT" ? `deposit:${p.ref}` : `wdr_hold:${p.ref}`));
+      const keptRefs = await refsNow();
+      const ledgerRef = (p: { ref: string; direction: string }) => (p.direction === "DEPOSIT" ? `deposit:${p.ref}` : `wdr_hold:${p.ref}`);
+      const lost = d.realPays.find((p) => p.status === "SUCCEEDED" && refsBefore.has(ledgerRef(p)) && !keptRefs.has(ledgerRef(p)));
       if (lost) throw new Error(`a real payment (${lost.ref}) would lose its ledger entries`);
     },
     { timeout: 120_000, isolationLevel: Prisma.TransactionIsolationLevel.Serializable },

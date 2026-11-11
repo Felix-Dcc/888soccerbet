@@ -23,9 +23,11 @@ export const PERMISSIONS = {
   "odds.sync": "Run the odds sync and settle job",
   "referrals.view": "See your own referred players and their activity",
   "referrals.view_all": "See every admin's referral network",
+  "commission.view": "See your own referral commission and payouts",
   "admins.view": "See administrators and their performance",
   "audit_logs.view": "Read the audit log",
   "system.view": "See system health and provider status",
+  "system.manage": "Change platform settings and thresholds",
 } as const;
 
 export type Permission = keyof typeof PERMISSIONS;

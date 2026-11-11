@@ -35,7 +35,7 @@ export default function VerifyEmailPage() {
     try {
       const r = await fetch("/api/account/verify-email", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ code }) });
       if (r.ok) {
-        window.dispatchEvent(new Event("stakra:refresh"));
+        window.dispatchEvent(new Event("sb:refresh"));
         router.push("/");
         router.refresh();
         return;
@@ -63,7 +63,7 @@ export default function VerifyEmailPage() {
   return (
     <AuthShell title="Confirm your email">
       {state === "loading" ? (
-        <div className="h-40 animate-pulse rounded-lg bg-white/[0.04]" aria-busy="true" />
+        <div className="h-40 animate-pulse rounded-lg bg-ink-500" aria-busy="true" />
       ) : state === "signedOut" ? (
         <div className="space-y-4">
           <p className="text-sm text-fog">Log in to confirm your email.</p>

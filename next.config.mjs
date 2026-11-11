@@ -12,6 +12,10 @@ const nextConfig = {
     formats: ["image/avif", "image/webp"],
     minimumCacheTTL: 60 * 60 * 24 * 7, // badges rarely change
   },
+  // Short admin invite links (betzone.com.co/invite/CODE) are served by the invite page.
+  async rewrites() {
+    return [{ source: "/invite/:token", destination: "/account/invite/:token" }];
+  },
   async headers() {
     return [
       {

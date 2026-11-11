@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { formatMilliOdds, formatPesewas } from "@/lib/money";
+import { formatMilliOdds } from "@/lib/money";
+import { amountIn, GHS_CURRENCY, moneyIn, unitOf, type Currency } from "@/lib/currency";
 import { formatStamp } from "@/lib/time";
 import { legOutcome, ticketTotals, type Ticket } from "@/lib/tickets";
 import { Trophy } from "./BetTicket";
@@ -16,10 +17,10 @@ const legTime = new Intl.DateTimeFormat("en-GB", {
 });
 
 // Win green for indicators; the brand lime stays on buttons.
-const WIN = "text-[#33D17A]";
+const WIN = "text-teal";
 const STATUS: Record<string, { label: string; tone: string }> = {
   WON: { label: "Won", tone: WIN },
-  LOST: { label: "Lost", tone: "text-[#FF6B6B]" },
+  LOST: { label: "Lost", tone: "text-danger" },
   VOID: { label: "Void", tone: "text-fog" },
   REJECTED: { label: "Rejected", tone: "text-fog" },
   PENDING: { label: "Running", tone: "text-gold" },
@@ -28,9 +29,10 @@ const STATUS: Record<string, { label: string; tone: string }> = {
 export type CashoutProps = { quote: CashoutQuote; auto: { target: string; above: boolean } | null; partialsLeft: number };
 
 /** Running bets get the light "running" slip; settled ones the dark result ticket with its verify code. */
-export function TicketView({ bet, verifyCode, owner, cashout }: { bet: Ticket; verifyCode?: string; owner: boolean; cashout?: CashoutProps }) {
-  if (bet.status === "PENDING") return <RunningTicket bet={bet} cashout={owner ? cashout : undefined} />;
-  return <SettledTicket bet={bet} verifyCode={verifyCode!} owner={owner} />;
+/** currency: the bettor's (Naira for a Nigerian player), so the ticket reads the same for them and anyone verifying it. */
+export function TicketView({ bet, verifyCode, owner, cashout, currency = GHS_CURRENCY }: { bet: Ticket; verifyCode?: string; owner: boolean; cashout?: CashoutProps; currency?: Currency }) {
+  if (bet.status === "PENDING") return <RunningTicket bet={bet} cashout={owner ? cashout : undefined} currency={currency} />;
+  return <SettledTicket bet={bet} verifyCode={verifyCode!} owner={owner} currency={currency} />;
 }
 
 /**
@@ -39,14 +41,14 @@ export function TicketView({ bet, verifyCode, owner, cashout }: { bet: Ticket; v
  * the bet record. `owner` adds the Share/Verify actions; the public page shows the same ticket
  * without them, and never anything about who placed it.
  */
-function SettledTicket({ bet, verifyCode, owner }: { bet: Ticket; verifyCode: string; owner: boolean }) {
+function SettledTicket({ bet, verifyCode, owner, currency }: { bet: Ticket; verifyCode: string; owner: boolean; currency: Currency }) {
   const status = STATUS[bet.status] ?? STATUS.PENDING!;
   const won = bet.status === "WON";
   const { cashed, placedStake, ret } = ticketTotals(bet);
-  const amount = formatPesewas(ret ?? bet.potentialPayout);
+  const amount = amountIn(currency, ret ?? bet.potentialPayout);
 
   return (
-    <article aria-label={`Ticket ${bet.ref}`} className="theme-dark overflow-hidden rounded-2xl bg-[#14171C] text-white shadow-lift ring-1 ring-white/[0.06]">
+    <article aria-label={`Ticket ${bet.ref}`} className="overflow-hidden rounded-2xl bg-ink-700 text-white shadow-lift ring-1 ring-line">
       <div className="p-4 sm:p-6">
         <div className="flex items-center justify-between gap-3 text-xs tabular-nums text-fog-muted">
           <span>Ticket ID: {bet.ref}</span>
@@ -63,18 +65,18 @@ function SettledTicket({ bet, verifyCode, owner }: { bet: Ticket; verifyCode: st
           </span>
         </div>
         <div className="mt-1 flex items-baseline justify-between gap-3">
-          <span className="text-sm text-fog">Total Kingz Bet Return</span>
+          <span className="text-sm text-fog">Total Bet Zone Return</span>
           <span className={`whitespace-nowrap font-display text-[28px] font-extrabold leading-tight tabular-nums ${won ? WIN : "text-white"}`}>
-            <span className="mr-1 text-sm font-bold opacity-70">GHS</span>
+            <span className="mr-1 text-sm font-bold opacity-70">{unitOf(currency)}</span>
             {amount}
           </span>
         </div>
 
         <dl className="mt-4 space-y-2 border-t border-white/[0.08] pt-4 text-[15px]">
-          <Row label="Total Stake" value={formatPesewas(placedStake)} />
+          <Row label="Total Stake" value={amountIn(currency, placedStake)} />
           <Row label="Total Odds" value={formatMilliOdds(bet.combinedMilliOdds)} />
-          {cashed > 0n && <Row label="Cashed out" value={formatPesewas(cashed)} />}
-          {bet.bonusAmount > 0n && <Row label="Total Bonus" value={formatPesewas(bet.bonusAmount)} />}
+          {cashed > 0n && <Row label="Cashed out" value={amountIn(currency, cashed)} />}
+          {bet.bonusAmount > 0n && <Row label="Total Bonus" value={amountIn(currency, bet.bonusAmount)} />}
         </dl>
 
         {bet.cashouts.length > 0 && (
@@ -85,7 +87,7 @@ function SettledTicket({ bet, verifyCode, owner }: { bet: Ticket; verifyCode: st
                   {formatStamp(c.createdAt)} · {c.full ? "Full" : "Partial"}
                   {c.auto ? " (auto)" : ""}
                 </span>
-                <span className="font-semibold text-white">GHS {formatPesewas(c.amount)}</span>
+                <span className="font-semibold text-white">{moneyIn(currency, c.amount)}</span>
               </li>
             ))}
           </ul>
@@ -93,7 +95,7 @@ function SettledTicket({ bet, verifyCode, owner }: { bet: Ticket; verifyCode: st
 
         {owner && (
           <div className="mt-5 grid grid-cols-2 gap-3">
-            <ShareTicket code={verifyCode} won={won} amount={amount} />
+            <ShareTicket code={verifyCode} won={won} amount={moneyIn(currency, ret ?? bet.potentialPayout)} />
             <Link href={`/verify/${verifyCode}`} className="btn h-12 border border-white/15 bg-white/[0.06] text-[15px] text-white hover:bg-white/[0.1]">
               <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
                 <path d="M12 3 4 6v6c0 4.5 3.4 8.4 8 9 4.6-.6 8-4.5 8-9V6l-8-3Z" />
@@ -138,7 +140,7 @@ function SettledTicket({ bet, verifyCode, owner }: { bet: Ticket; verifyCode: st
                   </div>
                 )}
                 <dl className="relative mt-3 grid grid-cols-[4.5rem_1fr] gap-x-3 gap-y-1 overflow-hidden rounded-md bg-white/[0.06] px-3 py-3 text-[15px]">
-                  {legWon && <Trophy className="pointer-events-none absolute right-3 top-1/2 h-14 w-14 -translate-y-1/2 text-[#33D17A]/15" />}
+                  {legWon && <Trophy className="pointer-events-none absolute right-3 top-1/2 h-14 w-14 -translate-y-1/2 text-teal/15" />}
                   <dt className="text-right text-fog">Pick</dt>
                   <dd className="flex min-w-0 items-center gap-1.5 font-semibold">
                     <span className="min-w-0">
@@ -150,7 +152,7 @@ function SettledTicket({ bet, verifyCode, owner }: { bet: Ticket; verifyCode: st
                       </span>
                     )}
                     {leg.status === "LOST" && (
-                      <span className="text-[#FF6B6B]" aria-label="lost">
+                      <span className="text-danger" aria-label="lost">
                         ✕
                       </span>
                     )}
@@ -183,13 +185,13 @@ function LegMark({ status }: { status: string }) {
   const base = "grid h-7 w-7 place-items-center rounded-full text-sm font-bold";
   if (status === "WON")
     return (
-      <span className={`${base} bg-[#33D17A] text-[#0B1A10]`} aria-label="Won">
+      <span className={`${base} bg-teal text-lime-ink`} aria-label="Won">
         ✓
       </span>
     );
   if (status === "LOST")
     return (
-      <span className={`${base} bg-[#FF6B6B] text-white`} aria-label="Lost">
+      <span className={`${base} bg-danger text-snow`} aria-label="Lost">
         ✕
       </span>
     );
@@ -207,7 +209,7 @@ function LegMark({ status }: { status: string }) {
  * progress through the selections, each one's live state, and cash out at the bottom (the same
  * button as on My Bets). No verify code or sharing until it is settled.
  */
-function RunningTicket({ bet, cashout }: { bet: Ticket; cashout?: CashoutProps }) {
+function RunningTicket({ bet, cashout, currency }: { bet: Ticket; cashout?: CashoutProps; currency: Currency }) {
   const { cashed, placedStake } = ticketTotals(bet);
   const total = bet.selections.length;
   const done = bet.selections.filter((l) => l.status !== "OPEN").length;
@@ -222,7 +224,7 @@ function RunningTicket({ bet, cashout }: { bet: Ticket; cashout?: CashoutProps }
         </div>
         <div className="mt-3 flex items-center justify-between gap-3">
           <h2 className="font-display text-xl font-bold text-white">{bet.type === "ACCUMULATOR" ? "Multiple" : "Single"}</h2>
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-gold/15 px-2.5 py-1 text-xs font-bold uppercase tracking-wide text-[#8a6100]">
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-gold/15 px-2.5 py-1 text-xs font-bold uppercase tracking-wide text-gold">
             <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-gold" aria-hidden />
             Running
           </span>
@@ -230,8 +232,8 @@ function RunningTicket({ bet, cashout }: { bet: Ticket; cashout?: CashoutProps }
         <div className="mt-2 flex items-baseline justify-between gap-3">
           <span className="text-sm text-fog">Potential Win</span>
           <span className="whitespace-nowrap font-display text-[26px] font-extrabold leading-tight tabular-nums text-white">
-            <span className="mr-1 text-sm font-bold text-fog">GHS</span>
-            {formatPesewas(bet.potentialPayout)}
+            <span className="mr-1 text-sm font-bold text-fog">{unitOf(currency)}</span>
+            {amountIn(currency, bet.potentialPayout)}
           </span>
         </div>
 
@@ -252,10 +254,10 @@ function RunningTicket({ bet, cashout }: { bet: Ticket; cashout?: CashoutProps }
         </div>
 
         <dl className="mt-4 grid grid-cols-2 gap-3 text-sm">
-          <Stat label="Total Stake" value={formatPesewas(placedStake)} />
+          <Stat label="Total Stake" value={amountIn(currency, placedStake)} />
           <Stat label="Total Odds" value={formatMilliOdds(bet.combinedMilliOdds)} />
-          {cashed > 0n && <Stat label="Stake still running" value={formatPesewas(bet.stake)} />}
-          {cashed > 0n && <Stat label="Cashed out so far" value={formatPesewas(cashed)} />}
+          {cashed > 0n && <Stat label="Stake still running" value={amountIn(currency, bet.stake)} />}
+          {cashed > 0n && <Stat label="Cashed out so far" value={amountIn(currency, cashed)} />}
         </dl>
       </div>
 
@@ -291,7 +293,7 @@ function RunningTicket({ bet, cashout }: { bet: Ticket; cashout?: CashoutProps }
                 </Link>
                 <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
                   <span className="rounded-md bg-ink-600 px-2 py-0.5 font-semibold text-white">
-                    {leg.selectionName} <span className="tabular-nums text-lime">@{formatMilliOdds(leg.milliOddsAtPlacement)}</span>
+                    {leg.selectionName} <span className="tabular-nums text-gold">@{formatMilliOdds(leg.milliOddsAtPlacement)}</span>
                   </span>
                   <span className="text-fog">{leg.marketName}</span>
                 </div>
@@ -309,7 +311,7 @@ function RunningTicket({ bet, cashout }: { bet: Ticket; cashout?: CashoutProps }
               <span>
                 {formatStamp(c.createdAt)} · Partial cash out{c.auto ? " (auto)" : ""}
               </span>
-              <span className="font-semibold text-white">GHS {formatPesewas(c.amount)}</span>
+              <span className="font-semibold text-white">{moneyIn(currency, c.amount)}</span>
             </li>
           ))}
         </ul>
@@ -338,7 +340,7 @@ function RunningMark({ status, live }: { status: string; live: boolean }) {
   const base = "grid h-6 w-6 place-items-center rounded-full text-xs font-bold";
   if (status === "WON")
     return (
-      <span className={`${base} bg-lime text-lime-ink`} aria-label="Won">
+      <span className={`${base} bg-teal text-lime-ink`} aria-label="Won">
         ✓
       </span>
     );

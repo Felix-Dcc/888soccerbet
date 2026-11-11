@@ -21,15 +21,17 @@ function show(p: CleanupPlan) {
   console.log(`  staff kept:   ${list(p.keptStaff)}`);
   console.log(`  sign-ups kept with no deposit (${p.keptPlayersWithoutDeposits.length}): ${list(p.keptPlayersWithoutDeposits)}`);
   console.log(`  bets by real players:   ${p.bets.keep}`);
-  for (const a of p.keptAdjustments) console.log(`  admin adjustment kept: ${ghs(a.amount)}  ${a.email}`);
+  for (const s of p.unprovenShinobi) console.log(`  REVIEW shinobipay ${s.direction} ${s.status} ${ghs(s.amount)}  ${s.email}  (no successful deposit; record kept)`);
+  for (const c of p.commissionPayouts) console.log(`  REVIEW commission payout recorded: ${ghs(c.amount)}  ${c.email}  (not removed)`);
   console.log("\nTO REMOVE");
-  console.log(`  demo payments:          ${p.demoPayments.count}  (${ghs(p.demoPayments.total)} of fake money)`);
+  for (const a of p.removedAdjustments) console.log(`  admin adjustment:       ${ghs(a.amount)}  ${a.email}`);
+  console.log(`  non-ShinobiPay payments: ${p.demoPayments.count}  (${ghs(p.demoPayments.total)} of fake money)`);
   console.log(`  demo bets:              ${p.bets.remove}`);
   console.log(`  ledger transactions:    ${p.ledger.remove} of ${p.ledger.remove + p.ledger.keep}  (keeping ${p.ledger.keep})`);
   console.log(`  demo accounts deleted:  ${p.deleteAccounts.length}  ${list(p.deleteAccounts)}`);
   console.log(`  demo accounts closed:   ${p.closeAccounts.length}  ${list(p.closeAccounts)}  (named in the audit trail, which can't be edited)`);
   console.log(`  generated/manual games: ${p.manualFixtures}`);
-  console.log(`  sandbox webhook events: ${p.sandboxWebhooks}`);
+  console.log(`  non-ShinobiPay webhook events: ${p.sandboxWebhooks}`);
 }
 
 async function main() {

@@ -3,6 +3,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { newId } from "@/lib/clientId";
 import { ConfirmDialog, send } from "./ConfirmDialog";
+import { CopyButton } from "@/components/CopyButton";
 
 type PermInfo = { key: string; label: string };
 type RoleInfo = { id: string; name: string; permissions: string[] };
@@ -33,21 +34,32 @@ function PermissionPicker({ all, value, onChange, idPrefix }: { all: PermInfo[];
 }
 
 /** Super admin: create an administrator, then hand them their single-use setup link. */
-export function CreateAdminForm({ perms, roles }: { perms: PermInfo[]; roles: RoleInfo[] }) {
+export function CreateAdminForm({ perms, roles, defaultCommissionBp }: { perms: PermInfo[]; roles: RoleInfo[]; defaultCommissionBp: number }) {
   const router = useRouter();
-  const [f, setF] = useState({ email: "", displayName: "", username: "", role: "ADMIN" as "ADMIN" | "SUPER_ADMIN", adminRoleId: "" });
-  const [grants, setGrants] = useState<string[]>(["dashboard.view", "referrals.view"]);
+  const [f, setF] = useState({ role: "ADMIN" as "ADMIN" | "SUPER_ADMIN", adminRoleId: "" });
+  const [useDefaultRate, setUseDefaultRate] = useState(true);
+  const [rate, setRate] = useState(String(defaultCommissionBp / 100));
+  // 0 to 100 with at most 2 decimals, or null when invalid.
+  const ratePct = /^\d{1,3}(\.\d{1,2})?$/.test(rate.trim()) && Number(rate) <= 100 ? Number(rate) : null;
+  const rateLabel = useDefaultRate ? `the default rate (${defaultCommissionBp / 100}%)` : `${ratePct ?? 0}% commission`;
+  const [grants, setGrants] = useState<string[]>(["dashboard.view", "referrals.view", "commission.view"]);
   const [confirm, setConfirm] = useState(false);
   const [link, setLink] = useState<string | null>(null);
-  const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => setF((s) => ({ ...s, [k]: e.target.value }));
+  const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLSelectElement>) => setF((s) => ({ ...s, [k]: e.target.value }));
 
   if (link)
     return (
       <div role="status" className="space-y-3">
-        <p className="text-sm text-white">Admin created. Send them this single-use link to set their password (it expires in 72 hours and is shown only once):</p>
-        <input readOnly value={link} onFocus={(e) => e.target.select()} className="input font-mono text-xs" aria-label="Setup link" />
-        <button type="button" className="btn-ghost px-4 py-2 text-sm" onClick={() => { setLink(null); setF({ email: "", displayName: "", username: "", role: "ADMIN", adminRoleId: "" }); }}>
-          Create another
+        <p className="text-sm text-white">
+          Invite link ready. Send it to the new admin: they open it, choose their own email and password, and get the access you picked. It works once, expires in 72 hours, and is shown
+          only now.
+        </p>
+        <div className="flex gap-2">
+          <input readOnly value={link} onFocus={(e) => e.target.select()} className="input min-w-0 flex-1 font-mono text-xs" aria-label="Admin invite link" />
+          <CopyButton text={link} label="Copy link" />
+        </div>
+        <button type="button" className="btn-ghost px-4 py-2 text-sm" onClick={() => setLink(null)}>
+          Generate another
         </button>
       </div>
     );
@@ -60,20 +72,7 @@ export function CreateAdminForm({ perms, roles }: { perms: PermInfo[]; roles: Ro
         setConfirm(true);
       }}
     >
-      <div className="grid gap-3 sm:grid-cols-3">
-        <div>
-          <label className="label" htmlFor="na-name">Name</label>
-          <input id="na-name" required minLength={2} maxLength={60} className="input" value={f.displayName} onChange={set("displayName")} />
-        </div>
-        <div>
-          <label className="label" htmlFor="na-user">Username</label>
-          <input id="na-user" required pattern="[A-Za-z0-9_.\-]{3,24}" title="3-24 letters, numbers, . _ -" className="input" value={f.username} onChange={set("username")} />
-        </div>
-        <div>
-          <label className="label" htmlFor="na-email">Email</label>
-          <input id="na-email" type="email" required className="input" value={f.email} onChange={set("email")} />
-        </div>
-      </div>
+      <p className="text-sm text-fog">Pick their access, then generate a link. The new admin sets their own email and password from it.</p>
       <div className="grid gap-3 sm:grid-cols-2">
         <div>
           <label className="label" htmlFor="na-type">Type</label>
@@ -102,28 +101,115 @@ export function CreateAdminForm({ perms, roles }: { perms: PermInfo[]; roles: Ro
           <PermissionPicker all={perms} value={grants} onChange={setGrants} idPrefix="na" />
         </fieldset>
       )}
-      <button className="btn-lime px-5 py-2.5 text-sm">Create admin</button>
+      <fieldset className="rounded-xl border border-line p-3">
+        <legend className="label px-1">Commission rate</legend>
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex items-center gap-2">
+            <input
+              id="na-rate"
+              aria-label="Commission rate (%)"
+              inputMode="decimal"
+              disabled={useDefaultRate}
+              className="input w-24 tabular-nums disabled:opacity-50"
+              value={useDefaultRate ? String(defaultCommissionBp / 100) : rate}
+              onChange={(e) => setRate(e.target.value.replace(/[^\d.]/g, ""))}
+            />
+            <span className="text-sm text-fog">%</span>
+          </div>
+          <label className="flex items-center gap-2 text-sm text-white">
+            <input type="checkbox" checked={useDefaultRate} onChange={(e) => setUseDefaultRate(e.target.checked)} />
+            Use the default rate ({defaultCommissionBp / 100}%)
+          </label>
+        </div>
+        {!useDefaultRate && ratePct === null && <p className="mt-2 text-xs text-danger">Enter 0 to 100, up to 2 decimal places.</p>}
+        <p className="mt-2 text-xs text-fog">What they earn on the net deposits of players who sign up with their code. You can change it later on the Commission page.</p>
+      </fieldset>
+      <button disabled={!useDefaultRate && ratePct === null} className="btn-lime px-5 py-2.5 text-sm">Add admin</button>
       <ConfirmDialog
         open={confirm}
-        title="Create administrator"
-        message={
-          <>
-            Create <b className="text-white">{f.email}</b> as {f.role === "SUPER_ADMIN" ? "a super admin with full access" : "an admin"}?
-          </>
-        }
-        confirmLabel="Create"
+        title="Generate admin invite link"
+        message={<>Create a single-use link that makes whoever opens it {f.role === "SUPER_ADMIN" ? "a super admin with full access" : "an admin with the access above"}, earning {rateLabel}?</>}
+        confirmLabel="Generate link"
         onClose={() => setConfirm(false)}
         onConfirm={async (password) => {
           const { error, data } = await send("/api/admin/admins", "POST", {
-            ...f,
-            adminRoleId: f.adminRoleId || null,
+            role: f.role,
+            adminRoleId: f.role === "ADMIN" ? f.adminRoleId || null : null,
             permGrants: f.role === "ADMIN" ? grants : [],
+            commissionPct: useDefaultRate ? null : ratePct,
             password,
           });
           if (error) return error;
           setConfirm(false);
-          setLink(String(data.setupUrl));
+          setLink(String(data.inviteUrl));
           router.refresh();
+          return null;
+        }}
+      />
+    </form>
+  );
+}
+
+/** Super admin: make an existing player an admin (with a role) or a super admin. */
+export function PromoteToAdmin({ userId, email, roles }: { userId: string; email: string; roles: RoleInfo[] }) {
+  const router = useRouter();
+  const [role, setRole] = useState<"ADMIN" | "SUPER_ADMIN">("ADMIN");
+  const [adminRoleId, setAdminRoleId] = useState("");
+  const [confirm, setConfirm] = useState(false);
+  const roleName = roles.find((r) => r.id === adminRoleId)?.name;
+
+  return (
+    <form
+      className="space-y-4"
+      onSubmit={(e) => {
+        e.preventDefault();
+        setConfirm(true);
+      }}
+    >
+      <p className="text-sm text-fog">They keep their account, sign-in, balance and history, and get console access on their next page load.</p>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div>
+          <label className="label" htmlFor="pa-type">Make them</label>
+          <select id="pa-type" className="input" value={role} onChange={(e) => setRole(e.target.value as typeof role)}>
+            <option value="ADMIN">Admin (permissions from a role)</option>
+            <option value="SUPER_ADMIN">Super admin (everything)</option>
+          </select>
+        </div>
+        {role === "ADMIN" && (
+          <div>
+            <label className="label" htmlFor="pa-role">Role</label>
+            <select id="pa-role" className="input" value={adminRoleId} onChange={(e) => setAdminRoleId(e.target.value)}>
+              <option value="">No role (add permissions later)</option>
+              {roles.map((r) => (
+                <option key={r.id} value={r.id}>
+                  {r.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+      </div>
+      <button className="btn-lime px-5 py-2.5 text-sm">Make administrator</button>
+      <ConfirmDialog
+        open={confirm}
+        title="Make administrator"
+        message={
+          role === "SUPER_ADMIN"
+            ? `${email} becomes a super admin with full access to everything, including money and other admins.`
+            : `${email} becomes an admin${roleName ? ` with the "${roleName}" role` : " with no permissions until you add some"}.`
+        }
+        confirmLabel="Make administrator"
+        onClose={() => setConfirm(false)}
+        onConfirm={async (password) => {
+          const { error } = await send(`/api/admin/admins/${userId}`, "PATCH", {
+            action: "promote",
+            role,
+            adminRoleId: role === "ADMIN" ? adminRoleId || null : null,
+            password,
+          });
+          if (error) return error;
+          setConfirm(false);
+          router.push(`/admin/admins/${userId}`);
           return null;
         }}
       />
@@ -233,9 +319,10 @@ export function AdminAccessEditor({
 /** Super admin: suspend/reactivate an admin, or issue a password reset link. */
 export function AdminActions({ adminId, email, status }: { adminId: string; email: string; status: string }) {
   const router = useRouter();
-  const [action, setAction] = useState<"status" | "reset" | null>(null);
+  const [action, setAction] = useState<"status" | "reset" | "remove" | null>(null);
   const [link, setLink] = useState<string | null>(null);
   const suspending = status === "ACTIVE";
+  if (status === "CLOSED") return <p className="text-sm text-fog">This administrator has been removed. They can&apos;t sign in, and their access can&apos;t be changed.</p>;
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap gap-2">
@@ -244,6 +331,9 @@ export function AdminActions({ adminId, email, status }: { adminId: string; emai
         </button>
         <button type="button" onClick={() => setAction("reset")} className="btn-ghost px-4 py-2 text-sm">
           Reset password link
+        </button>
+        <button type="button" onClick={() => setAction("remove")} className="btn border border-danger/50 px-4 py-2 text-sm text-danger hover:bg-danger/10">
+          Remove admin
         </button>
       </div>
       {link && (
@@ -259,7 +349,7 @@ export function AdminActions({ adminId, email, status }: { adminId: string; emai
         message={
           suspending ? (
             <>
-              <b className="text-white">{email}</b> is signed out everywhere and can&apos;t sign in. Players they referred stay attributed to them.
+              <b className="text-white">{email}</b> is signed out everywhere and can&apos;t sign in. Users they referred stay attributed to them.
             </>
           ) : (
             <>
@@ -273,6 +363,27 @@ export function AdminActions({ adminId, email, status }: { adminId: string; emai
           const { error } = await send(`/api/admin/admins/${adminId}`, "PATCH", { action: "status", status: suspending ? "SUSPENDED" : "ACTIVE", password });
           if (error) return error;
           setAction(null);
+          router.refresh();
+          return null;
+        }}
+      />
+      <ConfirmDialog
+        open={action === "remove"}
+        danger
+        title="Remove administrator"
+        message={
+          <>
+            <b className="text-white">{email}</b> loses all admin access for good: signed out everywhere, can&apos;t sign in, their links and invites stop working and they leave
+            the roster. Their history, referred users and audit trail are kept. This can&apos;t be undone.
+          </>
+        }
+        confirmLabel="Remove"
+        onClose={() => setAction(null)}
+        onConfirm={async (password) => {
+          const { error } = await send(`/api/admin/admins/${adminId}`, "PATCH", { action: "remove", password });
+          if (error) return error;
+          setAction(null);
+          router.push("/admin/admins");
           router.refresh();
           return null;
         }}
@@ -365,6 +476,92 @@ export function RoleEditor({ perms, role }: { perms: PermInfo[]; role?: RoleInfo
 }
 
 /** Staff actions on a player: suspend/reactivate (users.suspend), balance correction (wallets.adjust). */
+/**
+ * Credit or debit an account's cash: pick the direction, enter a positive amount and a reason, then
+ * confirm with your password. Posted as a ledger adjustment with an idempotency key (a double click
+ * can't post twice) and written to the audit log. A debit can't take the balance below zero.
+ */
+function BalanceAdjust({ url, extra = {}, email, idPrefix }: { url: string; extra?: Record<string, unknown>; email: string; idPrefix: string }) {
+  const router = useRouter();
+  const [dir, setDir] = useState<"credit" | "debit">("credit");
+  const [amount, setAmount] = useState("");
+  const [reason, setReason] = useState("");
+  const [key, setKey] = useState(newId);
+  const [open, setOpen] = useState(false);
+  const [done, setDone] = useState<string | null>(null);
+  const value = /^\d+(\.\d{1,2})?$/.test(amount.trim()) ? Number(amount) : 0;
+  const valid = value > 0 && value <= 100_000 && reason.trim().length >= 5;
+  const ghsText = `GHS ${value.toFixed(2)}`;
+  return (
+    <div className="space-y-2">
+      <form
+        className="space-y-2"
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (valid) setOpen(true);
+        }}
+      >
+        <div role="radiogroup" aria-label="Credit or debit" className="grid grid-cols-2 rounded-lg bg-ink-800 p-1 text-sm font-semibold">
+          {(["credit", "debit"] as const).map((d) => (
+            <button
+              key={d}
+              type="button"
+              role="radio"
+              aria-checked={dir === d}
+              onClick={() => setDir(d)}
+              className={`rounded-md py-1.5 transition ${dir === d ? (d === "credit" ? "bg-lime text-lime-ink" : "bg-danger text-white") : "text-fog hover:text-white"}`}
+            >
+              {d === "credit" ? "Credit (add)" : "Debit (remove)"}
+            </button>
+          ))}
+        </div>
+        <div className="grid gap-2 sm:grid-cols-[10rem_1fr]">
+          <div>
+            <label className="label" htmlFor={`${idPrefix}-amount`}>Amount (GHS)</label>
+            <input id={`${idPrefix}-amount`} required inputMode="decimal" placeholder="0.00" className="input tabular-nums" value={amount} onChange={(e) => setAmount(e.target.value.replace(/[^\d.]/g, ""))} />
+          </div>
+          <div>
+            <label className="label" htmlFor={`${idPrefix}-reason`}>Reason</label>
+            <input id={`${idPrefix}-reason`} required minLength={5} maxLength={300} placeholder="At least 5 characters" className="input" value={reason} onChange={(e) => setReason(e.target.value)} />
+          </div>
+        </div>
+        <button disabled={!valid} className={`px-4 py-2 text-sm ${dir === "credit" ? "btn-lime" : "btn border border-danger/50 text-danger hover:bg-danger/10"}`}>
+          {dir === "credit" ? "Credit" : "Debit"} {value > 0 ? ghsText : "balance"}
+        </button>
+      </form>
+      {done && (
+        <p role="status" className="text-sm text-lime">
+          {done}
+        </p>
+      )}
+      <ConfirmDialog
+        open={open}
+        danger={dir === "debit"}
+        title={dir === "credit" ? "Credit balance" : "Debit balance"}
+        message={
+          <>
+            {dir === "credit" ? "Add" : "Remove"} <b className="text-white">{ghsText}</b> {dir === "credit" ? "to" : "from"} {email}&apos;s balance. It&apos;s recorded in the ledger and audit log
+            and can&apos;t be edited; a mistake needs an opposite adjustment.
+          </>
+        }
+        confirmLabel={dir === "credit" ? "Credit" : "Debit"}
+        onClose={() => setOpen(false)}
+        onConfirm={async (password) => {
+          const { error } = await send(url, "POST", { ...extra, amountGhs: dir === "credit" ? value : -value, reason: reason.trim(), idempotencyKey: key, password });
+          if (error) return error;
+          setOpen(false);
+          setKey(newId()); // the next adjustment is a new one
+          setAmount("");
+          setReason("");
+          setDone(`${dir === "credit" ? "Credited" : "Debited"} ${ghsText}`);
+          router.refresh();
+          return null;
+        }}
+      />
+    </div>
+  );
+}
+
 export function PlayerActions({
   playerId,
   email,
@@ -383,18 +580,15 @@ export function PlayerActions({
   verified: boolean;
 }) {
   const router = useRouter();
-  const [action, setAction] = useState<"status" | "adjust" | "verify" | null>(null);
+  const [action, setAction] = useState<"status" | "verify" | null>(null);
   const [reason, setReason] = useState("");
-  const [amount, setAmount] = useState("");
-  const [key, setKey] = useState(newId);
   const [done, setDone] = useState<string | null>(null);
   const suspending = status === "ACTIVE";
-  const amountNum = Number(amount);
   return (
     <div className="space-y-4">
       {canSuspend && (
         <button type="button" onClick={() => { setReason(""); setAction("status"); }} className={`btn px-4 py-2 text-sm ${suspending ? "border border-danger/50 text-danger hover:bg-danger/10" : "btn-lime"}`}>
-          {suspending ? "Suspend player" : "Reactivate player"}
+          {suspending ? "Suspend user" : "Reactivate user"}
         </button>
       )}
       {canVerify && !verified && (
@@ -402,29 +596,7 @@ export function PlayerActions({
           Verify account
         </button>
       )}
-      {canAdjust && (
-        <form
-          className="space-y-2"
-          onSubmit={(e) => {
-            e.preventDefault();
-            setAction("adjust");
-          }}
-        >
-          <div className="grid gap-2 sm:grid-cols-[10rem_1fr]">
-            <div>
-              <label className="label" htmlFor="adj-amount">Amount (GHS, minus to debit)</label>
-              <input id="adj-amount" required inputMode="decimal" pattern="-?\d+(\.\d{1,2})?" className="input" value={amount} onChange={(e) => setAmount(e.target.value)} />
-            </div>
-            <div>
-              <label className="label" htmlFor="adj-reason">Reason</label>
-              <input id="adj-reason" required minLength={5} maxLength={300} className="input" value={reason} onChange={(e) => setReason(e.target.value)} />
-            </div>
-          </div>
-          <button disabled={!amountNum} className="btn-ghost px-4 py-2 text-sm">
-            Post balance correction
-          </button>
-        </form>
-      )}
+      {canAdjust && <BalanceAdjust url={`/api/admin/players/${playerId}`} extra={{ action: "adjust" }} email={email} idPrefix="adj" />}
       {done && (
         <p role="status" className="text-sm text-lime">
           {done}
@@ -433,7 +605,7 @@ export function PlayerActions({
       <ConfirmDialog
         open={action === "status"}
         danger={suspending}
-        title={suspending ? "Suspend player" : "Reactivate player"}
+        title={suspending ? "Suspend user" : "Reactivate user"}
         message={
           <div className="space-y-2">
             <p>
@@ -449,29 +621,7 @@ export function PlayerActions({
           const { error } = await send(`/api/admin/players/${playerId}`, "POST", { action: "status", status: suspending ? "SUSPENDED" : "ACTIVE", reason, password });
           if (error) return error;
           setAction(null);
-          setDone(suspending ? "Player suspended" : "Player reactivated");
-          router.refresh();
-          return null;
-        }}
-      />
-      <ConfirmDialog
-        open={action === "adjust"}
-        title="Post balance correction"
-        message={
-          <>
-            {amountNum > 0 ? "Credit" : "Debit"} <b className="text-white">GHS {Math.abs(amountNum).toFixed(2)}</b> {amountNum > 0 ? "to" : "from"} {email}. This is recorded in the ledger and audit log and can&apos;t be edited; a mistake needs an opposite correction.
-          </>
-        }
-        confirmLabel="Post correction"
-        onClose={() => setAction(null)}
-        onConfirm={async (password) => {
-          const { error } = await send(`/api/admin/players/${playerId}`, "POST", { action: "adjust", amountGhs: amountNum, reason, idempotencyKey: key, password });
-          if (error) return error;
-          setAction(null);
-          setKey(newId()); // next correction is a new one
-          setAmount("");
-          setReason("");
-          setDone("Correction posted");
+          setDone(suspending ? "User suspended" : "User reactivated");
           router.refresh();
           return null;
         }}
@@ -499,67 +649,9 @@ export function PlayerActions({
   );
 }
 
-/** Credit (or debit, with a minus) an administrator's own cash balance. Password-confirmed, audited. */
+/** Credit or debit an administrator's own cash balance. Password-confirmed, audited. */
 export function AdminBalanceCredit({ adminId, email }: { adminId: string; email: string }) {
-  const router = useRouter();
-  const [open, setOpen] = useState(false);
-  const [amount, setAmount] = useState("");
-  const [reason, setReason] = useState("");
-  const [key, setKey] = useState(newId);
-  const [done, setDone] = useState<string | null>(null);
-  const amountNum = Number(amount);
-  return (
-    <div className="space-y-2">
-      <form
-        className="space-y-2"
-        onSubmit={(e) => {
-          e.preventDefault();
-          setOpen(true);
-        }}
-      >
-        <div className="grid gap-2 sm:grid-cols-[10rem_1fr]">
-          <div>
-            <label className="label" htmlFor="ac-amount">Amount (GHS, minus to debit)</label>
-            <input id="ac-amount" required inputMode="decimal" pattern="-?\d+(\.\d{1,2})?" className="input" value={amount} onChange={(e) => setAmount(e.target.value)} />
-          </div>
-          <div>
-            <label className="label" htmlFor="ac-reason">Reason</label>
-            <input id="ac-reason" required minLength={5} maxLength={300} className="input" value={reason} onChange={(e) => setReason(e.target.value)} />
-          </div>
-        </div>
-        <button disabled={!amountNum} className="btn-lime px-4 py-2 text-sm">
-          {amountNum < 0 ? "Debit balance" : "Credit balance"}
-        </button>
-      </form>
-      {done && (
-        <p role="status" className="text-sm text-lime">
-          {done}
-        </p>
-      )}
-      <ConfirmDialog
-        open={open}
-        title={amountNum < 0 ? "Debit balance" : "Credit balance"}
-        message={
-          <>
-            {amountNum > 0 ? "Credit" : "Debit"} <b className="text-white">GHS {Math.abs(amountNum).toFixed(2)}</b> {amountNum > 0 ? "to" : "from"} {email}. Recorded in the ledger and audit log and can&apos;t be edited; a mistake needs an opposite correction.
-          </>
-        }
-        confirmLabel={amountNum < 0 ? "Debit" : "Credit"}
-        onClose={() => setOpen(false)}
-        onConfirm={async (password) => {
-          const { error } = await send(`/api/admin/admins/${adminId}/balance`, "POST", { amountGhs: amountNum, reason, idempotencyKey: key, password });
-          if (error) return error;
-          setOpen(false);
-          setKey(newId());
-          setAmount("");
-          setReason("");
-          setDone("Balance updated");
-          router.refresh();
-          return null;
-        }}
-      />
-    </div>
-  );
+  return <BalanceAdjust url={`/api/admin/admins/${adminId}/balance`} email={email} idPrefix="ac" />;
 }
 
 /** Delete an admin account's settled financial history (the transaction-list rows). Any admin; balances and the ledger are left alone, pending items kept. */

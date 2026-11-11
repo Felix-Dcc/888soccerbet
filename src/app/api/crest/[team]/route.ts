@@ -1,15 +1,12 @@
 /**
- * Original badge for a side (or competition) with no real artwork: the generated fictional teams,
- * fictional leagues, and manual games the feed doesn't know. Drawn from the name alone, so the same
- * name always gets the same badge and nothing is stored. Never served for real clubs or leagues:
- * cached feed badges are applied first. `?kind=league` draws a round league emblem instead of a
- * team shield. The central device is an emblem (no initials); its motif follows the name's theme,
- * with a stable fallback otherwise. These are original marks, not imitations of any real club or
- * competition.
+ * Club or league crest. Catalog clubs (src/lib/crests/catalog) get a designed badge; everything
+ * else falls back to the hash-based generator. `?kind=league` draws a round league emblem.
+ * `?v=2` (or any version bump) busts the immutable cache when designs change.
  */
-// Dynamic so `?kind=league` is read (force-static drops query params); the immutable cache header
-// below still serves every repeat of a given URL from the browser/CDN, so the handler runs rarely.
 export const dynamic = "force-dynamic";
+
+import { findClub, findLeague } from "@/lib/crests/catalog";
+import { renderClubCrest, renderLeagueCrest } from "@/lib/crests/render";
 
 const hash = (s: string) => {
   let h = 2166136261;
@@ -19,7 +16,6 @@ const hash = (s: string) => {
 
 const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
 
-/** A five-point star centred at (cx,cy), outer radius r. */
 function star(cx: number, cy: number, r: number, fill: string) {
   const pts: string[] = [];
   for (let i = 0; i < 10; i++) {
@@ -30,25 +26,18 @@ function star(cx: number, cy: number, r: number, fill: string) {
   return `<polygon points="${pts.join(" ")}" fill="${fill}"/>`;
 }
 
-/** Palette from the name: a two-tone body plus a gold, silver or bronze metallic trim (deterministic). */
 function palette(h: number) {
   const hue = h % 360;
   const metal = [
-    { trim: "#E7C46A", trimHi: "#FFF0C0" }, // gold
-    { trim: "#CFD8E3", trimHi: "#FFFFFF" }, // silver
-    { trim: "#C8894B", trimHi: "#F0C89A" }, // bronze
+    { trim: "#E7C46A", trimHi: "#FFF0C0" },
+    { trim: "#CFD8E3", trimHi: "#FFFFFF" },
+    { trim: "#C8894B", trimHi: "#F0C89A" },
   ][(h >> 3) % 3]!;
-  return {
-    deep: `hsl(${hue} 58% 15%)`,
-    mid: `hsl(${hue} 56% 29%)`,
-    light: `hsl(${hue} 52% 40%)`,
-    ...metal,
-  };
+  return { deep: `hsl(${hue} 58% 15%)`, mid: `hsl(${hue} 56% 29%)`, light: `hsl(${hue} 52% 40%)`, ...metal };
 }
 
 type Palette = ReturnType<typeof palette>;
 
-/** Emblem devices, each drawn centred on (0,0) spanning roughly ±12. No text. */
 const DEVICES: Record<string, (p: Palette) => string> = {
   ball: (p) =>
     `<circle r="11.5" fill="${p.trimHi}"/><circle r="11.5" fill="none" stroke="${p.deep}" stroke-width="1"/>
@@ -126,9 +115,8 @@ function device(name: string, h: number): (p: Palette) => string {
   return DEVICES[keys[h % keys.length]!]!;
 }
 
-function teamCrest(name: string, h: number) {
+function fallbackTeamCrest(name: string, h: number) {
   const p = palette(h);
-  // Vary the stars above the device and the direction of the sheen, so same-device badges still differ.
   const starRow = [[26, 32, 38], [28, 36], []][(h >> 7) % 3]!;
   const stars = starRow.map((x) => star(x, 14, 2.3, p.trim)).join("");
   const sash = (h >> 9) % 2 === 0 ? "M-6 44 44 -6 58 8 8 58Z" : "M70 44 20 -6 6 8 56 58Z";
@@ -146,7 +134,7 @@ ${stars}
 </svg>`;
 }
 
-function leagueCrest(name: string, h: number) {
+function fallbackLeagueCrest(name: string, h: number) {
   const p = palette(h);
   const dots = Array.from({ length: 12 }, (_, i) => {
     const a = (Math.PI / 6) * i;
@@ -170,12 +158,21 @@ export async function GET(req: Request, { params }: { params: Promise<{ team: st
   const raw = decodeURIComponent((await params).team).slice(0, 60) || "FC";
   const kind = new URL(req.url).searchParams.get("kind");
   const h = hash(raw);
-  const svg = kind === "league" ? leagueCrest(raw, h) : teamCrest(raw, h);
+
+  let svg: string;
+  if (kind === "league") {
+    const league = findLeague(raw);
+    svg = league ? renderLeagueCrest(league) : fallbackLeagueCrest(raw, h);
+  } else {
+    const club = findClub(raw);
+    svg = club ? renderClubCrest(club) : fallbackTeamCrest(raw, h);
+  }
+
   return new Response(svg, {
     headers: {
       "content-type": "image/svg+xml; charset=utf-8",
-      "cache-control": "public, max-age=31536000, immutable", // the name fully determines the badge
-      "content-security-policy": "default-src 'none'; style-src 'unsafe-inline'", // inert even if opened directly
+      "cache-control": "public, max-age=31536000, immutable",
+      "content-security-policy": "default-src 'none'; style-src 'unsafe-inline'",
     },
   });
 }

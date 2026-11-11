@@ -3,24 +3,32 @@ import { Suspense } from "react";
 import { Sora, Manrope } from "next/font/google";
 import "./globals.css";
 import { AppShell } from "@/components/AppShell";
+import { siteUrl } from "@/lib/siteUrl";
 import { SideNav, type NavData } from "@/components/SideNav";
-import { Footer } from "@/components/Footer";
+import { Footer, SupportFab } from "@/components/Footer";
 import { Splash, SPLASH_SCRIPT } from "@/components/Splash";
+import { THEME_SCRIPT } from "@/lib/theme";
 import { minStakeGhs } from "@/lib/betEngine";
+import { getCurrentUser } from "@/lib/session";
+import { playerCurrency } from "@/lib/wallet";
+import { GHS_CURRENCY, type Currency } from "@/lib/currency";
 import { bonusRules } from "@/lib/bonus";
-import { listCompetitions, listFixtures, listSports } from "@/lib/queries";
+import { HotMatches } from "@/components/HotMatches";
+import { hotFixtures, listCompetitions, listFixtures, listSports } from "@/lib/queries";
 
 const display = Sora({ subsets: ["latin"], weight: ["600", "700", "800"], variable: "--font-display" });
 const body = Manrope({ subsets: ["latin"], weight: ["400", "500", "600", "700", "800"], variable: "--font-body" });
 
 export const metadata: Metadata = {
-  title: "Kingz Bet — Sports Betting",
+  title: "Bet Zone — Sports Betting",
   description: "Football and basketball odds across the Premier League, Champions League, La Liga, Serie A, Bundesliga and NBA.",
   // iOS Safari would turn match IDs, odds and booking codes into tel:/mailto: links before React
   // loads, breaking hydration (and making an ID tappable to call it).
   formatDetection: { telephone: false, email: false, address: false, date: false },
 };
-export const viewport: Viewport = { themeColor: "#0B4A2A", width: "device-width", initialScale: 1 };
+export const viewport: Viewport = { themeColor: "#F8FBF9", width: "device-width", initialScale: 1 };
+// The slip's minimum stake comes from Platform Settings (DB), so no page may be pre-rendered at build time.
+export const dynamic = "force-dynamic";
 
 /** Navigation data for the rail. A database outage degrades to an empty nav, not a broken page. */
 async function navData(): Promise<NavData> {
@@ -44,11 +52,34 @@ async function SideNavWithData() {
   return <SideNav data={await navData()} />;
 }
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+/** Most-backed fixtures for the betslip rail; a database hiccup just drops the panel. */
+async function HotMatchesWithData() {
+  try {
+    return <HotMatches fixtures={await hotFixtures()} />;
+  } catch (e) {
+    console.error("[layout] hot matches unavailable:", e instanceof Error ? e.message : e);
+    return null;
+  }
+}
+
+/** The signed-in player's display currency; a database hiccup falls back to GHS rather than breaking every page. */
+async function currencyForVisitor(): Promise<Currency> {
+  try {
+    return await playerCurrency(await getCurrentUser());
+  } catch (e) {
+    console.error("[layout] currency unavailable:", e instanceof Error ? e.message : e);
+    return GHS_CURRENCY;
+  }
+}
+
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  const [minStake, currency] = await Promise.all([minStakeGhs(), currencyForVisitor()]);
   return (
-    // The head script adds a splash class to <html> before hydration; that difference is expected.
-    <html lang="en" className={`${display.variable} ${body.variable}`} suppressHydrationWarning>
+    // White is the default; the head script removes it for players who chose dark, and adds a
+    // splash class, before hydration. Those differences are expected.
+    <html lang="en" data-theme="light" className={`${display.variable} ${body.variable}`} suppressHydrationWarning>
       <head>
+        <script dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />
         <script dangerouslySetInnerHTML={{ __html: SPLASH_SCRIPT }} />
         <noscript>
           <style>{"#kb-splash{display:none}"}</style>
@@ -57,17 +88,25 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className="font-sans antialiased">
         <Splash />
         <AppShell
-          minStakeGhs={minStakeGhs()}
+          minStakeGhs={minStake}
           bonus={bonusRules()}
+          siteUrl={siteUrl()}
+          currency={currency}
+          footer={<Footer nigeria={currency.code === "NGN"} />}
           sidebar={
             <Suspense>
               <SideNavWithData />
             </Suspense>
           }
+          rail={
+            <Suspense>
+              <HotMatchesWithData />
+            </Suspense>
+          }
         >
           {children}
         </AppShell>
-        <Footer />
+        <SupportFab />
       </body>
     </html>
   );

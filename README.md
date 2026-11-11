@@ -1,10 +1,10 @@
-# Kingz Bet
+# Bet Zone
 
 A sandbox online sportsbook: football & basketball, pre-match and live, with a
 server-authoritative bet engine, a double-entry ledger wallet, idempotent payment
 webhooks, settlement, and an operations console.
 
-> **Not for real-money use.** Kingz Bet is a demonstration platform. It holds no Gaming
+> **Not for real-money use.** Bet Zone is a demonstration platform. It holds no Gaming
 > Commission of Ghana licence, integrates no licensed trading or payment provider, and
 > moves no real money. Every external integration here is a clearly-labelled **sandbox
 > adapter**. See [`docs/LAUNCH-READINESS.md`](docs/LAUNCH-READINESS.md).
@@ -35,8 +35,8 @@ npm run dev                     # http://localhost:3000
 npm run worker                  # (separate shell) keeps odds fresh & settles finished games
 ```
 
-Seed logins (phone or email): `admin@kingsbet.gh` / `0240000002` / `Admin123!` ·
-`demo@kingsbet.gh` / `0240000001` / `Demo1234!`. Demo referral link: `/register?ref=DEMOKING`.
+Seed logins (phone or email): `admin@betzone.com.co` / `0240000002` / `Admin123!` ·
+`demo@betzone.com.co` / `0240000001` / `Demo1234!`. Demo referral link: `/register?ref=DEMOBZ`.
 
 ### Accounts, matches and booking codes
 
@@ -71,7 +71,7 @@ Seed logins (phone or email): `admin@kingsbet.gh` / `0240000002` / `Admin123!` �
 
 This repo is wired to a **self-contained PostgreSQL cluster** created for development,
 isolated from your system Postgres (it runs on **port 5433**, data in `.localdb/`, role
-`stakra`). Your existing Postgres on 5432 was not touched. Control it with:
+`soccerbet`). Your existing Postgres on 5432 was not touched. Control it with:
 
 ```bash
 PG="/c/Program Files/PostgreSQL/18/bin"
@@ -139,9 +139,9 @@ odds, and referral/phone/email registration and login.
 npm run build && npm start
 ```
 
-Production runs on Railway (project `kingzbet`): `web` (the site; `npm start` applies migrations
+Production runs on Railway (project `888soccerbet`): `web` (the site; `npm start` applies migrations
 first), `worker` (same code with `SERVICE_ROLE=worker`), `Postgres`, and `db-backup`. Deploy with
-`railway up --service web` / `--service worker` from this folder. kingzbet.live points at `web` via
+`railway up --service web` / `--service worker` from this folder. 888soccerbet.com points at `web` via
 Cloudflare DNS.
 
 ## Going live with ShinobiPay
@@ -149,10 +149,10 @@ Cloudflare DNS.
 ShinobiPay (`src/lib/providers/payments/shinobipay.ts`) takes deposits; it has no API to pay
 players, so withdrawals are paid by an admin. On ShinobiPay's dashboard (test keys first):
 
-1. Register the webhook URL `https://kingzbet.live/api/webhooks/payments`; copy the **signing secret**
+1. Register the webhook URL `https://888soccerbet.com/api/webhooks/payments`; copy the **signing secret**
    (`whsec_...`, shown once).
 2. Copy the **secret key** (`sk_test_...`).
-3. Railway > kingzbet > `web` > Variables: set `SHINOBI_SECRET_KEY`, `SHINOBI_WEBHOOK_SECRET`, then
+3. Railway > 888soccerbet > `web` > Variables: set `SHINOBI_SECRET_KEY`, `SHINOBI_WEBHOOK_SECRET`, then
    `PAYMENT_PROVIDER=shinobipay`.
 4. Test: a deposit (approve the prompt on the phone), then a withdrawal. It appears in admin >
    Trading desk > **Withdrawals to pay**; send the MoMo, then click **Paid** (or **Failed** to refund).
@@ -167,10 +167,10 @@ each decision asks for their password and is recorded in the audit trail.
 The Flutterwave adapter (`src/lib/providers/payments/flutterwave.ts`) is built and tested; the site
 uses the sandbox until it is switched on. On Flutterwave's dashboard (test mode first):
 
-1. Settings > Webhooks: URL `https://kingzbet.live/api/webhooks/payments`, type a long random
+1. Settings > Webhooks: URL `https://888soccerbet.com/api/webhooks/payments`, type a long random
    **Secret hash**, and turn webhooks on.
 2. Settings > API keys: copy the **Secret key**.
-3. Railway > kingzbet > `web` > Variables: set `FLW_SECRET_KEY`, `FLW_SECRET_HASH` (same value as
+3. Railway > 888soccerbet > `web` > Variables: set `FLW_SECRET_KEY`, `FLW_SECRET_HASH` (same value as
    step 1), then `PAYMENT_PROVIDER=flutterwave`. Railway redeploys; System in the admin console
    shows Payments as flutterwave (sandbox while the key is a TEST key).
 4. Make one small deposit and one withdrawal on each network (MTN, Telecel, AirtelTigo). Then
@@ -185,12 +185,12 @@ unclear reply leaves it held until the webhook settles it.
 
 `db-backup` is a Railway cron job (`ops/db-backup/`) that runs at 03:00 UTC every night: it
 `pg_dump`s the production database into the private `db-backups` bucket as
-`daily/kingzbet-<UTC time>.sql.gz` and deletes copies older than 30 days. Its credentials are Railway
+`daily/888soccerbet-<UTC time>.sql.gz` and deletes copies older than 30 days. Its credentials are Railway
 variable references to `Postgres` and `db-backups`, so no secret is stored in this repo.
 
 - Run one now: `railway cron run --service db-backup --yes`; check with `railway logs --service db-backup`.
 - Restore: download the file from the bucket (Railway dashboard → db-backups), then
-  `gunzip -c kingzbet-<time>.sql.gz | psql "<empty database URL>"`. Restore into a new, empty
+  `gunzip -c 888soccerbet-<time>.sql.gz | psql "<empty database URL>"`. Restore into a new, empty
   database first and check it before pointing the site at it.
 
 Deployment notes, security checklist and launch blockers are in

@@ -3,8 +3,11 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { ConfirmDialog, send } from "./ConfirmDialog";
 
-/** Paid / Failed for one hand-paid withdrawal. Both re-ask the admin's password. */
-export function PayoutActions({ refCode, amount, msisdn, network, accountName }: { refCode: string; amount: string; msisdn: string; network: string; accountName?: string }) {
+/**
+ * Paid / Failed for one hand-paid withdrawal. Both re-ask the admin's password.
+ * to: number and network, or bank and account number. naira: what to send a Nigerian player (null for Ghana).
+ */
+export function PayoutActions({ refCode, amount, to, naira, accountName }: { refCode: string; amount: string; to: string; naira?: string | null; accountName?: string | null }) {
   const router = useRouter();
   const [open, setOpen] = useState<"PAID" | "FAILED" | null>(null);
   const record = async (password: string) => {
@@ -15,10 +18,10 @@ export function PayoutActions({ refCode, amount, msisdn, network, accountName }:
   return (
     <>
       <div className="flex gap-2">
-        <button type="button" onClick={() => setOpen("PAID")} className="inline-flex h-8 items-center rounded-md bg-lime px-3 text-xs font-bold text-lime-ink hover:bg-lime-600">
+        <button type="button" onClick={() => setOpen("PAID")} className="inline-flex h-8 items-center rounded-xl bg-lime px-3 text-xs font-bold text-lime-ink hover:bg-lime-600">
           Paid
         </button>
-        <button type="button" onClick={() => setOpen("FAILED")} className="inline-flex h-8 items-center rounded-md border border-[#FF5A5F]/50 px-3 text-xs font-semibold text-[#FF8A8D] hover:bg-[#FF5A5F]/10">
+        <button type="button" onClick={() => setOpen("FAILED")} className="inline-flex h-8 items-center rounded-xl border border-danger/50 px-3 text-xs font-semibold text-danger hover:bg-danger/10">
           Failed
         </button>
       </div>
@@ -30,12 +33,12 @@ export function PayoutActions({ refCode, amount, msisdn, network, accountName }:
         message={
           open === "PAID" ? (
             <>
-              Only after you have sent <strong>GHS {amount}</strong> to <strong>{msisdn}</strong> ({network}
-              {accountName ? <>, {accountName}</> : null}). The player is emailed that it&apos;s paid.
+              Only after you have sent {naira ? <><strong>{naira}</strong> (GHS {amount})</> : <strong>GHS {amount}</strong>} to <strong>{to}</strong>
+              {accountName ? <> ({accountName})</> : null}. The player is emailed that it&apos;s paid.
             </>
           ) : (
             <>
-              <strong>GHS {amount}</strong> goes back to the player&apos;s balance. Only if the money was <strong>not</strong> sent.
+              <strong>GHS {amount}</strong> goes back to the user&apos;s balance. Only if the money was <strong>not</strong> sent.
             </>
           )
         }

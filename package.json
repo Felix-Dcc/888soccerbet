@@ -1,12 +1,12 @@
 {
-  "name": "kingzbet",
+  "name": "betzone",
   "version": "0.1.0",
   "private": true,
-  "description": "Kingz Bet \u2014 sandbox sportsbook platform (not licensed for real-money operation)",
+  "description": "Bet Zone — sandbox sportsbook platform (not licensed for real-money operation)",
   "scripts": {
     "dev": "next dev",
     "build": "prisma generate && next build",
-    "start": "if [ \"$SERVICE_ROLE\" = worker ]; then tsx src/worker.ts; else prisma migrate deploy && next start; fi",
+    "start": "if [ \"$SERVICE_ROLE\" = worker ]; then tsx src/worker.ts; else prisma migrate deploy && tsx scripts/ensure-super-admin.ts && next start; fi",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
@@ -23,6 +23,7 @@
   },
   "dependencies": {
     "@prisma/client": "6.3.1",
+    "lucide-react": "^1.64.0",
     "next": "15.1.11",
     "prisma": "6.3.1",
     "react": "19.0.0",

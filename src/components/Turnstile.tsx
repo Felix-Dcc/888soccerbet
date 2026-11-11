@@ -45,7 +45,7 @@ export function Turnstile({ onToken, resetKey = 0 }: { onToken: (token: string) 
         if (gone || !box.current || !window.turnstile) return;
         id.current = window.turnstile.render(box.current, {
           sitekey: SITE_KEY,
-          theme: "dark",
+          theme: document.documentElement.dataset.theme === "light" ? "light" : "dark",
           size: "flexible",
           callback: (t: string) => cb.current(t),
           "expired-callback": () => cb.current(""),

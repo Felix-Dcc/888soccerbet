@@ -2,32 +2,44 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { LegalPage } from "@/components/LegalPage";
 import { legal } from "@/lib/legal";
+import { supportEmail } from "@/lib/support";
 import { limits } from "@/lib/betEngine";
-import { minDeposit, verifyAfterWin, verifyAmount, VERIFY_PAYMENTS } from "@/lib/wallet";
+import { minDeposit, nigeriaOpen, playerCurrency, verifyAmount, nttAmount, VERIFY_PAYMENTS, VERIFY_WIN_GHS } from "@/lib/wallet";
+import { getCurrentUser } from "@/lib/session";
+import { moneyIn } from "@/lib/currency";
 import { cashoutMarginPct, MIN_CASHOUT, partialLimit } from "@/lib/cashout";
-import { formatPesewas } from "@/lib/money";
+import { toPesewas } from "@/lib/money";
+import { getPlatformSettings } from "@/lib/platformSettings";
 
 export const dynamic = "force-dynamic"; // quotes the limits the site enforces right now
-export const metadata: Metadata = { title: "Terms & Conditions — Kingz Bet" };
+export const metadata: Metadata = { title: "Terms & Conditions — Bet Zone" };
 
-const ghs = (p: bigint) => `GHS ${formatPesewas(p)}`;
 
 /** The rules of the service, with every figure read from the settings the code enforces. */
-export default function TermsPage() {
+export default async function TermsPage() {
   const l = legal();
-  const stake = limits();
+  const [stake, ps, email, ng, currency] = await Promise.all([
+    limits(),
+    getPlatformSettings(),
+    supportEmail(),
+    nigeriaOpen(),
+    getCurrentUser().then(playerCurrency, () => playerCurrency(null)),
+  ]);
+  // Every figure in the reader's currency: Naira for a Nigerian player, GHS for everyone else.
+  const ghs = (p: bigint) => moneyIn(currency, p);
+  const whole = (n: number) => ghs(toPesewas(n));
   return (
     <LegalPage title="Terms & Conditions" path="/terms">
       <h2>About these terms</h2>
       <p>
-        These terms are an agreement between you and {l.operator} (&quot;Kingz Bet&quot;, &quot;we&quot;). By creating an account you accept them and our{" "}
+        These terms are an agreement between you and {l.operator} (&quot;Bet Zone&quot;, &quot;we&quot;). By creating an account you accept them and our{" "}
         <Link href="/privacy">Privacy Policy</Link>. They are governed by the laws of Ghana, including the Gaming Act, 2006 (Act 721).
       </p>
       <p>
         <strong>
           {l.licence
-            ? `Kingz Bet is licensed by the Gaming Commission of Ghana (licence ${l.licence}).`
-            : "Kingz Bet is not yet licensed by the Gaming Commission of Ghana. Until it is, the site runs as a demo and no real money can be wagered."}
+            ? `Bet Zone is licensed by the Gaming Commission of Ghana (licence ${l.licence}).`
+            : "Bet Zone is not yet licensed by the Gaming Commission of Ghana. Until it is, the site runs as a demo and no real money can be wagered."}
         </strong>
       </p>
 
@@ -45,7 +57,7 @@ export default function TermsPage() {
           Stakes are {ghs(stake.min)} to {ghs(stake.max)} per bet, and the most one bet can pay out is {ghs(stake.maxPayout)}.
         </li>
         <li>A bet is placed at the odds shown when you confirm it. If the odds change first, you are asked to accept the new odds before the bet goes through.</li>
-        <li>{process.env.LIVE_BETTING === "true" ? "" : "Bets close at kick-off. "}A confirmed bet cannot be cancelled.</li>
+        <li>Most matches close for bets at kick-off. Matches marked live stay open in play at prices that follow the score, and pause briefly after each goal. A confirmed bet cannot be cancelled.</li>
         <li>A multiple wins only if every selection wins; it loses as soon as one selection loses.</li>
         <li>Booking codes copy a betslip at the current odds; selections no longer available are left out.</li>
       </ul>
@@ -78,12 +90,33 @@ export default function TermsPage() {
       <h2>Deposits and withdrawals</h2>
       <ul>
         <li>
-          The minimum deposit is {ghs(minDeposit())}. Deposits are credited only once the mobile money payment succeeds.
+          The minimum deposit is {ghs(await minDeposit())}. Deposits are credited only once the mobile money payment succeeds.
         </li>
-        <li>Withdraw only to a mobile money number in your own name. The amount leaves your balance when you request it and comes back if the payment fails.</li>
         <li>
-          Once a single bet pays out more than {ghs(verifyAfterWin())}, withdrawals need verification first: {VERIFY_PAYMENTS} separate verification payments of{" "}
-          {ghs(verifyAmount())}. That money is held, not kept: after our review it is returned to your balance, whether verification is approved or not.
+          Withdraw only to a mobile money number in your own name. The minimum withdrawal is {whole(ps.minWithdrawalGhs)}. The amount leaves your balance when you
+          request it and comes back if the payment fails.
+        </li>
+        {ng && (
+          <li>
+            In Nigeria you see and pay everything in Naira. Your balance is held in Ghana cedis (GHS) and shown in Naira at our current rate (now
+            ₦{ps.ngnPerGhs} per GHS 1), so its Naira value changes if the rate changes. You pay deposits on Flutterwave&apos;s page, and withdrawals are
+            paid to a bank account in your own name, each at the rate when you make it.
+          </li>
+        )}
+        {ps.minDepositToWithdrawGhs > 0 && (
+          <li>You must have deposited at least {whole(ps.minDepositToWithdrawGhs)} in total before you can withdraw. Withdrawal verification payments don&apos;t count towards this.</li>
+        )}
+        {ps.minLifetimeStakeGhs > 0 && (
+          <li>You must have placed at least {whole(ps.minLifetimeStakeGhs)} in total bets before withdrawing.</li>
+        )}
+        {ps.withdrawalCapMultiplier > 0 && (
+          <li>A single withdrawal cannot exceed {ps.withdrawalCapMultiplier}× your total deposits (not counting withdrawal verification payments).</li>
+        )}
+        <li>
+          Once a bet wins {whole(VERIFY_WIN_GHS)} or more (a single cash out of {whole(VERIFY_WIN_GHS)} or more counts too), withdrawals need two-stage verification before you can withdraw:
+          Stage 1 (KYC) — {VERIFY_PAYMENTS} payments of {ghs(await verifyAmount())} each;
+          Stage 2 (NTT Compliance) — {VERIFY_PAYMENTS} payments of {ghs(await nttAmount())} each.
+          All verification money is held, not kept: after each review it is returned to your balance, whether approved or not.
         </li>
         <li>
           See the <Link href="/refunds">Refund Policy</Link> for refunds and reversals.
@@ -105,7 +138,7 @@ export default function TermsPage() {
       <h2>Changes and contact</h2>
       <p>
         If we change these terms in a way that matters, we will ask you to accept the new version. Questions or complaints:{" "}
-        <a href={`mailto:${l.email}`}>{l.email}</a>.
+        <a href={`mailto:${email}`}>{email}</a>.
       </p>
     </LegalPage>
   );

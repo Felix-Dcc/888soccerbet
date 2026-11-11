@@ -25,25 +25,29 @@ vi.mock("../src/lib/email", async (load) => {
   return { ...real, sendEmail: async (m: { to: string; subject: string; text: string }) => (mail.sent.push(m), true) };
 });
 import { randomUUID } from "node:crypto";
+import { readFileSync } from "node:fs";
+import { hashPassword, verifyPassword } from "../src/lib/auth";
+import { ensureSuperAdmin } from "../src/lib/superAdmin";
 import type { MarketType, Prisma } from "@prisma/client";
 import { prisma } from "../src/lib/db";
 import { houseAccountId, userAccountId, postTransaction, userCashBalance, ledgerIsBalanced } from "../src/lib/ledger";
 import { placeBet, BetError } from "../src/lib/betEngine";
 import { setLiveScore, settleBet, settleFixture, voidFixture, SettlementError } from "../src/lib/settlement";
-import { initiateDeposit, initiateWithdrawal, initiateVerificationPayment, confirmDeposit, manualPayoutQueue, processPaymentEvent, reconcilePendingDeposits, recordManualPayout, reviewVerification, verifyPlayer, verificationState } from "../src/lib/wallet";
+import { depositPauseUntil, depositShortfall, initiateBankWithdrawal, initiateDeposit, initiateWithdrawal, initiateVerificationPayment, confirmDeposit, manualPayoutQueue, processPaymentEvent, reconcilePendingDeposits, recordManualPayout, reviewNttCompliance, reviewVerification, verifyPlayer, verificationState, VERIFY_PAYMENTS } from "../src/lib/wallet";
 import { toPesewas } from "../src/lib/money";
 import { referralCode } from "../src/lib/ids";
 import { createBooking, loadBooking, resolvePicks } from "../src/lib/bookings";
 import { registerUser, findUserByIdentifier } from "../src/lib/accounts";
 import { TERMS_VERSION } from "../src/lib/legal";
-import { createAdmin, consumeAccessToken, formatReferralCode, issueResetLink, setAdminStatus, updateAdminAccess } from "../src/lib/admins";
+import { createAdmin, consumeAccessToken, issueResetLink, promoteToAdmin, setAdminStatus, updateAdminAccess } from "../src/lib/admins";
 import { adminComparison, parseRange, scopeMetrics } from "../src/lib/adminAnalytics";
 import { adjustAdminBalance, adjustBalance, canViewPlayer } from "../src/lib/playerAdmin";
 import { audit, verifyAuditChain } from "../src/lib/audit";
 import { listFixtures, listResults, dataVersion } from "../src/lib/queries";
-import { applyMarkets, goLiveManualFixtures, syncFixtures, syncLiveOdds, updateLiveScores } from "../src/lib/sync";
+import { applyMarkets, goLiveManualFixtures, retireOrphanedFeedFixtures, settleRecentlyFinished, syncFixtures, syncLiveOdds, updateLiveScores } from "../src/lib/sync";
 import { createManualFixture, rescheduleManualFixture } from "../src/lib/manualFixtures";
 import { isTestAccount, planDemoCleanup, runDemoCleanup } from "../src/lib/demoCleanup";
+import { decidePayoutRequest, myCommission, LIFETIME, requestPayout } from "../src/lib/commission";
 import { manualFixtureSchema } from "../src/lib/validation";
 import { generateMatch } from "../src/lib/matchGenerator";
 import { advanceScriptedMatches, buildScript, scriptLengthMin, type MatchScript } from "../src/lib/scriptedMatches";
@@ -51,6 +55,21 @@ import { markWinsSeen, unseenWins } from "../src/lib/wins";
 import { ensureVerifyCode, ticketByVerifyCode, ticketByRef, ticketTotals } from "../src/lib/tickets";
 import { cashOut, quoteForBet, runAutoCashouts, setAutoCashout } from "../src/lib/cashout";
 import { confirmEmailCode, requestPasswordReset, requireVerifiedEmail, sendVerificationCode } from "../src/lib/emailFlows";
+import { invalidateSettingsCache, type SettingsPayload } from "../src/lib/platformSettings";
+
+/** Write the Platform Settings row the money paths read, and drop the cached copy so it applies at once. */
+async function pinSettings(data: Partial<SettingsPayload>) {
+  await prisma.platformSettings.upsert({ where: { id: "singleton" }, create: { id: "singleton", ...data }, update: data });
+  invalidateSettingsCache();
+}
+// Money-path tests use small round stakes, deposits and withdrawals with no withdrawal gates;
+// the real minimums (deposit 50, stake 250) have their own test below.
+const TEST_SETTINGS: Partial<SettingsPayload> = {
+  minStakeGhs: 1, minDepositGhs: 1, minWithdrawalGhs: 1,
+  maxStakeGhs: 5000, maxPayoutGhs: 200000,
+  minDepositToWithdrawGhs: 0, minLifetimeStakeGhs: 0, withdrawalCapMultiplier: 0,
+  kycVerificationFeeGhs: 500, nttComplianceFeeGhs: 500,
+};
 
 async function fundedUser(ghs: number) {
   const user = await prisma.user.create({
@@ -91,6 +110,7 @@ async function makeMatch(odds: { home: number; draw?: number; away: number }, st
 }
 
 beforeAll(async () => {
+  await pinSettings(TEST_SETTINGS);
   await houseAccountId(prisma, "HOUSE_PNL");
   await houseAccountId(prisma, "PAYMENT_CLEARING");
 });
@@ -210,6 +230,100 @@ describe("wallet", () => {
     expect(await processPaymentEvent("sandbox", ev)).toBe("processed");
     expect(await processPaymentEvent("sandbox", ev)).toBe("duplicate"); // replayed callback
     expect(await userCashBalance(prisma, user.id)).toBe(toPesewas(50)); // credited once
+    expect(await ledgerIsBalanced()).toBe(true);
+  });
+
+  it("counts a referred player's withdrawal verification fees toward the referring admin's commission", async () => {
+    const admin = await prisma.user.create({
+      data: { email: `adm_${randomUUID()}@test.gh`, passwordHash: "x", role: "ADMIN", referralCode: referralCode(), commissionBp: 1000 }, // 10%
+    });
+    const player = await prisma.user.create({
+      data: { email: `t_${randomUUID()}@test.gh`, passwordHash: "x", dateOfBirth: new Date("1990-01-01"), referralCode: referralCode(), referredById: admin.id },
+    });
+    const pay = (amountGhs: number, direction: "DEPOSIT" | "WITHDRAWAL", purpose?: string, status: "SUCCEEDED" | "FAILED" = "SUCCEEDED") =>
+      prisma.paymentIntent.create({
+        data: {
+          ref: `T-${randomUUID().slice(0, 8)}`, userId: player.id, direction, amount: toPesewas(amountGhs), status, provider: "shinobipay",
+          idempotencyKey: randomUUID(), metadata: purpose ? { purpose } : {}, settledAt: new Date(),
+        },
+      });
+    await pay(100, "DEPOSIT");
+    await pay(30, "DEPOSIT", "VERIFICATION");
+    await pay(40, "DEPOSIT", "NTT");
+    await pay(500, "DEPOSIT", "VERIFICATION", "FAILED"); // never counts
+    await pay(20, "WITHDRAWAL");
+    const c = await myCommission(admin.id, LIFETIME);
+    expect(c.lifetime.deposits).toBe(toPesewas(100));
+    expect(c.lifetime.verification).toBe(toPesewas(70));
+    expect(c.lifetime.depositors).toBe(1);
+    expect(c.lifetime.net).toBe(toPesewas(150)); // 100 + 70 - 20
+    expect(c.lifetime.earned).toBe(toPesewas(15)); // 10%
+  });
+
+  it("pays commission through a request queue: one waiting at a time, never more than owed, decided once", async () => {
+    const sa = await prisma.user.create({ data: { email: `sa_${randomUUID()}@t.gh`, passwordHash: "x", role: "SUPER_ADMIN", referralCode: referralCode() } });
+    const admin = await prisma.user.create({
+      data: { email: `adm_${randomUUID()}@test.gh`, passwordHash: "x", role: "ADMIN", referralCode: referralCode(), commissionBp: 1000 }, // 10%
+    });
+    const player = await prisma.user.create({
+      data: { email: `t_${randomUUID()}@test.gh`, passwordHash: "x", dateOfBirth: new Date("1990-01-01"), referralCode: referralCode(), referredById: admin.id },
+    });
+    await prisma.paymentIntent.create({
+      data: { ref: `T-${randomUUID().slice(0, 8)}`, userId: player.id, direction: "DEPOSIT", amount: toPesewas(500), status: "SUCCEEDED", provider: "sandbox", idempotencyKey: randomUUID(), settledAt: new Date() },
+    }); // owed GHS 50
+
+    await expect(requestPayout(admin, toPesewas(50.01), "MoMo 0240000000")).rejects.toMatchObject({ code: "OVERPAY" });
+    const first = await requestPayout(admin, toPesewas(20), "MoMo 0240000000");
+    await expect(requestPayout(admin, toPesewas(5), "MoMo 0240000000")).rejects.toMatchObject({ code: "ALREADY_REQUESTED" });
+    await expect(decidePayoutRequest(sa, first.id, false, null)).rejects.toMatchObject({ code: "NO_REASON" });
+    await decidePayoutRequest(sa, first.id, false, "Wrong number");
+    await expect(decidePayoutRequest(sa, first.id, true, null)).rejects.toMatchObject({ code: "ALREADY_DECIDED" });
+    expect((await myCommission(admin.id, LIFETIME)).lifetime.paid).toBe(0n); // a rejection pays nothing
+
+    const second = await requestPayout(admin, toPesewas(30), "MoMo 0240000001");
+    await prisma.user.update({ where: { id: admin.id }, data: { commissionBp: 500 } }); // now owed GHS 25
+    await expect(decidePayoutRequest(sa, second.id, true, null)).rejects.toMatchObject({ code: "OVERPAY" });
+    await prisma.user.update({ where: { id: admin.id }, data: { commissionBp: 1000 } }); // owed GHS 50 again
+    await expect(decidePayoutRequest(sa, second.id, true, null)).resolves.toMatchObject({ status: "APPROVED" });
+    const c = await myCommission(admin.id, LIFETIME);
+    expect(c.lifetime.paid).toBe(toPesewas(30));
+    expect(c.lifetime.owed).toBe(toPesewas(20));
+    expect(c.pending).toBeNull();
+    expect(await prisma.commissionPayout.count({ where: { adminId: admin.id, idempotencyKey: `request:${second.id}` } })).toBe(1);
+  });
+
+  it("pauses deposits for 5 minutes after every 3rd failed deposit in a row, then allows 3 fresh tries", async () => {
+    const user = await fundedUser(0);
+    const fail = (minsAgo: number) =>
+      prisma.paymentIntent.create({
+        data: {
+          ref: `T-${randomUUID().slice(0, 8)}`, userId: user.id, direction: "DEPOSIT", amount: toPesewas(100), status: "FAILED", provider: "sandbox",
+          idempotencyKey: randomUUID(), createdAt: new Date(Date.now() - minsAgo * 60_000 - 1000), settledAt: new Date(Date.now() - minsAgo * 60_000),
+        },
+      });
+    await fail(3);
+    await fail(2);
+    expect(await depositPauseUntil(user.id)).toBeNull(); // two failures: still fine
+    await fail(1);
+    const until = await depositPauseUntil(user.id);
+    expect(until!.getTime()).toBeGreaterThan(Date.now() + 3.5 * 60_000); // ~4 minutes left
+    await expect(initiateDeposit(user.id, 100, "0241234567", randomUUID())).rejects.toMatchObject({ code: "DEPOSIT_PAUSED" });
+    expect(await depositPauseUntil(user.id, Date.now() + 5 * 60_000)).toBeNull(); // over once the 5 minutes pass
+    await fail(0); // a 4th failure after the pause: fresh tries, not paused again yet
+    expect(await depositPauseUntil(user.id)).toBeNull();
+    const ok = await initiateDeposit(user.id, 100, "0241234567", randomUUID()); // a pending (not failed) try breaks the streak
+    expect(ok.status).toBe("PENDING");
+  });
+
+  it("retries an event an earlier attempt recorded but never finished, crediting it once", async () => {
+    const user = await fundedUser(0);
+    const intent = await initiateDeposit(user.id, 50, "0241234567", randomUUID());
+    const ev = { providerEventId: `evt_${randomUUID()}`, ourRef: intent.ref, status: "SUCCEEDED" as const, amountPesewas: intent.amount };
+    // An attempt that crashed after recording the event: left RECEIVED, nothing credited.
+    await prisma.webhookEvent.create({ data: { provider: "sandbox", providerEventId: ev.providerEventId, payloadHash: ev.providerEventId, status: "RECEIVED" } });
+    expect(await processPaymentEvent("sandbox", ev)).toBe("processed"); // the retry finishes it
+    expect(await processPaymentEvent("sandbox", ev)).toBe("duplicate");
+    expect(await userCashBalance(prisma, user.id)).toBe(toPesewas(50));
     expect(await ledgerIsBalanced()).toBe(true);
   });
 
@@ -353,16 +467,6 @@ describe("wallet", () => {
 });
 
 describe("minimums and withdrawal verification", () => {
-  // The int config lowers both minimums to GHS 1 for the other tests; restore the real ones here.
-  const withEnv = async (vars: Record<string, string>, fn: () => Promise<void>) => {
-    const old = Object.fromEntries(Object.keys(vars).map((k) => [k, process.env[k]]));
-    Object.assign(process.env, vars);
-    try {
-      await fn();
-    } finally {
-      for (const [k, v] of Object.entries(old)) v === undefined ? delete process.env[k] : (process.env[k] = v);
-    }
-  };
   const succeed = (intent: { ref: string; amount: bigint }) =>
     processPaymentEvent("sandbox", { providerEventId: `evt_${randomUUID()}`, ourRef: intent.ref, status: "SUCCEEDED", amountPesewas: intent.amount });
   const pay = async (userId: string) => succeed(await initiateVerificationPayment(userId, "0241234567", randomUUID()));
@@ -376,22 +480,50 @@ describe("minimums and withdrawal verification", () => {
     await settleFixture(fixture.id, 1, 0);
   };
 
-  it("isn't needed until a win pays out over GHS 1000", async () => {
-    const user = await fundedUser(0);
-    await win(user.id, 1000); // exactly 1000: not over
-    expect(await verificationState(user.id)).toMatchObject({ required: false });
-    await expect(initiateVerificationPayment(user.id, "0241234567", randomUUID())).rejects.toMatchObject({ code: "NOT_REQUIRED" });
-    await initiateWithdrawal(user.id, 100, "0241234567", randomUUID()); // unverified, but allowed
-    expect(await userCashBalance(prisma, user.id)).toBe(toPesewas(900));
+  it("is triggered only by a win of GHS 1000+ (or a cash out paying that much); never of staff", async () => {
+    const fresh = await fundedUser(500); // never bet
+    expect(await verificationState(fresh.id)).toMatchObject({ required: false });
+    await initiateWithdrawal(fresh.id, 100, "0241234567", randomUUID()); // goes through
 
-    await win(user.id, 1002);
-    expect(await verificationState(user.id)).toMatchObject({ required: true, paid: 0 });
-    await expect(initiateWithdrawal(user.id, 100, "0241234567", randomUUID())).rejects.toMatchObject({ code: "VERIFICATION_REQUIRED" });
+    const under = await fundedUser(0);
+    await win(under.id, 998); // just under the trigger
+    expect(await verificationState(under.id)).toMatchObject({ required: false });
+    await initiateWithdrawal(under.id, 100, "0241234567", randomUUID());
+
+    const exactly = await fundedUser(0);
+    await win(exactly.id, 1000); // the trigger itself
+    expect(await verificationState(exactly.id)).toMatchObject({ required: true, stage: "kyc" });
+    await expect(initiateWithdrawal(exactly.id, 100, "0241234567", randomUUID())).rejects.toMatchObject({ code: "VERIFICATION_REQUIRED" });
+
+    // A full cash out settles as WON with potentialPayout 0, so only what it paid decides.
+    const cashOutFor = async (stakeGhs: number) => {
+      const u = await fundedUser(stakeGhs);
+      const { home } = await makeMatch({ home: 2.0, draw: 3.0, away: 4.0 });
+      const placed = await placeBet(u.id, { idempotencyKey: randomUUID(), stakeGhs, acceptOddsChange: false, selections: [{ selectionId: home.id, expectedMilliOdds: 2000 }] });
+      const bet = await prisma.bet.findUniqueOrThrow({ where: { ref: placed.ref } });
+      const quote = await quoteForBet(bet.id);
+      if (!quote.available) throw new Error("cash out unavailable");
+      await cashOut({ betId: bet.id, userId: u.id, expected: quote.offer, idempotencyKey: randomUUID() });
+      const paid = (await prisma.cashout.findFirstOrThrow({ where: { betId: bet.id } })).amount;
+      return { u, paid };
+    };
+    const small = await cashOutFor(800); // pays under GHS 1000
+    expect(small.paid < 100000n).toBe(true);
+    expect(await verificationState(small.u.id)).toMatchObject({ required: false });
+    const big = await cashOutFor(1500);
+    expect(big.paid >= 100000n).toBe(true);
+    expect(await verificationState(big.u.id)).toMatchObject({ required: true });
+    await expect(initiateWithdrawal(big.u.id, 10, "0241234567", randomUUID())).rejects.toMatchObject({ code: "VERIFICATION_REQUIRED" });
+
+    const staff = await prisma.user.create({ data: { email: `adm_${randomUUID()}@test.gh`, passwordHash: "x", role: "ADMIN", referralCode: referralCode() } });
+    expect(await verificationState(staff.id)).toMatchObject({ required: false });
+    await expect(initiateVerificationPayment(staff.id, "0241234567", randomUUID())).rejects.toMatchObject({ code: "NOT_REQUIRED" });
     expect(await ledgerIsBalanced()).toBe(true);
   });
 
   it("rejects a deposit under GHS 50 and a stake under GHS 250", async () => {
-    await withEnv({ MIN_DEPOSIT_GHS: "50", MIN_STAKE_GHS: "250" }, async () => {
+    await pinSettings({ minDepositGhs: 50, minStakeGhs: 250 }); // the live defaults
+    try {
       const user = await fundedUser(1000);
       await expect(initiateDeposit(user.id, 49, "0241234567", randomUUID())).rejects.toMatchObject({ code: "DEPOSIT_TOO_LOW" });
       await expect(initiateDeposit(user.id, 50, "0241234567", randomUUID())).resolves.toMatchObject({ status: "PENDING" });
@@ -400,32 +532,104 @@ describe("minimums and withdrawal verification", () => {
         placeBet(user.id, { idempotencyKey: randomUUID(), stakeGhs, acceptOddsChange: false, selections: [{ selectionId: home.id, expectedMilliOdds: 2000 }] });
       await expect(bet(249)).rejects.toBeInstanceOf(BetError);
       await expect(bet(250)).resolves.toBeTruthy();
-    });
+    } finally {
+      await pinSettings(TEST_SETTINGS);
+    }
   });
 
-  it("doesn't count a normal deposit, holds two payments, then approval releases them and unlocks withdrawals", async () => {
+  it("doesn't count a normal deposit, holds five KYC then five NTT payments, and each approval releases them; then withdrawals unlock", async () => {
+    expect(VERIFY_PAYMENTS).toBe(5);
     const user = await fundedUser(0);
     await win(user.id, 1002); // cash 1002
     await succeed(await initiateDeposit(user.id, 500, "0241234567", randomUUID())); // normal deposit
-    expect(await verificationState(user.id)).toMatchObject({ paid: 0, status: "UNVERIFIED" });
+    expect(await verificationState(user.id)).toMatchObject({ stage: "kyc", kyc: { paid: 0, needed: 5 }, status: "UNVERIFIED" });
     await expect(initiateWithdrawal(user.id, 100, "0241234567", randomUUID())).rejects.toMatchObject({ code: "VERIFICATION_REQUIRED" });
 
+    // Stage 1: KYC
     await pay(user.id);
-    expect(await verificationState(user.id)).toMatchObject({ paid: 1, held: toPesewas(500), status: "UNVERIFIED" }); // bar half full
+    expect(await verificationState(user.id)).toMatchObject({ kyc: { paid: 1, heldGhs: 500 }, status: "UNVERIFIED" });
     expect(await userCashBalance(prisma, user.id)).toBe(toPesewas(1502)); // held, not spendable
+    await expect(reviewVerification(user.id, true)).rejects.toMatchObject({ code: "NOT_READY" });
+    for (let i = 0; i < 3; i++) await pay(user.id);
+    expect(await verificationState(user.id)).toMatchObject({ kyc: { paid: 4, needed: 5, heldGhs: 2000 }, status: "UNVERIFIED" }); // "Last payment left"
     await expect(reviewVerification(user.id, true)).rejects.toMatchObject({ code: "NOT_READY" });
 
     await pay(user.id);
-    expect(await verificationState(user.id)).toMatchObject({ paid: 2, held: toPesewas(1000), status: "PENDING" }); // bar full
+    expect(await verificationState(user.id)).toMatchObject({ kyc: { paid: 5, heldGhs: 2500 }, status: "PENDING" });
     await expect(initiateVerificationPayment(user.id, "0241234567", randomUUID())).rejects.toMatchObject({ code: "AWAITING_REVIEW" });
     await expect(initiateWithdrawal(user.id, 100, "0241234567", randomUUID())).rejects.toMatchObject({ code: "VERIFICATION_REQUIRED" });
 
-    expect(await reviewVerification(user.id, true)).toEqual({ released: toPesewas(1000) });
-    expect(await verificationState(user.id)).toMatchObject({ held: 0n, status: "VERIFIED" });
-    expect(await userCashBalance(prisma, user.id)).toBe(toPesewas(2502));
+    expect(await reviewVerification(user.id, true)).toEqual({ released: toPesewas(2500), nextStatus: "KYC_APPROVED" });
+    expect(await verificationState(user.id)).toMatchObject({ stage: "ntt", kyc: { heldGhs: 0 }, status: "KYC_APPROVED" });
+    expect(await userCashBalance(prisma, user.id)).toBe(toPesewas(4002));
+    await expect(initiateWithdrawal(user.id, 100, "0241234567", randomUUID())).rejects.toMatchObject({ code: "VERIFICATION_REQUIRED" });
+
+    // Stage 2: NTT compliance
+    for (let i = 0; i < 4; i++) await pay(user.id);
+    expect(await verificationState(user.id)).toMatchObject({ ntt: { paid: 4, heldGhs: 2000 }, status: "KYC_APPROVED" });
+    await pay(user.id);
+    expect(await verificationState(user.id)).toMatchObject({ ntt: { paid: 5, heldGhs: 2500 }, status: "NTT_PENDING" });
+    await expect(initiateVerificationPayment(user.id, "0241234567", randomUUID())).rejects.toMatchObject({ code: "AWAITING_REVIEW" });
+    expect(await reviewNttCompliance(user.id, true)).toEqual({ released: toPesewas(2500), nextStatus: "VERIFIED" });
+    expect(await verificationState(user.id)).toMatchObject({ ntt: { heldGhs: 0 }, status: "VERIFIED" });
+    expect(await userCashBalance(prisma, user.id)).toBe(toPesewas(6502));
     await expect(initiateVerificationPayment(user.id, "0241234567", randomUUID())).rejects.toMatchObject({ code: "ALREADY_VERIFIED" });
     await initiateWithdrawal(user.id, 100, "0241234567", randomUUID());
-    expect(await userCashBalance(prisma, user.id)).toBe(toPesewas(2402));
+    expect(await userCashBalance(prisma, user.id)).toBe(toPesewas(6402));
+    expect(await ledgerIsBalanced()).toBe(true);
+  });
+
+  it("counts only real deposits, never verification payments, for the deposit-to-withdraw rule and the withdrawal cap", async () => {
+    await pinSettings({ minDepositToWithdrawGhs: 600, kycVerificationFeeGhs: 300 });
+    try {
+      const user = await fundedUser(0);
+      await win(user.id, 1002); // verification now required
+      await succeed(await initiateDeposit(user.id, 200, "0241234567", randomUUID())); // real deposit: GHS 200
+      for (let i = 0; i < VERIFY_PAYMENTS; i++) await pay(user.id); // 5 x GHS 300 verification payments
+      expect(await verifyPlayer(user.id)).toEqual({ released: toPesewas(1500) });
+
+      expect(await depositShortfall(user.id)).toBe(toPesewas(400)); // what the wallet's pop-up shows
+      // GHS 200 real + GHS 1,500 verification: still GHS 400 short of GHS 600 in real deposits, and it says so.
+      await expect(initiateWithdrawal(user.id, 100, "0241234567", randomUUID())).rejects.toMatchObject({
+        code: "DEPOSIT_REQUIREMENT",
+        message: "You need an additional GHS 400.00 deposit before withdrawing",
+      });
+      await succeed(await initiateDeposit(user.id, 100, "0241234567", randomUUID())); // GHS 300 real
+      await expect(initiateWithdrawal(user.id, 100, "0241234567", randomUUID())).rejects.toMatchObject({
+        message: "You need an additional GHS 300.00 deposit before withdrawing",
+      });
+      expect(await depositShortfall(user.id)).toBe(toPesewas(300));
+      await succeed(await initiateDeposit(user.id, 300, "0241234567", randomUUID())); // GHS 600 real in total
+      expect(await depositShortfall(user.id)).toBe(0n);
+      const staff = await prisma.user.create({ data: { email: `adm_${randomUUID()}@test.gh`, passwordHash: "x", role: "ADMIN", referralCode: referralCode() } });
+      expect(await depositShortfall(staff.id)).toBe(0n); // staff are never held to it
+      await initiateWithdrawal(user.id, 100, "0241234567", randomUUID());
+
+      await pinSettings({ withdrawalCapMultiplier: 2 }); // cap = 2 x GHS 600 real = GHS 1,200
+      await expect(initiateWithdrawal(user.id, 1201, "0241234567", randomUUID())).rejects.toMatchObject({ code: "WITHDRAWAL_CAP" });
+      await initiateWithdrawal(user.id, 1200, "0241234567", randomUUID());
+      expect(await ledgerIsBalanced()).toBe(true);
+    } finally {
+      await pinSettings(TEST_SETTINGS);
+    }
+  });
+
+  it("keeps a stage submitted under the old 2-payment rule complete: no more payments asked, and it can be approved", async () => {
+    const user = await fundedUser(0);
+    await win(user.id, 1002);
+    await pay(user.id);
+    await pay(user.id);
+    await prisma.user.update({ where: { id: user.id }, data: { kycStatus: "PENDING" } }); // submitted back when 2 were enough
+    expect(await verificationState(user.id)).toMatchObject({ kyc: { paid: 5, needed: 5, heldGhs: 1000 }, status: "PENDING" });
+    await expect(initiateVerificationPayment(user.id, "0241234567", randomUUID())).rejects.toMatchObject({ code: "AWAITING_REVIEW" });
+    expect(await reviewVerification(user.id, true)).toEqual({ released: toPesewas(1000), nextStatus: "KYC_APPROVED" });
+
+    await pay(user.id);
+    await pay(user.id);
+    await prisma.user.update({ where: { id: user.id }, data: { kycStatus: "NTT_PENDING" } });
+    expect(await verificationState(user.id)).toMatchObject({ ntt: { paid: 5, heldGhs: 1000 }, status: "NTT_PENDING" });
+    await expect(initiateVerificationPayment(user.id, "0241234567", randomUUID())).rejects.toMatchObject({ code: "AWAITING_REVIEW" });
+    expect(await reviewNttCompliance(user.id, true)).toEqual({ released: toPesewas(1000), nextStatus: "VERIFIED" });
     expect(await ledgerIsBalanced()).toBe(true);
   });
 
@@ -434,11 +638,11 @@ describe("minimums and withdrawal verification", () => {
     await win(user.id, 1002); // a big win makes verification required
     await expect(initiateWithdrawal(user.id, 100, "0241234567", randomUUID())).rejects.toMatchObject({ code: "VERIFICATION_REQUIRED" });
     await pay(user.id); // only one of the two payments in; GHS 500 held
-    expect(await verificationState(user.id)).toMatchObject({ paid: 1, held: toPesewas(500), status: "UNVERIFIED" });
+    expect(await verificationState(user.id)).toMatchObject({ kyc: { paid: 1, heldGhs: 500 }, status: "UNVERIFIED" });
 
     // Admin verifies directly, without the second payment: held money is released and the account is VERIFIED.
     expect(await verifyPlayer(user.id)).toEqual({ released: toPesewas(500) });
-    expect(await verificationState(user.id)).toMatchObject({ held: 0n, status: "VERIFIED" });
+    expect(await verificationState(user.id)).toMatchObject({ kyc: { heldGhs: 0 }, ntt: { heldGhs: 0 }, status: "VERIFIED" });
     expect(await userCashBalance(prisma, user.id)).toBe(toPesewas(1502)); // 1002 win + 500 released
 
     // The withdrawal now goes through without the standard verification step.
@@ -454,13 +658,13 @@ describe("minimums and withdrawal verification", () => {
     const user = await fundedUser(0);
     await win(user.id, 1002);
     await pay(user.id);
-    expect(await reviewVerification(user.id, false)).toEqual({ released: toPesewas(500) });
-    expect(await verificationState(user.id)).toMatchObject({ paid: 0, held: 0n, status: "REJECTED" });
+    expect(await reviewVerification(user.id, false)).toEqual({ released: toPesewas(500), nextStatus: "REJECTED" });
+    expect(await verificationState(user.id)).toMatchObject({ kyc: { paid: 0, heldGhs: 0 }, status: "REJECTED" });
     expect(await userCashBalance(prisma, user.id)).toBe(toPesewas(1502));
     await expect(reviewVerification(user.id, false)).rejects.toMatchObject({ code: "NOTHING_HELD" });
     await expect(initiateWithdrawal(user.id, 100, "0241234567", randomUUID())).rejects.toMatchObject({ code: "VERIFICATION_REQUIRED" });
     await pay(user.id);
-    expect(await verificationState(user.id)).toMatchObject({ paid: 1 });
+    expect(await verificationState(user.id)).toMatchObject({ kyc: { paid: 1 } });
     expect(await ledgerIsBalanced()).toBe(true);
   });
 });
@@ -481,10 +685,10 @@ describe("booking codes", () => {
     const a = await makeMatch({ home: 2.0, away: 4.0 });
     const b = await makeMatch({ home: 1.5, away: 3.0 });
     const code = await createBooking([a.home.id, b.away.id]);
-    expect(code).toMatch(/^[A-Z0-9]{8}$/);
+    expect(code).toMatch(/^[A-Z0-9]{6}$/);
 
     await prisma.selection.update({ where: { id: a.home.id }, data: { milliOdds: 2200 } }); // price moves after booking
-    const loaded = await loadBooking(code.toLowerCase().replace(/(....)/, "$1 ")); // typed loosely
+    const loaded = await loadBooking(code.toLowerCase().replace(/(...)/, "$1 ")); // typed loosely
     expect(loaded.unavailable).toBe(0);
     expect(loaded.picks.map((p) => p.selectionId)).toEqual([a.home.id, b.away.id]);
     expect(loaded.picks[0]!.milliOdds).toBe(2200);
@@ -529,35 +733,36 @@ describe("accounts", () => {
   const unique = () => randomUUID().slice(0, 8);
   const phone = () => "05" + String(Math.floor(Math.random() * 1e8)).padStart(8, "0");
 
-  it("registers with a referral code, normalises the phone and allows phone or email login", async () => {
-    const referrer = await registerUser({ email: `r_${unique()}@t.gh`, password: "password1", acceptTerms: true, phone: phone(), dateOfBirth: "1990-01-01" });
+  it("registers with name, email and password and a referral code; logs in by email, or by an older account's phone", async () => {
+    const referrer = await registerUser({ email: `r_${unique()}@t.gh`, password: "password1", acceptTerms: true });
     // Players don't refer players: only an administrator's code is accepted.
     await expect(
-      registerUser({ email: `x_${unique()}@t.gh`, password: "password1", acceptTerms: true, phone: phone(), dateOfBirth: "1990-01-01", referralCode: referrer.referralCode }),
+      registerUser({ email: `x_${unique()}@t.gh`, password: "password1", acceptTerms: true, referralCode: referrer.referralCode }),
     ).rejects.toMatchObject({ code: "BAD_REFERRAL" });
     await prisma.user.update({ where: { id: referrer.id }, data: { role: "ADMIN" } });
-    const p = phone();
-    const intl = "+233 " + p.slice(1);
     const user = await registerUser({
       name: "  Ama Mensah ",
-      email: `U_${unique()}@T.GH`.toLowerCase(), password: "password1", acceptTerms: true, phone: intl, dateOfBirth: "1990-01-01",
+      email: `U_${unique()}@T.GH`.toLowerCase(), password: "password1", acceptTerms: true,
       referralCode: referrer.referralCode.toLowerCase(),
     });
-    expect(user.phone).toBe(p);
+    expect(user).toMatchObject({ phone: null, dateOfBirth: null, emailVerifiedAt: null, country: "GH" });
     expect(user.displayName).toBe("Ama Mensah");
     expect(user.referredById).toBe(referrer.id);
     expect(user.referralCode).not.toBe(referrer.referralCode);
     expect(user.termsVersion).toBe(TERMS_VERSION); // consent recorded with the version accepted
     expect(user.termsAcceptedAt).toBeInstanceOf(Date);
-    expect((await findUserByIdentifier(p))?.id).toBe(user.id);
-    expect((await findUserByIdentifier(intl))?.id).toBe(user.id);
     expect((await findUserByIdentifier(user.email.toUpperCase()))?.id).toBe(user.id);
+    // Accounts made when sign-up asked for a phone still log in with it, in any format.
+    const p = phone();
+    await prisma.user.update({ where: { id: user.id }, data: { phone: p } });
+    expect((await findUserByIdentifier(p))?.id).toBe(user.id);
+    expect((await findUserByIdentifier("+233 " + p.slice(1)))?.id).toBe(user.id);
   });
 
   it("credits sign-ups without a code to the default administrator, never overriding a code and never blocking", async () => {
-    const admin = async () => prisma.user.update({ where: { id: (await registerUser({ email: `a_${unique()}@t.gh`, password: "password1", acceptTerms: true, phone: phone(), dateOfBirth: "1990-01-01" })).id }, data: { role: "ADMIN" } });
+    const admin = async () => prisma.user.update({ where: { id: (await registerUser({ email: `a_${unique()}@t.gh`, password: "password1", acceptTerms: true })).id }, data: { role: "ADMIN" } });
     const [element, other] = [await admin(), await admin()];
-    const signUp = (referralCode?: string) => registerUser({ email: `n_${unique()}@t.gh`, password: "password1", acceptTerms: true, phone: phone(), dateOfBirth: "1990-01-01", referralCode });
+    const signUp = (referralCode?: string) => registerUser({ email: `n_${unique()}@t.gh`, password: "password1", acceptTerms: true, referralCode });
     vi.stubEnv("DEFAULT_REFERRAL_CODE", ` ${element.referralCode.slice(0, 4)}-${element.referralCode.slice(4)} `.toLowerCase()); // typed loosely into Railway
     try {
       expect(await signUp()).toMatchObject({ referredById: element.id, referralSource: "AUTO" });
@@ -569,19 +774,13 @@ describe("accounts", () => {
     }
   });
 
-  it("rejects an unknown referral code, a duplicate phone in another format, a duplicate email, and under-18s", async () => {
-    const p = phone();
+  it("rejects an unknown referral code and a duplicate email", async () => {
     const email = `d_${unique()}@t.gh`;
-    await registerUser({ email, password: "password1", acceptTerms: true, phone: p, dateOfBirth: "1990-01-01" });
-    await expect(registerUser({ email: `x_${unique()}@t.gh`, password: "password1", acceptTerms: true, phone: phone(), dateOfBirth: "1990-01-01", referralCode: "NOPE0000" }))
+    await registerUser({ email, password: "password1", acceptTerms: true });
+    await expect(registerUser({ email: `x_${unique()}@t.gh`, password: "password1", acceptTerms: true, referralCode: "NOPE0000" }))
       .rejects.toMatchObject({ code: "BAD_REFERRAL" });
-    await expect(registerUser({ email: `y_${unique()}@t.gh`, password: "password1", acceptTerms: true, phone: "233" + p.slice(1), dateOfBirth: "1990-01-01" }))
-      .rejects.toMatchObject({ code: "PHONE_TAKEN" });
-    await expect(registerUser({ email, password: "password1", acceptTerms: true, phone: phone(), dateOfBirth: "1990-01-01" }))
+    await expect(registerUser({ email, password: "password1", acceptTerms: true }))
       .rejects.toMatchObject({ code: "EMAIL_TAKEN" });
-    const tooYoung = new Date(); tooYoung.setFullYear(tooYoung.getFullYear() - 17);
-    await expect(registerUser({ email: `z_${unique()}@t.gh`, password: "password1", acceptTerms: true, phone: phone(), dateOfBirth: tooYoung.toISOString().slice(0, 10) }))
-      .rejects.toMatchObject({ code: "UNDERAGE" });
   });
 });
 
@@ -698,9 +897,9 @@ describe("admin: manual games, void and final results", () => {
     const { id } = await createManualFixture(input, script);
 
     // Bet on the home win while it is still upcoming.
-    const user = await fundedUser(100);
+    const user = await fundedUser(1000);
     const home = await prisma.selection.findFirstOrThrow({ where: { market: { fixtureId: id, type: "MATCH_RESULT" }, code: "1" } });
-    await placeBet(user.id, { idempotencyKey: randomUUID(), stakeGhs: 10, acceptOddsChange: true, selections: [{ selectionId: home.id, expectedMilliOdds: home.milliOdds }] });
+    await placeBet(user.id, { idempotencyKey: randomUUID(), stakeGhs: 250, acceptOddsChange: true, selections: [{ selectionId: home.id, expectedMilliOdds: home.milliOdds }] });
 
     const kickOff = new Date();
     await rescheduleManualFixture(id, kickOff.toISOString());
@@ -714,18 +913,20 @@ describe("admin: manual games, void and final results", () => {
     // Half time: exactly the scripted half-time score, still unsettled.
     await advanceScriptedMatches(at(script.halfMin));
     expect(await read()).toMatchObject({ status: "LIVE", homeScore: 1, awayScore: 0 });
-    expect(await userCashBalance(prisma, user.id)).toBe(toPesewas(90)); // staked, not paid
+    expect(await userCashBalance(prisma, user.id)).toBe(toPesewas(750)); // staked, not paid
 
-    // Full time: the script settles it and the home win pays out, once.
-    expect(await advanceScriptedMatches(at(scriptLengthMin(script)))).toMatchObject({ settled: 1 });
+    // Full time (after this match's own added time): the script settles it and the home win pays out, once.
+    const ko = (await read()).startsAt.getTime();
+    expect(await advanceScriptedMatches(at(scriptLengthMin(script, ko) - 0.5))).toMatchObject({ settled: 0 }); // still in added time
+    expect(await advanceScriptedMatches(at(scriptLengthMin(script, ko)))).toMatchObject({ settled: 1 });
     expect(await read()).toMatchObject({ status: "FINISHED", homeScore: 2, awayScore: 1 });
     const bet = await prisma.bet.findFirstOrThrow({ where: { userId: user.id } });
     expect(bet.status).toBe("WON");
-    expect(await userCashBalance(prisma, user.id)).toBe(toPesewas(90) + bet.potentialPayout);
+    expect(await userCashBalance(prisma, user.id)).toBe(toPesewas(750) + bet.potentialPayout);
 
     // A later tick finds nothing to do: no second payout.
-    expect(await advanceScriptedMatches(at(scriptLengthMin(script) + 30))).toEqual({ updated: 0, settled: 0 });
-    expect(await userCashBalance(prisma, user.id)).toBe(toPesewas(90) + bet.potentialPayout);
+    expect(await advanceScriptedMatches(at(scriptLengthMin(script, ko) + 30))).toEqual({ updated: 0, settled: 0 });
+    expect(await userCashBalance(prisma, user.id)).toBe(toPesewas(750) + bet.potentialPayout);
     expect(await ledgerIsBalanced()).toBe(true);
   });
 
@@ -962,6 +1163,44 @@ describe("feed refresh retires picks it stopped quoting", () => {
   });
 });
 
+describe("feed switch", () => {
+  it("retires the old feed's unbet matches, keeps bet ones and the new feed's, and does nothing on the fallback feed", async () => {
+    const user = await fundedUser(50);
+    const oldUnbet = (await makeMatch({ home: 2.0, away: 2.0 })).fixture;
+    const oldBet = await makeMatch({ home: 2.0, away: 2.0 });
+    const current = (await makeMatch({ home: 2.0, away: 2.0 })).fixture;
+    const sandboxUnbet = (await makeMatch({ home: 2.0, away: 2.0 })).fixture;
+    await prisma.fixture.update({ where: { id: oldUnbet.id }, data: { providerRef: `sdb-${randomUUID()}`, status: "LIVE" } });
+    await prisma.fixture.update({ where: { id: oldBet.fixture.id }, data: { providerRef: `sdb-${randomUUID()}` } });
+    await prisma.fixture.update({ where: { id: sandboxUnbet.id }, data: { providerRef: `sbx-${randomUUID()}` } });
+    await placeBet(user.id, { idempotencyKey: randomUUID(), stakeGhs: 5, acceptOddsChange: false, selections: [{ selectionId: oldBet.home.id, expectedMilliOdds: 2000 }] });
+    const status = async (id: string) => (await prisma.fixture.findUniqueOrThrow({ where: { id } })).status;
+
+    // Fallback (key missing): TheSportsDB is the feed in use, so nothing may be touched.
+    feed.override = { name: "thesportsdb" } as unknown as OddsProvider;
+    try {
+      expect(await retireOrphanedFeedFixtures()).toEqual({ retired: 0, kept: 0 });
+    } finally {
+      feed.override = null;
+    }
+    expect(await status(oldUnbet.id)).toBe("LIVE");
+
+    feed.override = { name: "theoddsapi" } as unknown as OddsProvider;
+    try {
+      const r = await retireOrphanedFeedFixtures();
+      expect(r.retired).toBeGreaterThanOrEqual(2);
+      expect(r.kept).toBeGreaterThanOrEqual(1);
+    } finally {
+      feed.override = null;
+    }
+    expect(await status(oldUnbet.id)).toBe("CANCELLED");
+    expect(await status(sandboxUnbet.id)).toBe("CANCELLED");
+    expect(await status(oldBet.fixture.id)).toBe("SCHEDULED"); // has a bet: left for an admin
+    expect(await status(current.id)).toBe("SCHEDULED"); // the live feed's own match
+    expect(await ledgerIsBalanced()).toBe(true);
+  });
+});
+
 describe("live scores", () => {
   it("settles a match that finished and dropped out of the in-play feed", async () => {
     const user = await fundedUser(100);
@@ -983,6 +1222,36 @@ describe("live scores", () => {
       feed.override = null;
     }
     expect(await prisma.fixture.findUniqueOrThrow({ where: { id: fixture.id } })).toMatchObject({ status: "FINISHED", homeScore: 2, awayScore: 1 });
+    expect(await userCashBalance(prisma, user.id)).toBe(toPesewas(110)); // home win paid
+    expect(await ledgerIsBalanced()).toBe(true);
+  });
+
+  it("settles soon after full time even while live scores sit at their credit reserve", async () => {
+    const user = await fundedUser(100);
+    const { fixture, home } = await makeMatch({ home: 2.0, draw: 3.0, away: 4.0 });
+    const early = await makeMatch({ home: 2.0, draw: 3.0, away: 4.0 });
+    await placeBet(user.id, { idempotencyKey: randomUUID(), stakeGhs: 10, acceptOddsChange: false, selections: [{ selectionId: home.id, expectedMilliOdds: 2000 }] });
+    const comp = await prisma.competition.create({ data: { sportKey: "football", name: `Results League ${randomUUID()}`, providerRef: "soccer_results_test" } });
+    // One kicked off 2h05m ago (first result check is due), one 1h40m ago (too early to check).
+    await prisma.fixture.update({ where: { id: fixture.id }, data: { competitionId: comp.id, status: "LIVE", startsAt: new Date(Date.now() - 125 * 60_000) } });
+    await prisma.fixture.update({ where: { id: early.fixture.id }, data: { competitionId: comp.id, status: "LIVE", startsAt: new Date(Date.now() - 100 * 60_000) } });
+
+    const asked: string[] = [];
+    const result = { providerRef: fixture.providerRef!, homeScore: 1, awayScore: 0, finished: true };
+    feed.override = {
+      fetchLiveScores: async () => [],
+      fetchResults: async (refs: string[]) => (asked.push(...refs), refs.includes(result.providerRef) ? [result] : []),
+      creditsRemaining: 10, // below LIVE_SCORES_RESERVE: live scores are paused
+    } as unknown as OddsProvider;
+    try {
+      expect(await updateLiveScores()).toMatchObject({ settled: 0, skipped: expect.stringContaining("credit reserve") });
+      expect(await settleRecentlyFinished(30 * 60_000)).toEqual({ checked: 1, settled: 1 });
+    } finally {
+      feed.override = null;
+    }
+    expect(asked).toEqual([fixture.providerRef]); // the too-early match cost nothing
+    expect(await prisma.fixture.findUniqueOrThrow({ where: { id: fixture.id } })).toMatchObject({ status: "FINISHED", homeScore: 1, awayScore: 0 });
+    expect((await prisma.fixture.findUniqueOrThrow({ where: { id: early.fixture.id } })).status).toBe("LIVE");
     expect(await userCashBalance(prisma, user.id)).toBe(toPesewas(110)); // home win paid
     expect(await ledgerIsBalanced()).toBe(true);
   });
@@ -1456,7 +1725,7 @@ describe("ticket verification codes", () => {
     const { fixture, home } = await makeMatch({ home: 2.0, draw: 3.0, away: 4.0 });
     const [a, b] = [await place(user.id, home.id), await place(user.id, home.id)];
     const rows = await prisma.bet.findMany({ where: { ref: { in: [a.ref, b.ref] } }, select: { ref: true, verifyCode: true } });
-    for (const r of rows) expect(r.verifyCode).toMatch(/^KB[ACDEFGHJKLMNPQRSTUVWXYZ2345679]{14}$/);
+    for (const r of rows) expect(r.verifyCode).toMatch(/^SB[ACDEFGHJKLMNPQRSTUVWXYZ2345679]{14}$/);
     expect(rows[0]!.verifyCode).not.toBe(rows[1]!.verifyCode);
 
     const code = rows[0]!.verifyCode!;
@@ -1464,7 +1733,7 @@ describe("ticket verification codes", () => {
     expect(await ticketByVerifyCode(code)).toBeNull(); // still running: nothing to verify yet
     await settleFixture(fixture.id, 1, 0);
     expect((await ticketByVerifyCode(typed))?.ref).toBe(rows[0]!.ref);
-    expect(await ticketByVerifyCode("KBNOTAREALCODE00")).toBeNull();
+    expect(await ticketByVerifyCode("SBNOTAREALCODE00")).toBeNull();
     expect(await ticketByVerifyCode("   ")).toBeNull();
   });
 
@@ -1637,7 +1906,7 @@ describe("responsible gambling on deposits", () => {
     await prisma.user.update({ where: { id: user.id }, data: { selfExcludedUntil: new Date(Date.now() + 86_400_000) } });
     await expect(deposit(user.id, 50)).rejects.toMatchObject({ code: "SELF_EXCLUDED" });
     await prisma.bet.create({
-      data: { ref: `KB-T${Date.now()}`, userId: user.id, type: "SINGLE", stake: 1n, combinedMilliOdds: 2000000, potentialPayout: toPesewas(2000), status: "WON", idempotencyKey: randomUUID() },
+      data: { ref: `SB-T${Date.now()}`, userId: user.id, type: "SINGLE", stake: 1n, combinedMilliOdds: 2000000, potentialPayout: toPesewas(2000), status: "WON", idempotencyKey: randomUUID() },
     }); // a big win, so verification applies
     await expect(initiateVerificationPayment(user.id, "0241234567", randomUUID())).rejects.toMatchObject({ code: "SELF_EXCLUDED" });
   });
@@ -1653,19 +1922,37 @@ describe("admin system", () => {
     registerUser({
       email: `p_${uniq()}@t.gh`,
       password: "password1",
-      phone: "05" + String(Math.floor(Math.random() * 1e8)).padStart(8, "0"),
-      dateOfBirth: "1990-01-01",
       referralCode: code,
       referralSource: source,
       acceptTerms: true,
     });
 
-  it("creates an admin with a unique ADM code and a single-use setup link", async () => {
+  it("lets a super admin make an existing player an admin or super admin, and nothing else", async () => {
+    const sa = await makeSuper();
+    const role = await prisma.adminRole.create({ data: { name: `Agent ${uniq()}`, permissions: ["referrals.view"] } });
+    const player = await fundedUser(25);
+    const after = await promoteToAdmin(sa, player.id, { role: "ADMIN", adminRoleId: role.id });
+    expect(after).toMatchObject({ role: "ADMIN", adminRoleId: role.id, status: "ACTIVE" });
+    expect(await userCashBalance(prisma, player.id)).toBe(toPesewas(25)); // keeps their balance
+    const log = await prisma.auditLog.findFirstOrThrow({ where: { action: "ADMIN_PROMOTE", targetId: player.id } });
+    expect(log.actorUserId).toBe(sa.id);
+    await expect(promoteToAdmin(sa, player.id, { role: "SUPER_ADMIN" })).rejects.toMatchObject({ code: "ALREADY_STAFF" }); // not for existing staff
+
+    const other = await fundedUser(0);
+    expect(await promoteToAdmin(sa, other.id, { role: "SUPER_ADMIN", adminRoleId: role.id })).toMatchObject({ role: "SUPER_ADMIN", adminRoleId: null });
+    await expect(promoteToAdmin(sa, sa.id, { role: "ADMIN" })).rejects.toMatchObject({ code: "SELF_EDIT" });
+    const suspended = await fundedUser(0);
+    await prisma.user.update({ where: { id: suspended.id }, data: { status: "SUSPENDED" } });
+    await expect(promoteToAdmin(sa, suspended.id, { role: "ADMIN" })).rejects.toMatchObject({ code: "NOT_ACTIVE" });
+    await expect(promoteToAdmin(sa, (await fundedUser(0)).id, { role: "ADMIN", adminRoleId: "no-such-role" })).rejects.toMatchObject({ code: "BAD_ROLE" });
+  });
+
+  it("creates an admin with a unique 8-character code and a single-use setup link", async () => {
     const sa = await makeSuper();
     const { user, token } = await newAdmin(sa, { permGrants: ["referrals.view", "not.a.permission"] });
-    expect(user.referralCode).toMatch(/^ADM[ACDEFGHJKLMNPQRSTUVWXYZ2345679]{8}$/); // ADM + 8 random: no name in it
-    expect(user.referralCode).not.toMatch(/FELIX/i);
-    expect(formatReferralCode(user.referralCode, true)).toMatch(/^ADM-[A-Z0-9]{4}-[A-Z0-9]{4}$/);
+    expect(user.referralCode).toMatch(/^[ACDEFGHJKLMNPQRSTUVWXYZ2345679]{8}$/); // 8 random, letters and numbers: no name in it
+    expect(user.referralCode).toMatch(/[0-9]/);
+    expect(user.referralCode).toMatch(/[A-Z]/);
     expect(user.permGrants).toEqual(["referrals.view"]); // junk dropped
     await expect(consumeAccessToken(token, "a-strong-password")).resolves.toMatchObject({ userId: user.id });
     await expect(consumeAccessToken(token, "another-password1")).rejects.toMatchObject({ code: "BAD_LINK" }); // single use
@@ -1709,9 +1996,10 @@ describe("admin system", () => {
   it("attributes sign-ups to the admin whose code or link was used, once, server-side", async () => {
     const sa = await makeSuper();
     const { user: admin } = await newAdmin(sa);
-    const shown = formatReferralCode(admin.referralCode, true);
-    const viaLink = await register(shown.toLowerCase(), "LINK"); // dashes and case don't matter
+    const viaLink = await register(` ${admin.referralCode.slice(0, 4)}-${admin.referralCode.slice(4)} `.toLowerCase(), "LINK"); // dashes, spaces and case don't matter
     const viaCode = await register(admin.referralCode);
+    // A link shared before codes were shortened ("ADM" + the 8) still finds the admin.
+    expect(await register(`ADM-${admin.referralCode.slice(0, 4)}-${admin.referralCode.slice(4)}`)).toMatchObject({ referredById: admin.id });
     expect(viaLink).toMatchObject({ referredById: admin.id, referralSource: "LINK" });
     expect(viaCode).toMatchObject({ referredById: admin.id, referralSource: "CODE" });
     expect(viaLink.referredAt).toBeInstanceOf(Date);
@@ -1802,50 +2090,28 @@ describe("admin system", () => {
 });
 
 describe("email", () => {
-  beforeAll(() => vi.stubEnv("BREVO_API_KEY", "test")); // the check only applies once email is configured
+  beforeAll(() => vi.stubEnv("BREVO_API_KEY", "test")); // email is set up: still no code is asked for
   afterAll(() => vi.unstubAllEnvs());
   const unique = () => randomUUID().slice(0, 8);
   const phone = () => "05" + String(Math.floor(Math.random() * 1e8)).padStart(8, "0");
   const lastTo = (to: string) => [...mail.sent].reverse().find((m) => m.to === to);
 
-  it("locks money until the emailed code is confirmed; codes are single-use", async () => {
-    const user = await registerUser({ email: `v_${unique()}@t.gh`, password: "password1", acceptTerms: true, phone: phone(), dateOfBirth: "1990-01-01" });
+  it("never asks a new player for an email code: no code is sent and money isn't locked", async () => {
+    const user = await registerUser({ email: `v_${unique()}@t.gh`, password: "password1", acceptTerms: true });
     expect(user.emailVerifiedAt).toBeNull();
-    expect(() => requireVerifiedEmail(user)).toThrow(expect.objectContaining({ code: "EMAIL_UNVERIFIED" }));
-    expect(await sendVerificationCode(user)).toBe(true);
-    const code = lastTo(user.email)!.subject.slice(0, 6);
-    expect(code).toMatch(/^\d{6}$/);
-    const wrong = code === "000000" ? "111111" : "000000";
-    await expect(confirmEmailCode(user.id, wrong)).rejects.toMatchObject({ code: "BAD_CODE" });
-    await confirmEmailCode(user.id, code);
-    const after = await prisma.user.findUniqueOrThrow({ where: { id: user.id } });
-    expect(after.emailVerifiedAt).toBeInstanceOf(Date);
-    expect(() => requireVerifiedEmail(after)).not.toThrow();
-    await expect(confirmEmailCode(user.id, code)).rejects.toMatchObject({ code: "BAD_CODE" }); // used
-    // A confirmation code is never accepted as a password link.
-    await expect(consumeAccessToken(`email-verify:${user.id}:${code}`, "a-strong-password")).rejects.toMatchObject({ code: "BAD_LINK" });
-  });
-
-  it("only the newest code works, and staff never need one", async () => {
-    const user = await registerUser({ email: `n_${unique()}@t.gh`, password: "password1", acceptTerms: true, phone: phone(), dateOfBirth: "1990-01-01" });
-    await sendVerificationCode(user);
-    const first = lastTo(user.email)!.subject.slice(0, 6);
-    await sendVerificationCode(user);
-    const second = lastTo(user.email)!.subject.slice(0, 6);
-    if (first !== second) await expect(confirmEmailCode(user.id, first)).rejects.toMatchObject({ code: "BAD_CODE" });
-    await confirmEmailCode(user.id, second);
-    expect(() => requireVerifiedEmail({ role: "ADMIN", emailVerifiedAt: null })).not.toThrow();
-    vi.stubEnv("BREVO_API_KEY", "");
-    expect(() => requireVerifiedEmail({ role: "USER", emailVerifiedAt: null })).not.toThrow(); // email not set up: nobody is locked out
-    vi.stubEnv("BREVO_API_KEY", "test");
+    expect(() => requireVerifiedEmail(user)).not.toThrow();
+    const before = mail.sent.length;
+    expect(await sendVerificationCode(user)).toBe(false);
+    expect(mail.sent.length).toBe(before);
+    expect(lastTo(user.email)).toBeUndefined();
   });
 
   it("emails a single-use reset link that also confirms the email, and reveals nothing for unknown accounts", async () => {
-    const user = await registerUser({ email: `f_${unique()}@t.gh`, password: "password1", acceptTerms: true, phone: phone(), dateOfBirth: "1990-01-01" });
+    const user = await registerUser({ email: `f_${unique()}@t.gh`, password: "password1", acceptTerms: true });
     const before = mail.sent.length;
     await requestPasswordReset(`nobody_${unique()}@t.gh`);
     expect(mail.sent.length).toBe(before); // nothing sent, same answer to the caller
-    await requestPasswordReset(user.phone!);
+    await requestPasswordReset(user.email);
     const link = lastTo(user.email)!.text.match(/\/account\/setup\/([\w-]+)/)![1]!;
     await expect(consumeAccessToken(link, "a-new-password1")).resolves.toMatchObject({ userId: user.id, role: "USER" });
     await expect(consumeAccessToken(link, "a-new-password2")).rejects.toMatchObject({ code: "BAD_LINK" });
@@ -1857,7 +2123,7 @@ describe("email", () => {
     const m = await makeMatch({ home: 2.0, draw: 3.0, away: 4.0 });
     await placeBet(p.id, { idempotencyKey: randomUUID(), stakeGhs: 10, acceptOddsChange: false, selections: [{ selectionId: m.home.id, expectedMilliOdds: 2000 }] });
     await settleFixture(m.fixture.id, 2, 0);
-    await vi.waitFor(() => expect(lastTo(p.email)?.subject).toBe("You won GHS 20.00 on Kingz Bet"));
+    await vi.waitFor(() => expect(lastTo(p.email)?.subject).toBe("You won GHS 20.00 on Bet Zone"));
     const intent = await initiateDeposit(p.id, 30, "0241234567", randomUUID());
     await processPaymentEvent("sandbox", { providerEventId: `evt_${randomUUID()}`, ourRef: intent.ref, status: "SUCCEEDED", amountPesewas: intent.amount });
     await vi.waitFor(() => expect(lastTo(p.email)?.subject).toBe("Deposit received: GHS 30.00"));
@@ -1904,6 +2170,18 @@ describe("clearing demo data", () => {
     const tryerCash = await userAccountId(prisma, tryer.id, "USER_CASH");
     await postTransaction(prisma, "DEPOSIT", `deposit:${sbRef}`, [{ accountId: clearing, amount: -toPesewas(50) }, { accountId: tryerCash, amount: toPesewas(50) }]);
     await placeBet(tryer.id, pick(m.home));
+    // A test-address account with a ShinobiPay payout: real money left, so the account and its ledger stay.
+    const payee = await fundedUser(30);
+    await prisma.user.update({ where: { id: payee.id }, data: { kycStatus: "VERIFIED" } });
+    psp.override = { name: "shinobipay", isSandbox: false, payouts: "manual", initiate: async () => ({ providerRef: null, status: "PENDING" as const }), verifyWebhook: async () => ({ ok: false as const }) };
+    try {
+      await initiateWithdrawal(payee.id, 20, "0241234567", randomUUID());
+    } finally {
+      psp.override = null;
+    }
+    // A test-address account whose only ShinobiPay payment failed: no real money, but the provider's record stays, so it's closed.
+    const failedPayer = await fundedUser(0);
+    await prisma.paymentIntent.create({ data: { ref: `DEP-${randomUUID().slice(0, 8)}`, userId: failedPayer.id, direction: "DEPOSIT", amount: toPesewas(50), status: "FAILED", provider: "shinobipay", idempotencyKey: randomUUID() } });
     await settleFixture(m.fixture.id, 2, 0); // everyone on it wins GHS 20
     const realStaff = (await prisma.user.findMany({ where: { role: { not: "USER" } }, select: { email: true } })).filter((u) => !isTestAccount(u.email)).length;
 
@@ -1929,6 +2207,8 @@ describe("clearing demo data", () => {
 
     // The demo side is gone, and staff are never touched.
     expect(await prisma.paymentIntent.count({ where: { provider: "sandbox" } })).toBe(0);
+    expect(await userCashBalance(prisma, payee.id)).toBe(toPesewas(10)); // 30 in, 20 paid out
+    expect((await prisma.user.findUnique({ where: { id: failedPayer.id } }))?.status).toBe("CLOSED");
     const demoLeft = await prisma.user.findUnique({ where: { id: demo.id } });
     expect(demoLeft === null || demoLeft.status === "CLOSED").toBe(true);
 
@@ -1942,3 +2222,125 @@ describe("clearing demo data", () => {
     expect(await verifyAuditChain()).toMatchObject({ ok: true }); // the audit trail is untouched
   });
 });
+
+describe("betzone seed logins migration", () => {
+  const rename = () => prisma.$executeRawUnsafe(readFileSync("prisma/migrations/20261110180000_betzone_seed_logins/migration.sql", "utf8"));
+  const emails = ["admin@888soccerbet.com", "admin@betzone.com.co", "demo@888soccerbet.com", "demo@betzone.com.co"];
+  const clear = () => prisma.user.deleteMany({ where: { email: { in: emails } } });
+
+  it("moves an old seeded login to betzone with its password, and never clashes with an existing one", async () => {
+    await clear();
+    try {
+      const admin = await prisma.user.create({ data: { email: "admin@888soccerbet.com", passwordHash: hashPassword("Admin123!"), role: "SUPER_ADMIN", referralCode: referralCode() } });
+      await prisma.user.create({ data: { email: "demo@888soccerbet.com", passwordHash: "x", referralCode: referralCode() } });
+      await prisma.user.create({ data: { email: "demo@betzone.com.co", passwordHash: "x", referralCode: referralCode() } });
+      await rename();
+      const moved = await findUserByIdentifier("admin@betzone.com.co");
+      expect(moved?.id).toBe(admin.id);
+      expect(verifyPassword("Admin123!", moved!.passwordHash)).toBe(true);
+      // The new address is taken, so the old demo account is left alone instead of failing the deploy.
+      expect(await prisma.user.count({ where: { email: "demo@888soccerbet.com" } })).toBe(1);
+      await rename(); // runs safely twice
+      expect(await prisma.user.count({ where: { email: { in: emails } } })).toBe(3);
+    } finally {
+      await clear();
+    }
+  });
+});
+
+describe("super admin from environment", () => {
+  it("creates the account, then leaves it alone, then puts back its password and access", async () => {
+    const email = `sa_env_${randomUUID()}@t.gh`;
+    try {
+      expect(await ensureSuperAdmin(` ${email.toUpperCase()} `, "First-pass1")).toBe("created");
+      const user = await findUserByIdentifier(email);
+      expect(user).toMatchObject({ role: "SUPER_ADMIN", status: "ACTIVE" });
+      expect(verifyPassword("First-pass1", user!.passwordHash)).toBe(true);
+      expect(await ensureSuperAdmin(email, "First-pass1")).toBe("unchanged");
+
+      await prisma.user.update({ where: { id: user!.id }, data: { role: "USER", status: "SUSPENDED" } });
+      expect(await ensureSuperAdmin(email, "Second-pass2")).toBe("updated");
+      const after = await prisma.user.findUniqueOrThrow({ where: { id: user!.id } });
+      expect(after).toMatchObject({ role: "SUPER_ADMIN", status: "ACTIVE" });
+      expect(verifyPassword("Second-pass2", after.passwordHash)).toBe(true);
+      expect(verifyPassword("First-pass1", after.passwordHash)).toBe(false);
+
+      await expect(ensureSuperAdmin(email, "short")).rejects.toThrow(/at least 8/);
+      await expect(ensureSuperAdmin("not-an-email", "Long-enough1")).rejects.toThrow(/valid email/);
+      expect(await verifyAuditChain()).toMatchObject({ ok: true });
+    } finally {
+      await prisma.user.updateMany({ where: { email }, data: { email: `gone_${randomUUID()}@t.gh`, adminUsername: null, role: "USER" } });
+    }
+  });
+});
+
+describe("Nigeria (Naira on Flutterwave, GHS balances, bank payouts by hand)", () => {
+  const ngUser = async (ghs: number) => {
+    const u = await fundedUser(ghs);
+    await prisma.user.update({ where: { id: u.id }, data: { country: "NG", kycStatus: "VERIFIED" } });
+    return u;
+  };
+  beforeAll(() => pinSettings({ ngnPerGhs: 130 }));
+  afterAll(() => pinSettings({ ngnPerGhs: 0 }));
+
+  it("opens Nigerian sign-up only once a Naira rate is set", async () => {
+    const input = { name: "Ada Obi", email: `ng_${randomUUID()}@t.gh`, password: "password1", country: "NG" as const, acceptTerms: true as const };
+    await pinSettings({ ngnPerGhs: 0 });
+    await expect(registerUser(input)).rejects.toMatchObject({ code: "NIGERIA_CLOSED" });
+    await pinSettings({ ngnPerGhs: 130 });
+    const u = await registerUser(input);
+    expect(u).toMatchObject({ country: "NG", phone: null });
+    expect((await findUserByIdentifier(input.email))?.id).toBe(u.id);
+  });
+
+  it("credits a Naira deposit its GHS amount, and only when the Naira asked was paid", async () => {
+    const u = await ngUser(0);
+    const intent = await initiateDeposit(u.id, 100, "", randomUUID());
+    expect(intent.metadata).toMatchObject({ country: "NG", ngn: { kobo: "1300000", rate: 130 } }); // GHS 100 = ₦13,000
+    expect(intent.metadata).not.toHaveProperty("msisdn");
+    // As on live: Flutterwave's charge, checked in Naira.
+    const meta = { ...(intent.metadata as Prisma.JsonObject), charge: { currency: "NGN", minor: "1300000" } };
+    await prisma.paymentIntent.update({ where: { id: intent.id }, data: { provider: "flutterwave_ng", metadata: meta } });
+    const ev = (id: string, amountPesewas: bigint, currency?: "NGN") => ({ providerEventId: id, ourRef: intent.ref, status: "SUCCEEDED" as const, amountPesewas, direction: "DEPOSIT" as const, ...(currency ? { currency } : {}) });
+
+    expect(await processPaymentEvent("flutterwave_ng", ev(`a${randomUUID()}`, 10000n))).toBe("ignored"); // GHS 100 reported: wrong currency
+    expect(await processPaymentEvent("flutterwave_ng", ev(`b${randomUUID()}`, 1299999n, "NGN"))).toBe("ignored"); // a kobo short
+    expect(await userCashBalance(prisma, u.id)).toBe(0n);
+    expect(await processPaymentEvent("flutterwave_ng", ev(`c${randomUUID()}`, 1300000n, "NGN"))).toBe("processed");
+    expect(await userCashBalance(prisma, u.id)).toBe(toPesewas(100));
+    expect(await processPaymentEvent("flutterwave_ng", ev(`d${randomUUID()}`, 1300000n, "NGN"))).toBe("ignored"); // once
+    expect(await userCashBalance(prisma, u.id)).toBe(toPesewas(100));
+    expect(await ledgerIsBalanced()).toBe(true);
+  });
+
+  it("pays Nigerian withdrawals by hand to a bank account in Naira at the rate when asked", async () => {
+    const sa = await prisma.user.create({ data: { email: `sa_${randomUUID()}@t.gh`, passwordHash: "x", role: "SUPER_ADMIN", referralCode: referralCode() } });
+    const u = await ngUser(200);
+    const bank = { bankName: "GTBank", accountNumber: "0123456789", accountName: "Ada Obi" };
+    await expect(initiateWithdrawal(u.id, 50, "0241234567", randomUUID())).rejects.toMatchObject({ code: "WRONG_PAYOUT" });
+    const w = await initiateBankWithdrawal(u.id, 50, bank, randomUUID());
+    expect(w).toMatchObject({ provider: "ng_bank", status: "PENDING", metadata: { ...bank, country: "NG", ngn: { kobo: "650000", rate: 130 } } });
+    expect(await userCashBalance(prisma, u.id)).toBe(toPesewas(150)); // held
+    expect((await manualPayoutQueue()).map((i) => i.ref)).toContain(w.ref);
+    await recordManualPayout(sa.id, w.ref, "PAID");
+    expect((await prisma.paymentIntent.findUniqueOrThrow({ where: { ref: w.ref } })).status).toBe("SUCCEEDED");
+
+    const gh = await fundedUser(100);
+    await prisma.user.update({ where: { id: gh.id }, data: { kycStatus: "VERIFIED" } });
+    await expect(initiateBankWithdrawal(gh.id, 50, bank, randomUUID())).rejects.toMatchObject({ code: "WRONG_PAYOUT" });
+    expect(await ledgerIsBalanced()).toBe(true);
+  });
+
+  it("refuses Nigerian money in and out while Nigeria is closed (rate 0)", async () => {
+    const u = await ngUser(100);
+    await pinSettings({ ngnPerGhs: 0 });
+    try {
+      await expect(initiateDeposit(u.id, 100, "", randomUUID())).rejects.toMatchObject({ code: "NIGERIA_CLOSED" });
+      await expect(initiateBankWithdrawal(u.id, 50, { bankName: "GTBank", accountNumber: "0123456789", accountName: "Ada Obi" }, randomUUID())).rejects.toMatchObject({ code: "NIGERIA_CLOSED" });
+      expect(await userCashBalance(prisma, u.id)).toBe(toPesewas(100));
+    } finally {
+      await pinSettings({ ngnPerGhs: 130 });
+    }
+  });
+});
+

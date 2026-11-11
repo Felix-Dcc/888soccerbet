@@ -15,7 +15,7 @@ export function BallOrbit({ sport = "football", className = "h-20 w-20" }: { spo
       <ellipse cx="60" cy="60" rx="54" ry="18" fill="none" stroke="rgb(var(--lime) / .18)" strokeWidth="1.5" transform="rotate(-20 60 60)" />
       <ellipse className="kb-orbit" pathLength={178} cx="60" cy="60" rx="54" ry="18" fill="none" stroke="rgb(var(--lime))" strokeWidth="2.5" strokeLinecap="round" transform="rotate(-20 60 60)" />
       <ellipse cx="60" cy="60" rx="50" ry="14" fill="none" stroke="rgb(245 196 81 / .18)" strokeWidth="1.5" transform="rotate(25 60 60)" />
-      <ellipse className="kb-orbit kb-orbit-2" pathLength={178} cx="60" cy="60" rx="50" ry="14" fill="none" stroke="#F5C451" strokeWidth="2" strokeLinecap="round" transform="rotate(25 60 60)" />
+      <ellipse className="kb-orbit kb-orbit-2" pathLength={178} cx="60" cy="60" rx="50" ry="14" fill="none" stroke="#00BA3B" strokeWidth="2" strokeLinecap="round" transform="rotate(25 60 60)" />
       <g className="kb-ball">
         <circle cx="60" cy="60" r="24" fill={`url(#kb-ball-${sport})`} stroke={basketball ? "#8A3A0A" : "#55606F"} strokeWidth="1.2" />
         {basketball ? (

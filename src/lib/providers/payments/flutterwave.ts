@@ -26,19 +26,19 @@ const sha = (s: string) => createHash("sha256").update(s).digest();
 export class FlutterwaveError extends PspError {}
 
 export class FlutterwaveProvider implements PaymentProvider {
-  readonly name = "flutterwave";
-  readonly payouts = "api" as const;
+  readonly name: string = "flutterwave";
+  readonly payouts: "api" | "manual" = "api";
   readonly isSandbox: boolean;
 
   constructor(
-    private readonly secretKey: string,
-    private readonly secretHash: string,
-    private readonly appUrl = (process.env.APP_URL || "https://kingzbet.live").replace(/\/+$/, ""),
+    protected readonly secretKey: string,
+    protected readonly secretHash: string,
+    protected readonly appUrl = (process.env.APP_URL || "https://betzone.com.co").replace(/\/+$/, ""),
   ) {
     this.isSandbox = secretKey.includes("_TEST");
   }
 
-  private async call(method: "GET" | "POST", path: string, body?: unknown): Promise<{ http: number; json: Record<string, unknown> }> {
+  protected async call(method: "GET" | "POST", path: string, body?: unknown): Promise<{ http: number; json: Record<string, unknown> }> {
     const res = await fetch(`${API}${path}`, {
       method,
       headers: { authorization: `Bearer ${this.secretKey}`, "content-type": "application/json", accept: "application/json" },
@@ -50,6 +50,8 @@ export class FlutterwaveProvider implements PaymentProvider {
   }
 
   async initiate(req: ChargeRequest): Promise<ChargeResult> {
+    const { msisdn, network } = req;
+    if (!msisdn || !network) throw new FlutterwaveError("Enter your mobile money number and network");
     if (req.direction === "DEPOSIT") {
       const { http, json } = await this.call("POST", "/charges?type=mobile_money_ghana", {
         tx_ref: req.ref,
@@ -57,8 +59,8 @@ export class FlutterwaveProvider implements PaymentProvider {
         currency: "GHS",
         country: "GH",
         email: req.email,
-        phone_number: req.msisdn,
-        network: CHARGE_NETWORK[req.network],
+        phone_number: msisdn,
+        network: CHARGE_NETWORK[network],
         ...(req.name ? { fullname: req.name } : {}),
         redirect_url: `${this.appUrl}/wallet`,
       });
@@ -71,13 +73,13 @@ export class FlutterwaveProvider implements PaymentProvider {
     }
 
     const { http, json } = await this.call("POST", "/transfers", {
-      account_bank: TRANSFER_NETWORK[req.network],
-      account_number: intl(req.msisdn),
+      account_bank: TRANSFER_NETWORK[network],
+      account_number: intl(msisdn),
       amount: ghsAmount(req.amountPesewas),
       currency: "GHS",
       reference: req.ref, // unique: Flutterwave rejects a repeat, so a retried request can't pay twice
-      narration: "Kingz Bet withdrawal",
-      beneficiary_name: req.name || "Kingz Bet player",
+      narration: "Bet Zone withdrawal",
+      beneficiary_name: req.name || "Bet Zone player",
       callback_url: `${this.appUrl}/api/webhooks/payments`,
     });
     const data = json.data as { id?: number | string } | undefined;
@@ -88,10 +90,14 @@ export class FlutterwaveProvider implements PaymentProvider {
     throw new FlutterwaveError(`Unclear payout response (HTTP ${http})`);
   }
 
-  async verifyWebhook(rawBody: string, headers: Headers): Promise<WebhookResult> {
+  /** The verif-hash header must equal our secret hash. Both sides hashed so the comparison is constant-time whatever their lengths. */
+  protected authentic(headers: Headers): boolean {
     const given = headers.get("verif-hash");
-    // Hash both sides so the comparison is constant-time whatever their lengths.
-    if (!given || !this.secretHash || !timingSafeEqual(sha(given), sha(this.secretHash))) return { ok: false };
+    return !!given && !!this.secretHash && timingSafeEqual(sha(given), sha(this.secretHash));
+  }
+
+  async verifyWebhook(rawBody: string, headers: Headers): Promise<WebhookResult> {
+    if (!this.authentic(headers)) return { ok: false };
     let body: { event?: string; data?: { id?: number | string } };
     try {
       body = JSON.parse(rawBody);

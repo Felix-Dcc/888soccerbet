@@ -6,7 +6,7 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "./db";
 import { bookingCode, normaliseCode } from "./ids";
-import { isBettable } from "./markets";
+import { isBettable, liveScore } from "./markets";
 
 export class BookingError extends Error {
   constructor(public code: string, message: string, public status = 422) {
@@ -21,6 +21,8 @@ export interface BookedPick {
   selectionName: string;
   marketName: string;
   fixtureName: string;
+  score?: { home: number; away: number } | null; // set while the match is in play
+  suspended?: boolean; // in play and paused (a goal is being repriced): kept on the slip, can't be placed yet
 }
 
 function loadSelections(ids: string[]) {
@@ -33,14 +35,26 @@ type LoadedSelection = Awaited<ReturnType<typeof loadSelections>>[number];
 
 const open = (s: LoadedSelection) => s.status === "OPEN" && s.market.status === "OPEN" && isBettable(s.market.fixture);
 
-const toPick = (s: LoadedSelection): BookedPick => ({
-  selectionId: s.id,
-  fixtureId: s.market.fixtureId,
-  milliOdds: s.milliOdds,
-  selectionName: s.name,
-  marketName: s.market.name,
-  fixtureName: `${s.market.fixture.homeTeam} v ${s.market.fixture.awayTeam}`,
-});
+// A generated football match in play between prices (just after a goal): the leg comes back once it reprices.
+// A pick the score has ruled out stays closed while the match is priced, so it is dropped as before.
+const paused = (s: LoadedSelection) => {
+  const f = s.market.fixture;
+  return f.status === "LIVE" && f.script !== null && f.sportKey === "football" && !isBettable(f);
+};
+
+const toPick = (s: LoadedSelection): BookedPick => {
+  const f = s.market.fixture;
+  return {
+    selectionId: s.id,
+    fixtureId: s.market.fixtureId,
+    milliOdds: s.milliOdds,
+    selectionName: s.name,
+    marketName: s.market.name,
+    fixtureName: `${f.homeTeam} v ${f.awayTeam}`,
+    score: liveScore(f),
+    suspended: !open(s),
+  };
+};
 
 /** Book a slip. Every leg must be open now and on a different match, same rules as placement. */
 export async function createBooking(selectionIds: string[], userId?: string): Promise<string> {
@@ -71,7 +85,7 @@ export async function createBooking(selectionIds: string[], userId?: string): Pr
 export async function resolvePicks(ids: string[]): Promise<{ picks: BookedPick[]; unavailable: number }> {
   const rows = await loadSelections(ids);
   const byId = new Map(rows.map((s) => [s.id, s]));
-  const picks = ids.map((id) => byId.get(id)).filter((s): s is LoadedSelection => !!s && open(s)).map(toPick);
+  const picks = ids.map((id) => byId.get(id)).filter((s): s is LoadedSelection => !!s && (open(s) || paused(s))).map(toPick);
   return { picks, unavailable: ids.length - picks.length };
 }
 

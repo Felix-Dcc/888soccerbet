@@ -3,10 +3,12 @@ import { headers } from "next/headers";
 import { clientIpFromHeaders, rateLimit } from "@/lib/rateLimit";
 import { ticketByVerifyCode } from "@/lib/tickets";
 import { TicketView } from "@/components/TicketView";
+import { prisma } from "@/lib/db";
+import { playerCurrency } from "@/lib/wallet";
 import { VerifyForm } from "@/components/VerifyForm";
 
 export const dynamic = "force-dynamic";
-export const metadata: Metadata = { title: "Ticket verification — Kingz Bet", robots: { index: false } };
+export const metadata: Metadata = { title: "Ticket verification — Bet Zone", robots: { index: false } };
 
 /**
  * Public verification: anyone with the code sees the ticket (ID, times, stake, odds, return,
@@ -23,7 +25,7 @@ export default async function VerifyTicketPage({ params }: { params: Promise<{ c
   if (!bet?.verifyCode)
     return (
       <div className="mx-auto max-w-lg space-y-4">
-        <Notice title="No ticket found" text="No Kingz Bet ticket has this verification code. Check the code and try again." />
+        <Notice title="No ticket found" text="No Bet Zone ticket has this verification code. Check the code and try again." />
         <VerifyForm defaultValue={decodeURIComponent(code)} />
       </div>
     );
@@ -37,11 +39,11 @@ export default async function VerifyTicketPage({ params }: { params: Promise<{ c
           <path d="m8.5 12 2.5 2.5 4.5-5" />
         </svg>
         <div>
-          <div className="font-display font-bold text-white">Genuine Kingz Bet ticket</div>
+          <div className="font-display font-bold text-white">Genuine Bet Zone ticket</div>
           <div className="text-xs text-fog">Details below come straight from our records.</div>
         </div>
       </div>
-      <TicketView bet={bet} verifyCode={bet.verifyCode} owner={false} />
+      <TicketView bet={bet} verifyCode={bet.verifyCode} owner={false} currency={await playerCurrency(await prisma.user.findUnique({ where: { id: bet.userId }, select: { country: true } }))} />
     </div>
   );
 }

@@ -29,7 +29,7 @@ export async function houseAccountId(db: Client, kind: AccountKind, currency = "
 export async function userAccountId(
   db: Client,
   userId: string,
-  kind: Extract<AccountKind, "USER_CASH" | "BET_ESCROW" | "BONUS" | "VERIFICATION_HOLD">,
+  kind: Extract<AccountKind, "USER_CASH" | "BET_ESCROW" | "BONUS" | "VERIFICATION_HOLD" | "NTT_HOLD">,
   currency = "GHS",
 ): Promise<string> {
   const existing = await db.ledgerAccount.findUnique({

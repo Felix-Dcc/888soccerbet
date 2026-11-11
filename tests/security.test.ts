@@ -19,7 +19,7 @@ describe("password hashing", () => {
 
 describe("webhook signature verification", () => {
   const provider = new SandboxMomoProvider();
-  const signed = (signature: string | null) => new Headers(signature ? { "x-stakra-signature": signature } : {});
+  const signed = (signature: string | null) => new Headers(signature ? { "x-sb-signature": signature } : {});
   it("accepts a correctly signed event", async () => {
     const { body, signature } = signSandboxEvent({ id: "e1", ref: "DEP-ABC", status: "SUCCEEDED", amountPesewas: "5000" });
     const r = await provider.verifyWebhook(body, signed(signature));

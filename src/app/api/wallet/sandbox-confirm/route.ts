@@ -30,7 +30,7 @@ export async function POST(req: Request) {
 
     // Deliver through the genuine webhook path so signature + idempotency run for real.
     const url = new URL("/api/webhooks/payments", process.env.APP_URL ?? req.url);
-    const res = await fetch(url, { method: "POST", headers: { "content-type": "application/json", "x-stakra-signature": signature }, body });
+    const res = await fetch(url, { method: "POST", headers: { "content-type": "application/json", "x-sb-signature": signature }, body });
     return json({ delivered: res.ok, webhook: await res.json() });
   } catch (e) {
     return errorResponse(e);

@@ -18,7 +18,7 @@ export default async function RolesPage({ searchParams }: { searchParams: Promis
 
   return (
     <>
-      <Head title="Permissions">
+      <Head title="Roles">
         <Link href="/admin/roles?edit=new#editor" className={btnGhost}>
           <Icon name="plus" />
           New role
@@ -30,7 +30,7 @@ export default async function RolesPage({ searchParams }: { searchParams: Promis
           <div className="relative overflow-x-auto">
             <table className="w-full border-collapse text-sm" style={{ minWidth: `${20 + (roles.length + 1) * 7}rem` }}>
               <thead>
-                <tr className="border-b border-white/[0.06] text-left">
+                <tr className="border-b border-line text-left">
                   <th scope="col" className="px-4 py-2.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-fog">
                     Permission
                   </th>
@@ -50,14 +50,14 @@ export default async function RolesPage({ searchParams }: { searchParams: Promis
                 </tr>
               </thead>
               {permissionGroups().map((g) => (
-                <tbody key={g.label} className="border-b border-white/[0.05] last:border-0">
+                <tbody key={g.label} className="border-b border-line last:border-0">
                   <tr>
-                    <th colSpan={roles.length + 2} scope="colgroup" className="bg-white/[0.02] px-4 py-1.5 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-fog">
+                    <th colSpan={roles.length + 2} scope="colgroup" className="bg-ink-500 px-4 py-1.5 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-fog">
                       {g.label}
                     </th>
                   </tr>
                   {g.perms.map((p) => (
-                    <tr key={p} className="hover:bg-white/[0.02]">
+                    <tr key={p} className="hover:bg-ink-500">
                       <th scope="row" className="px-4 py-1.5 text-left font-normal" title={PERMISSIONS[p]}>
                         <span className="font-mono text-xs text-white">{p}</span>
                         <span className="block truncate text-xs text-fog">{PERMISSIONS[p]}</span>
@@ -96,7 +96,7 @@ function Cell({ on }: { on?: boolean }) {
       <span className="sr-only">yes</span>
     </span>
   ) : (
-    <span className="inline-block h-1 w-1 rounded-full bg-white/15">
+    <span className="inline-block h-1 w-1 rounded-full bg-fog/30">
       <span className="sr-only">no</span>
     </span>
   );

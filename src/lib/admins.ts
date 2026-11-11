@@ -14,6 +14,7 @@ import { prisma } from "./db";
 import { hashPassword, hashToken } from "./auth";
 import { audit } from "./audit";
 import { cleanPermissions } from "./permissions";
+import { adminInviteCode, adminReferralCode } from "./ids";
 
 export class AdminError extends Error {
   constructor(
@@ -25,18 +26,10 @@ export class AdminError extends Error {
   }
 }
 
-const ALPHABET = "ACDEFGHJKLMNPQRSTUVWXYZ2345679";
 const SETUP_TTL_MS = 72 * 3600_000;
 const RESET_TTL_MS = 24 * 3600_000;
 
-/** Stored without dashes (codes are matched after normaliseCode strips them); shown as ADM-NAME-XXXX. */
-/** "ADM" + 8 random symbols. Nothing about the admin (name, username) is in it: codes are shared publicly. */
-export function newAdminReferralCode(): string {
-  const bytes = randomBytes(8);
-  return `ADM${[...bytes].map((b) => ALPHABET[b % ALPHABET.length]).join("")}`;
-}
-/** ADMXXXXXXXX -> ADM-XXXX-XXXX for reading aloud; anything else is shown as stored. */
-export const formatReferralCode = (code: string, staff: boolean) => (staff && /^ADM[A-Z0-9]{8}$/.test(code) ? `ADM-${code.slice(3, 7)}-${code.slice(7)}` : code);
+export const newAdminReferralCode = adminReferralCode;
 
 const accessSnapshot = (u: Pick<User, "role" | "status" | "adminRoleId" | "permGrants" | "permDenials">) => ({
   role: u.role,
@@ -54,6 +47,7 @@ async function lockUser(tx: Prisma.TransactionClient, id: string) {
   await tx.$queryRaw`SELECT id FROM "User" WHERE id = ${id} FOR UPDATE`;
   const u = await tx.user.findUnique({ where: { id } });
   if (!u || (u.role !== "ADMIN" && u.role !== "SUPER_ADMIN")) throw new AdminError("NOT_FOUND", "Administrator not found", 404);
+  if (u.status === "CLOSED") throw new AdminError("REMOVED", "This administrator has been removed", 410);
   return u;
 }
 
@@ -112,6 +106,99 @@ export async function createAdmin(actor: User, input: NewAdmin, ip?: string) {
   }
 }
 
+export interface InviteAccess {
+  role: Extract<Role, "ADMIN" | "SUPER_ADMIN">;
+  adminRoleId?: string | null;
+  permGrants?: string[];
+  permDenials?: string[];
+  commissionBp?: number | null; // basis points; null or missing = the default rate
+}
+
+/** A single-use invite link (raw token returned once, only its hash stored) for a new administrator with this access. */
+export async function createAdminInvite(actor: User, access: InviteAccess, ip?: string) {
+  return prisma.$transaction(async (tx) => {
+    if (access.adminRoleId && !(await tx.adminRole.findUnique({ where: { id: access.adminRoleId } }))) throw new AdminError("BAD_ROLE", "That role doesn't exist", 422);
+    const bp = access.commissionBp ?? null;
+    if (bp !== null && (!Number.isInteger(bp) || bp < 0 || bp > 10_000)) throw new AdminError("BAD_RATE", "Enter a commission rate from 0% to 100%, up to 2 decimal places", 422);
+    const admin = access.role === "ADMIN";
+    const token = adminInviteCode();
+    const invite = await tx.adminInvite.create({
+      data: {
+        tokenHash: hashToken(token),
+        role: access.role,
+        adminRoleId: admin ? (access.adminRoleId ?? null) : null,
+        permGrants: admin ? cleanPermissions(access.permGrants ?? []) : [],
+        permDenials: admin ? cleanPermissions(access.permDenials ?? []) : [],
+        commissionBp: bp,
+        createdById: actor.id,
+        expiresAt: new Date(Date.now() + SETUP_TTL_MS),
+      },
+    });
+    await audit(
+      { actorUserId: actor.id, action: "ADMIN_INVITE", targetType: "AdminInvite", targetId: invite.id, after: { role: invite.role, adminRoleId: invite.adminRoleId, permGrants: invite.permGrants, permDenials: invite.permDenials, commissionBp: invite.commissionBp, expiresAt: invite.expiresAt }, ip },
+      tx,
+    );
+    return { token, expiresAt: invite.expiresAt };
+  });
+}
+
+type Db = Prisma.TransactionClient | typeof prisma;
+
+/** The invite behind a link if it can still be used: unused, unexpired, and its creator still an active super admin. */
+async function usableInvite(db: Db, token: string) {
+  const invite = await db.adminInvite.findUnique({ where: { tokenHash: hashToken(token) } });
+  if (!invite || invite.usedAt || invite.expiresAt < new Date()) return null;
+  const creator = await db.user.findUnique({ where: { id: invite.createdById }, select: { role: true, status: true } });
+  if (creator?.role !== "SUPER_ADMIN" || creator.status !== "ACTIVE") return null;
+  return invite;
+}
+
+/** For the invite page: whether the link still works, before the visitor fills anything in. */
+export async function adminInviteValid(token: string): Promise<boolean> {
+  return !!(await usableInvite(prisma, token));
+}
+
+/** The invitee chooses their email and password: the administrator account is created with the invite's access. */
+export async function acceptAdminInvite(token: string, email: string, password: string, ip?: string) {
+  try {
+    return await prisma.$transaction(async (tx) => {
+      const invite = await usableInvite(tx, token);
+      if (!invite) throw new AdminError("BAD_LINK", "This invite link is invalid, used or expired; ask a super admin for a new one", 410);
+      // Claim it first, so two tabs (or two people) can never both use one link.
+      const claimed = await tx.adminInvite.updateMany({ where: { id: invite.id, usedAt: null }, data: { usedAt: new Date() } });
+      if (!claimed.count) throw new AdminError("BAD_LINK", "This invite link has already been used", 410);
+      if (await tx.user.findUnique({ where: { email }, select: { id: true } })) throw new AdminError("EMAIL_TAKEN", "An account with this email already exists; use a different email");
+      if (invite.adminRoleId && !(await tx.adminRole.findUnique({ where: { id: invite.adminRoleId } })))
+        throw new AdminError("BAD_ROLE", "The role on this invite no longer exists; ask a super admin for a new link", 410);
+      let code = newAdminReferralCode();
+      for (let i = 0; i < 5 && (await tx.user.findUnique({ where: { referralCode: code }, select: { id: true } })); i++) code = newAdminReferralCode();
+      const user = await tx.user.create({
+        data: {
+          email,
+          role: invite.role,
+          adminRoleId: invite.adminRoleId,
+          permGrants: invite.permGrants,
+          permDenials: invite.permDenials,
+          commissionBp: invite.commissionBp,
+          passwordHash: hashPassword(password),
+          referralCode: code,
+        },
+      });
+      await tx.adminInvite.update({ where: { id: invite.id }, data: { usedById: user.id } });
+      await audit(
+        { actorUserId: invite.createdById, action: "ADMIN_CREATE", targetType: "User", targetId: user.id, after: { email: user.email, ...accessSnapshot(user), commissionBp: user.commissionBp, referralCode: user.referralCode, inviteId: invite.id }, ip },
+        tx,
+      );
+      await audit({ actorUserId: user.id, action: "ADMIN_SETUP_COMPLETE", targetType: "User", targetId: user.id, ip }, tx);
+      return user;
+    });
+  } catch (e) {
+    // Lost a race with another sign-up for the same email (or referral code): nothing was written, the link still works.
+    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") throw new AdminError("TAKEN", "That email was just taken; use a different email");
+    throw e;
+  }
+}
+
 export interface AccessChange {
   role?: Extract<Role, "ADMIN" | "SUPER_ADMIN">;
   adminRoleId?: string | null;
@@ -144,6 +231,29 @@ export async function updateAdminAccess(actor: User, targetId: string, change: A
   });
 }
 
+/**
+ * Make an existing player an administrator (or super admin). They keep their account, sign-in,
+ * balance and history; the new access applies on their next page load. Active players only.
+ */
+export async function promoteToAdmin(actor: User, targetId: string, access: { role: Extract<Role, "ADMIN" | "SUPER_ADMIN">; adminRoleId?: string | null }, ip?: string) {
+  if (actor.id === targetId) throw new AdminError("SELF_EDIT", "You can't change your own access", 403);
+  return prisma.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT id FROM "User" WHERE id = ${targetId} FOR UPDATE`;
+    const target = await tx.user.findUnique({ where: { id: targetId } });
+    if (!target) throw new AdminError("NOT_FOUND", "User not found", 404);
+    if (target.role !== "USER") throw new AdminError("ALREADY_STAFF", "This account is already an administrator");
+    if (target.status !== "ACTIVE") throw new AdminError("NOT_ACTIVE", "Only an active account can be made an administrator", 422);
+    const admin = access.role === "ADMIN";
+    if (admin && access.adminRoleId && !(await tx.adminRole.findUnique({ where: { id: access.adminRoleId } }))) throw new AdminError("BAD_ROLE", "That role doesn't exist", 422);
+    const after = await tx.user.update({
+      where: { id: targetId },
+      data: { role: access.role, adminRoleId: admin ? (access.adminRoleId ?? null) : null, permGrants: [], permDenials: [] },
+    });
+    await audit({ actorUserId: actor.id, action: "ADMIN_PROMOTE", targetType: "User", targetId, before: accessSnapshot(target), after: accessSnapshot(after), ip }, tx);
+    return after;
+  });
+}
+
 export async function setAdminStatus(actor: User, targetId: string, status: "ACTIVE" | "SUSPENDED", ip?: string) {
   if (actor.id === targetId) throw new AdminError("SELF_EDIT", "You can't change your own status", 403);
   return prisma.$transaction(async (tx) => {
@@ -153,6 +263,26 @@ export async function setAdminStatus(actor: User, targetId: string, status: "ACT
     const after = await tx.user.update({ where: { id: targetId }, data: { status } });
     if (status === "SUSPENDED") await tx.session.deleteMany({ where: { userId: targetId } }); // signed out everywhere, now
     await audit({ actorUserId: actor.id, action: status === "SUSPENDED" ? "ADMIN_SUSPEND" : "ADMIN_REACTIVATE", targetType: "User", targetId, before: { status: target.status }, after: { status: after.status }, ip }, tx);
+    return after;
+  });
+}
+
+/**
+ * Remove an administrator for good. Nothing is deleted (the audit trail points at them and is
+ * append-only): the account is closed, so it can't sign in, its sessions and links stop working,
+ * its referral code stops accepting sign-ups, and it leaves the roster. It can't be undone here.
+ */
+export async function removeAdmin(actor: User, targetId: string, ip?: string) {
+  if (actor.id === targetId) throw new AdminError("SELF_EDIT", "You can't remove yourself", 403);
+  return prisma.$transaction(async (tx) => {
+    const target = await lockUser(tx, targetId);
+    if (target.role === "SUPER_ADMIN" && target.status === "ACTIVE" && (await activeSuperAdmins(tx)) <= 1)
+      throw new AdminError("LAST_SUPER_ADMIN", "This is the last active super admin; promote someone else first");
+    const after = await tx.user.update({ where: { id: targetId }, data: { status: "CLOSED", adminRoleId: null, permGrants: [], permDenials: [] } });
+    await tx.session.deleteMany({ where: { userId: targetId } });
+    await tx.accountToken.updateMany({ where: { userId: targetId, usedAt: null }, data: { usedAt: new Date() } });
+    await tx.adminInvite.updateMany({ where: { createdById: targetId, usedAt: null }, data: { usedAt: new Date() } });
+    await audit({ actorUserId: actor.id, action: "ADMIN_REMOVE", targetType: "User", targetId, before: accessSnapshot(target), after: accessSnapshot(after), ip }, tx);
     return after;
   });
 }

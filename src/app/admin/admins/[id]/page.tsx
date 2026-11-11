@@ -4,7 +4,6 @@ import { prisma } from "@/lib/db";
 import { adminPage } from "@/lib/adminPage";
 import { can, effectivePermissions, PERMISSIONS, permissionGroups, type Permission } from "@/lib/permissions";
 import { parseRange } from "@/lib/adminAnalytics";
-import { formatReferralCode } from "@/lib/admins";
 import { AdminAccessEditor, AdminActions, AdminBalanceCredit, AdminClearHistory } from "@/components/admin/AdminForms";
 import { userCashBalance } from "@/lib/ledger";
 import { formatPesewas } from "@/lib/money";
@@ -41,7 +40,7 @@ export default async function AdminProfilePage({ params, searchParams }: { param
 
   return (
     <>
-      <header className="flex flex-wrap items-center gap-4 border-b border-white/[0.06] pb-4">
+      <header className="flex flex-wrap items-center gap-4 border-b border-line pb-4">
         <Avatar name={name} size="h-12 w-12 text-sm" />
         <div className="min-w-[min(100%,18rem)] flex-1">
           <h1 className="truncate font-display text-[22px] font-bold text-white">{name}</h1>
@@ -50,7 +49,7 @@ export default async function AdminProfilePage({ params, searchParams }: { param
             {admin.role === "SUPER_ADMIN" ? <Pill tone="info">super admin</Pill> : <Pill tone="neutral">{admin.adminRole?.name ?? "custom access"}</Pill>}
             <span>{admin.email}</span>
             {admin.adminUsername && <span>@{admin.adminUsername}</span>}
-            <span className="font-mono">{formatReferralCode(admin.referralCode, true)}</span>
+            <span className="font-mono">{admin.referralCode}</span>
             <span>Last login {ago(admin.lastLoginAt)}</span>
           </div>
         </div>
@@ -68,11 +67,11 @@ export default async function AdminProfilePage({ params, searchParams }: { param
                     const s = source(p);
                     return (
                       <li key={p} className="flex items-center gap-2 text-sm" title={PERMISSIONS[p]}>
-                        <span className={`grid h-4 w-4 place-items-center rounded-sm ${s.on ? "bg-lime/15 text-lime" : "bg-white/[0.05] text-fog/50"}`}>
+                        <span className={`grid h-4 w-4 place-items-center rounded-sm ${s.on ? "bg-lime/15 text-lime" : "bg-ink-500 text-fog/50"}`}>
                           <Icon name={s.on ? "check" : "lock"} className="h-3 w-3" />
                         </span>
                         <span className={`min-w-0 flex-1 truncate font-mono text-xs ${s.on ? "text-white" : "text-fog/70"}`}>{p.split(".")[1]}</span>
-                        {s.why && <span className={`text-[10px] uppercase tracking-wide ${s.why === "removed" ? "text-[#FF8A8D]" : "text-fog"}`}>{s.why}</span>}
+                        {s.why && <span className={`text-[10px] uppercase tracking-wide ${s.why === "removed" ? "text-danger" : "text-fog"}`}>{s.why}</span>}
                       </li>
                     );
                   })}
@@ -81,7 +80,7 @@ export default async function AdminProfilePage({ params, searchParams }: { param
             ))}
           </div>
           {manage && (
-            <details className="group mt-5 border-t border-white/[0.06] pt-4">
+            <details className="group mt-5 border-t border-line pt-4">
               <summary className="flex cursor-pointer list-none items-center gap-2 text-sm font-semibold text-lime [&::-webkit-details-marker]:hidden">
                 <Icon name="chevron" className="h-4 w-4 transition group-open:rotate-90" />
                 Edit access
@@ -121,7 +120,7 @@ export default async function AdminProfilePage({ params, searchParams }: { param
               {actions.length === 0 ? (
                 <EmptyState icon="audit" title="No recorded actions" />
               ) : (
-                <ol className="divide-y divide-white/[0.05]">
+                <ol className="divide-y divide-line">
                   {actions.map((a) => (
                     <li key={a.id} className="flex items-baseline justify-between gap-3 px-4 py-2 text-sm">
                       <span className="min-w-0 truncate font-mono text-xs text-white">{a.action}</span>

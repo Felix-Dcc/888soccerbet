@@ -10,10 +10,14 @@ export async function GET() {
   try {
     const user = await getCurrentUser();
     if (!user) return json({ user: null });
-    const balance = await userCashBalance(prisma, user.id);
+    const [balance, openBets] = await Promise.all([
+      userCashBalance(prisma, user.id),
+      prisma.bet.count({ where: { userId: user.id, status: "PENDING" } }), // the My Bets badge: same count as "Open Bets (n)"
+    ]);
     return json({
       user: { id: user.id, email: user.email, displayName: user.displayName, role: user.role, kycStatus: user.kycStatus, emailVerified: emailVerified(user) },
       balance,
+      openBets,
     });
   } catch (e) {
     return errorResponse(e);

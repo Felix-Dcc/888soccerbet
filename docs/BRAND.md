@@ -1,4 +1,4 @@
-# Brand: Kingz Bet
+# Brand: Bet Zone
 
 ## Name selection
 
@@ -13,33 +13,41 @@ international) and distinctiveness from the reference:
 | Oddwin | odds + win | descriptive, weak as a trademark |
 | Sankobet | Sankofa + bet | culturally strong but long and on-the-nose |
 
-**Kingz Bet** was chosen as the final brand by stakeholder decision. It is confident and
-regal, trivially pronounceable in Ghana and internationally, and reads instantly as a
-betting brand.
+**Bet Zone** is the brand, chosen by the owner, replacing the working names *Kingz Bet* and
+then *888SoccerBet*. It is short, easy to say and type, and reads instantly as a betting site.
 
-### Clearance status (temporary brand) — ⚠️ conflict risk
+### Clearance status (temporary brand) — ⚠️ check before launch
 
-- Unlike a coined name, **"Kingz Bet" is a common betting-brand construction** ("King
-  Bet", "Kingbet", "Kingz Bet" exist in several markets). A **full trademark and domain
-  clearance is therefore essential and more likely to surface conflicts** than for a
-  coined name. No clearance search was run for this specific name here.
-- This is **not** legal clearance. A registered trademark search (USPTO/EUIPO + Ghana
-  Registrar of Companies service-mark register) and domain registration are required
-  before any launch. Until then Kingz Bet is a **temporary/working brand**.
+- "Bet Zone" / "Betzone" is a common construction, and betting businesses already trade under
+  it in several markets. A full trademark and domain clearance is therefore essential and more
+  likely to surface conflicts than for a coined name.
+- No clearance search was run for this name here, and this is **not** legal clearance. A
+  registered trademark search (USPTO/EUIPO + Ghana Registrar of Companies service-mark
+  register) and domain registration are required before any launch. Until then Bet Zone is a
+  **temporary/working brand**.
+- Email and web addresses still use the old `888soccerbet.com` domain until a Bet Zone domain
+  is chosen (`EMAIL_FROM`, `LEGAL_EMAIL`, `APP_URL` and the support links).
 
-## Visual identity (deliberately unlike the reference)
+## Visual identity
 
-The reference uses royal blue + gold with a light UI. Kingz Bet is the opposite end of the
-spectrum — a **dark "sport-tech"** identity:
+**White and green**, taken from the supplied logo.
 
-- **Ink** base `#0B0F14` with elevated surfaces `#141A22` / `#1B232E`.
-- **Electric lime** accent `#C6F24E` (energy, the "go" of a live price).
-- **Teal** `#16D1B4` for wins/positive signals; **coral** `#FF5A5F` for loss/danger.
-- Typography: **Sora** (display, geometric, confident) + **Manrope** (body, highly
-  legible at small sizes on phones).
-- Logo: a lime rounded-square containing an original crown/chevron mark, with a
-  `Kingz`+lime`Bet` wordmark. Defined in `src/components/Logo.tsx` (inline SVG, no raster
-  asset copied from anywhere).
+- **White mode is the default.** Page `#F7FAF8`, cards `#FFFFFF`, hairlines `#DFEBE3`, text
+  `#0A1A10`. Actions use a deepened brand green `#15803D` (the logo green is too pale for text
+  on white); odds and bonuses `#166534`.
+- **Deep brand green** for the always-dark blocks (header, footer, tickets) and dark mode:
+  page `#03140A`, surfaces `#061E0F`, with the logo's own green `#58F800` for actions.
+- Emerald and red are reserved for win/loss; amber only for warnings.
+- The **admin console** uses the same palette, white by default, with its own remembered
+  white/dark toggle.
+- Typography: **Sora** (display) + **Manrope** (body), tabular figures for money and odds.
+- Logo: the supplied Bet Zone artwork, cut out of its black background
+  (`public/img/brand/betzone-logo.png`), used in the header, admin sidebar, win pop-up and
+  booking pop-up. A small inline-SVG mark (`BrandMark` in `src/components/Logo.tsx`) stands in
+  where only a square icon fits.
+- Icons: the browser-tab favicon (`src/app/icon.png`, `src/app/favicon.ico`) is the crown and
+  "BET ZONE" on a dark rounded tile; the phone home-screen icon (`src/app/apple-icon.png`) is
+  the full logo.
 
 Tokens live in `tailwind.config.ts`; base styles and component classes in
 `src/app/globals.css`.
@@ -56,7 +64,7 @@ auditable") and always keeps the 18+/responsible-gaming message visible.
   structure from the reference's left-rail/centre/right-slip composition).
 - **Match card**: competition + time header, stacked teams with live score, a 2/3-up odds
   row, and a "N markets" link to the fixture page.
-- **Odds button**: compact, label-over-price, lime when selected — big enough for thumbs.
+- **Odds button**: a quiet tile with the price in amber; filled amber when selected — big enough for thumbs.
 - **Mobile-first**: single-column grid, bottom betslip FAB + drawer, 44px-plus tap
   targets, loading skeletons and explicit empty/error states throughout.
 - **Accessibility**: semantic landmarks, `aria-pressed` odds buttons, labelled inputs,

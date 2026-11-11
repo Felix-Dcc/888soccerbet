@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { FlutterwaveError, FlutterwaveProvider } from "../src/lib/providers/payments/flutterwave";
 import { guessNetwork } from "../src/lib/providers/payments/types";
 
-const fw = () => new FlutterwaveProvider("FLWSECK_TEST-abc", "hash-123", "https://kingzbet.live");
+const fw = () => new FlutterwaveProvider("FLWSECK_TEST-abc", "hash-123", "https://888soccerbet.com");
 const reply = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status });
 /** Stub fetch with one reply per call, recording what was sent. */
 function stubFetch(...replies: Response[]) {

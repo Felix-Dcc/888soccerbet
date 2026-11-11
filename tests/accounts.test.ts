@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach } from "vitest";
-import { normalizePhone, isAdult, extendSelfExclusion } from "../src/lib/accounts";
+import { normalizePhone, extendSelfExclusion } from "../src/lib/accounts";
 import { isBettable } from "../src/lib/markets";
 import { normaliseCode } from "../src/lib/ids";
 import { registerSchema, withdrawSchema } from "../src/lib/validation";
@@ -21,14 +21,6 @@ describe("normalizePhone", () => {
   });
 });
 
-describe("isAdult", () => {
-  const now = new Date("2026-10-23T12:00:00Z");
-  it("is true from the 18th birthday onwards", () => {
-    expect(isAdult(new Date("2008-10-23T00:00:00Z"), now)).toBe(true);
-    expect(isAdult(new Date("2008-10-24T00:00:00Z"), now)).toBe(false);
-  });
-});
-
 describe("isBettable", () => {
   const now = new Date("2026-10-23T12:00:00Z");
   const later = "2026-10-23T13:00:00Z";
@@ -42,13 +34,16 @@ describe("isBettable", () => {
     expect(isBettable({ status: "SCHEDULED", startsAt: earlier, oddsAt: null }, now)).toBe(false);
     expect(isBettable({ status: "LIVE", startsAt: earlier, oddsAt: null }, now)).toBe(false);
   });
-  it("allows LIVE fixtures only when LIVE_BETTING=true and their odds are fresh", () => {
-    process.env.LIVE_BETTING = "true";
+  it("allows LIVE fixtures only while their in-play odds are fresh", () => {
     const ago = (s: number) => new Date(now.getTime() - s * 1000);
     expect(isBettable({ status: "LIVE", startsAt: earlier, oddsAt: ago(30) }, now)).toBe(true);
     expect(isBettable({ status: "LIVE", startsAt: earlier, oddsAt: ago(91) }, now)).toBe(false); // older than 90s default
     expect(isBettable({ status: "LIVE", startsAt: earlier, oddsAt: null }, now)).toBe(false); // cleared by a goal
     expect(isBettable({ status: "SCHEDULED", startsAt: earlier, oddsAt: null }, now)).toBe(false);
+  });
+  it("opens a priced in-play fixture without the feed switch (generated matches)", () => {
+    process.env.LIVE_BETTING = "false";
+    expect(isBettable({ status: "LIVE", startsAt: earlier, oddsAt: new Date(now.getTime() - 10_000) }, now)).toBe(true);
   });
   it("never allows finished or cancelled fixtures", () => {
     process.env.LIVE_BETTING = "true";
@@ -92,8 +87,8 @@ describe("self-exclusion", () => {
 
 describe("demo cleanup: test accounts", () => {
   it("matches the live test sign-ups exactly, never a real look-alike", () => {
-    for (const e of ["gggg@gmail.com", "RON@gmail.com", "walk692@t.gh", "demo@kingsbet.gh", "partner.e2e@example.test"]) expect(isTestAccount(e)).toBe(true);
-    for (const e of ["ronappling56@gmail.com", "williamsmery81@gmail.com", "yjdehie@gmail.com", "j98700367@gmail.com", "n33849079@gmail.com", "admin@kingsbet.gh", "ron@gmail.com.gh", "aron@gmail.com"])
+    for (const e of ["gggg@gmail.com", "RON@gmail.com", "walk692@t.gh", "demo@betzone.com.co", "partner.e2e@example.test"]) expect(isTestAccount(e)).toBe(true);
+    for (const e of ["ronappling56@gmail.com", "williamsmery81@gmail.com", "yjdehie@gmail.com", "j98700367@gmail.com", "n33849079@gmail.com", "admin@betzone.com.co", "ron@gmail.com.gh", "aron@gmail.com"])
       expect(isTestAccount(e)).toBe(false);
   });
 });

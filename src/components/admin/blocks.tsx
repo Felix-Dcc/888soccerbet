@@ -1,13 +1,13 @@
 import Link from "next/link";
 import type { Metrics } from "@/lib/adminAnalytics";
 import type { Alert } from "@/lib/systemHealth";
-import { Delta, Light, Spark, ghs } from "./kit";
+import { Delta, Light, Spark, TERMS, Term, ghs } from "./kit";
 
 const pctOf = (a: bigint, b: bigint) => (b === 0n ? null : (Number(a) / Number(b)) * 100);
 
 /**
  * The house result and where it came from, straight from the ledger: the four sources add up
- * exactly to GGR. Hold = GGR as a share of the stakes on bets settled in the range.
+ * exactly to gross revenue. Margin = gross revenue as a share of the stakes on bets settled in the range.
  */
 export function GgrBreakdown({ m, prev, spark }: { m: Metrics; prev: Metrics | null; spark?: number[] }) {
   const hold = pctOf(m.revenue.ggr, m.revenue.settledTurnover);
@@ -21,29 +21,34 @@ export function GgrBreakdown({ m, prev, spark }: { m: Metrics; prev: Metrics | n
   return (
     <div className="grid gap-5 md:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
       <div>
-        <div className="flex items-end gap-3">
-          <span className={`font-display text-[34px] font-extrabold leading-none tabular-nums ${m.revenue.ggr < 0n ? "text-[#FF7A7A]" : "text-white"}`}>{ghs(m.revenue.ggr)}</span>
+        <div className="mb-2 text-[13px] font-medium text-fog">
+          <Term tip={TERMS.gross}>Gross revenue</Term>
+        </div>
+        <div className="flex flex-wrap items-end gap-x-3 gap-y-2">
+          <span className={`whitespace-nowrap font-display text-[32px] font-bold leading-none tracking-tight tabular-nums ${m.revenue.ggr < 0n ? "text-danger" : "text-white"}`}>{ghs(m.revenue.ggr)}</span>
           {spark && <Spark values={spark} className="mb-1 h-8 w-24" />}
         </div>
         <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-fog">
           <Delta cur={m.revenue.ggr} prev={prev?.revenue.ggr ?? null} />
           <span>
-            Hold <b className="tabular-nums text-white">{hold === null ? "—" : `${hold.toFixed(1)}%`}</b>
+            <Term tip={TERMS.margin}>Margin</Term> <b className="tabular-nums text-white">{hold === null ? "—" : `${hold.toFixed(1)}%`}</b>
           </span>
           <span>
             on <b className="tabular-nums text-white">{ghs(m.revenue.settledTurnover)}</b> settled
           </span>
         </div>
-        <dl className="mt-4 space-y-1 border-t border-white/[0.06] pt-3 text-sm">
+        <dl className="mt-4 space-y-1 border-t border-line pt-3 text-sm">
           <div className="flex justify-between">
             <dt className="text-fog">Bonuses</dt>
             <dd className="tabular-nums text-white">{ghs(m.revenue.bonuses)}</dd>
           </div>
           <div className="flex justify-between">
-            <dt className="text-fog">NGR</dt>
+            <dt className="text-fog">
+              <Term tip={TERMS.net}>Net revenue</Term>
+            </dt>
             <dd className="tabular-nums text-white">{ghs(m.revenue.ngr)}</dd>
           </div>
-          <div className="flex justify-between" title="Credited to players by staff ledger corrections; not part of GGR">
+          <div className="flex justify-between" title="Credited to users by staff ledger corrections; not part of gross revenue">
             <dt className="text-fog">Balance corrections</dt>
             <dd className="tabular-nums text-white">{ghs(m.revenue.adjustments)}</dd>
           </div>
@@ -60,20 +65,20 @@ export function GgrBreakdown({ m, prev, spark }: { m: Metrics; prev: Metrics | n
             return (
               <li key={r.label} className="grid grid-cols-[8.5rem_1fr_7rem] items-center gap-3 text-sm">
                 <span className="truncate text-fog">{r.label}</span>
-                <span className="relative h-2 rounded-full bg-white/[0.05]">
+                <span className="relative h-2 rounded-full bg-ink-500">
                   <span
-                    className={`absolute inset-y-0 rounded-full ${r.value < 0n ? "right-1/2 bg-[#FF7A7A]" : "left-1/2 bg-lime"}`}
+                    className={`absolute inset-y-0 rounded-full ${r.value < 0n ? "right-1/2 bg-danger" : "left-1/2 bg-lime"}`}
                     style={{ width: `${(Number(mag) / Number(max)) * 50}%` }}
                   />
-                  <span className="absolute inset-y-[-3px] left-1/2 w-px bg-white/20" aria-hidden />
+                  <span className="absolute inset-y-[-3px] left-1/2 w-px bg-fog/40" aria-hidden />
                 </span>
-                <span className={`text-right tabular-nums ${r.value < 0n ? "text-[#FF7A7A]" : "text-white"}`}>{ghs(r.value)}</span>
+                <span className={`text-right tabular-nums ${r.value < 0n ? "text-danger" : "text-white"}`}>{ghs(r.value)}</span>
               </li>
             );
           })}
         </ul>
-        <div className="mt-3 flex justify-between border-t border-white/[0.06] pt-2 text-sm font-semibold">
-          <span className="text-fog">GGR</span>
+        <div className="mt-3 flex justify-between border-t border-line pt-2 text-sm font-semibold">
+          <span className="text-fog">Gross revenue</span>
           <span className="tabular-nums text-white">{ghs(m.revenue.ggr)}</span>
         </div>
       </div>
@@ -86,7 +91,7 @@ export function StatusRail({ alerts, lastSync }: { alerts: Alert[]; lastSync: st
   const bad = alerts.filter((a) => a.level !== "ok");
   const worst = bad.some((a) => a.level === "critical") ? "critical" : bad.length ? "warn" : "ok";
   return (
-    <Link href="/admin/system" className="flex flex-wrap items-center gap-x-5 gap-y-2 rounded-md border border-white/[0.07] bg-[#0D1218] px-4 py-2.5 text-[13px] hover:border-white/[0.14]">
+    <Link href="/admin/system" className="flex flex-wrap items-center gap-x-5 gap-y-2 rounded-2xl border border-line bg-ink-700 px-5 py-3.5 text-[13px] shadow-card transition-colors duration-150 hover:border-ink-400">
       <span className="flex items-center gap-2 font-semibold text-white">
         <Light level={worst} pulse={worst !== "ok"} />
         {bad.length ? `${bad.length} issue${bad.length === 1 ? "" : "s"}` : "All systems normal"}

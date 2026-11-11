@@ -22,6 +22,8 @@ import { applyCachedBadges } from "./assets";
 import { competitionRank } from "./queries";
 import { runAutoCashouts } from "./cashout";
 import { IN_PLAY_MARKET_TYPES, liveBettingLeagues } from "./markets";
+import { RESULT_CHECK_HOURS, resultCheckDue } from "./resultChecks";
+import { pickDueLeagues } from "./oddsSchedule";
 
 const SPORTS = ["football", "basketball"];
 
@@ -115,13 +117,29 @@ export async function syncFixtures({ leagues, inPlay = false }: { leagues?: stri
   return { fixtures: fixtures.length, provider: provider.name, sandbox: provider.isSandbox };
 }
 
+/** Leagues whose odds are due a refresh (see oddsSchedule), judged from fixtures already stored: no credits. */
+export async function dueLeagues(leagues: readonly string[], last: ReadonlyMap<string, number>, now: number): Promise<string[]> {
+  const upcoming = await prisma.fixture.findMany({
+    where: { status: "SCHEDULED", startsAt: { gt: new Date(now) }, competition: { providerRef: { in: [...leagues] } } },
+    select: { startsAt: true, competition: { select: { providerRef: true } } },
+  });
+  const next = new Map<string, number>();
+  for (const f of upcoming) {
+    const l = f.competition.providerRef!;
+    const t = f.startsAt.getTime() - now;
+    if (!next.has(l) || t < next.get(l)!) next.set(l, t);
+  }
+  return pickDueLeagues(leagues, next, last, now);
+}
+
 /** In play only the match result is offered: every other open market on the match closes. */
 const closeInPlayExtras = (fixtureId: string) =>
   prisma.market.updateMany({ where: { fixtureId, status: "OPEN", type: { notIn: IN_PLAY_MARKET_TYPES } }, data: { status: "SUSPENDED" } });
 
 /**
  * Per-match markets (all over/under and handicap lines, team totals, correct score, odd/even,
- * GG/NG, double chance, draw no bet) for the top `limit` upcoming football fixtures. On a
+ * GG/NG, double chance, draw no bet) for the top `limit` football fixtures kicking off within
+ * ODDS_EXTRA_WINDOW_HOURS (default 48). On a
  * metered feed each match costs up to one credit per market returned, so coverage is capped,
  * and the whole step pauses below ODDS_EXTRA_RESERVE credits so the main odds sync never starves.
  * Matches not refreshed — outside the top set, or paused — have these markets suspended rather
@@ -139,8 +157,15 @@ export async function syncEventMarkets(limit = Number(process.env.ODDS_EXTRA_FIX
     return { fixtures: 0, markets: 0, skipped: `credit reserve: ${left} left` };
   }
 
+  // Only matches close enough for their prices to matter; later ones get them as they come into range.
+  const windowMs = Number(process.env.ODDS_EXTRA_WINDOW_HOURS ?? 48) * 3600_000;
   const upcoming = await prisma.fixture.findMany({
-    where: { sportKey: "football", status: "SCHEDULED", startsAt: { gt: new Date() }, competition: { providerRef: { not: null } } },
+    where: {
+      sportKey: "football",
+      status: "SCHEDULED",
+      startsAt: { gt: new Date(), lt: new Date(Date.now() + windowMs) },
+      competition: { providerRef: { not: null } },
+    },
     include: { competition: true },
   });
   const top = upcoming
@@ -288,21 +313,37 @@ async function settleIfOpen(fixtureId: string, home: number, away: number): Prom
   }
 }
 
-/** Settle any fixture the provider reports finished that we haven't settled yet. */
-export async function autoSettleFinished(): Promise<{ settled: number }> {
-  const provider = oddsProvider();
-  const open = await prisma.fixture.findMany({
-    where: {
-      status: { in: ["SCHEDULED", "LIVE"] },
-      providerRef: { not: null },
-      startsAt: { lt: new Date(Date.now() - RESULT_AFTER_MS) },
-    },
-    select: { id: true, providerRef: true, competition: { select: { providerRef: true } } },
-  });
-  if (!open.length) return { settled: 0 };
+/** Match-id prefixes of the feeds that label their matches: TheSportsDB, the sandbox. The Odds API's ids carry none. */
+const OTHER_FEED_PREFIXES = ["sdb-", "sbx-"];
+
+/**
+ * Retire matches a previous feed left behind. After switching to The Odds API, matches imported
+ * from TheSportsDB or the sandbox are never updated or settled again: they'd stay open forever,
+ * list their league a second time beside the new feed's, and trip the "waiting for results"
+ * alert. Only matches nobody has bet on are closed (CANCELLED, as for a called-off game); one
+ * with bets is left for an admin to settle or void. Checks the feed actually in use, not the
+ * setting: with the key missing it falls back to TheSportsDB, and then this does nothing.
+ */
+export async function retireOrphanedFeedFixtures(): Promise<{ retired: number; kept: number }> {
+  if (oddsProvider().name !== "theoddsapi") return { retired: 0, kept: 0 };
+  const orphaned = {
+    status: { in: ["SCHEDULED", "LIVE"] as ("SCHEDULED" | "LIVE")[] },
+    OR: OTHER_FEED_PREFIXES.map((p) => ({ providerRef: { startsWith: p } })),
+  };
+  const { count: retired } = await prisma.fixture.updateMany({ where: { ...orphaned, betSelections: { none: {} } }, data: { status: "CANCELLED" } });
+  const kept = await prisma.fixture.count({ where: orphaned });
+  return { retired, kept };
+}
+
+const openFeedFixture = { status: { in: ["SCHEDULED", "LIVE"] as ("SCHEDULED" | "LIVE")[] }, providerRef: { not: null } };
+const resultSelect = { id: true, providerRef: true, startsAt: true, competition: { select: { providerRef: true } } } as const;
+type ResultCandidate = { id: string; providerRef: string | null; competition: { providerRef: string | null } };
+
+/** Ask the feed for these matches' results and settle the ones it reports finished. */
+async function settleFromFeed(open: ResultCandidate[]): Promise<number> {
   // Only query leagues that have a candidate (each scores lookup costs credits on metered feeds).
-  const leagues = [...new Set(open.map((f) => f.competition.providerRef).filter((l): l is string => !!l))];
-  const results = await provider.fetchResults(
+  const leagues = leaguesOf(open);
+  const results = await oddsProvider().fetchResults(
     open.map((f) => f.providerRef!),
     leagues.length ? leagues : undefined,
   );
@@ -314,5 +355,36 @@ export async function autoSettleFinished(): Promise<{ settled: number }> {
       if (await settleIfOpen(f.id, r.homeScore, r.awayScore)) settled++;
     }
   }
-  return { settled };
+  return settled;
+}
+
+/** Settle any fixture the provider reports finished that we haven't settled yet. */
+export async function autoSettleFinished(): Promise<{ settled: number }> {
+  const open = await prisma.fixture.findMany({
+    where: { ...openFeedFixture, startsAt: { lt: new Date(Date.now() - RESULT_AFTER_MS) } },
+    select: resultSelect,
+  });
+  if (!open.length) return { settled: 0 };
+  return { settled: await settleFromFeed(open) };
+}
+
+/**
+ * Settle matches soon after full time, independent of live scores (which pause at their credit
+ * reserve) and of the full settle run (days apart). Each unsettled match is checked only at the
+ * ages in RESULT_CHECK_HOURS, so one that never finishes costs a bounded number of lookups.
+ * Free (DB-only) when no match is due. `everyMs` is how often the caller runs it.
+ */
+export async function settleRecentlyFinished(everyMs: number): Promise<{ checked: number; settled: number }> {
+  const now = Date.now();
+  const H = 60 * 60 * 1000;
+  const candidates = await prisma.fixture.findMany({
+    where: {
+      ...openFeedFixture,
+      startsAt: { lte: new Date(now - Math.min(...RESULT_CHECK_HOURS) * H), gt: new Date(now - Math.max(...RESULT_CHECK_HOURS) * H - everyMs) },
+    },
+    select: resultSelect,
+  });
+  const due = candidates.filter((f) => resultCheckDue(now - f.startsAt.getTime(), everyMs));
+  if (!due.length) return { checked: 0, settled: 0 };
+  return { checked: due.length, settled: await settleFromFeed(due) };
 }

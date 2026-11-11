@@ -5,6 +5,7 @@ import Image from "next/image";
 import { sportPhoto } from "@/lib/photos";
 import { kickoffLong } from "@/lib/time";
 import { OddsButton } from "@/components/betslip/OddsButton";
+import { liveScore } from "@/lib/markets";
 import { Crest } from "@/components/Crest";
 import { Countdown } from "@/components/Countdown";
 import { LivePill } from "@/components/MatchTable";
@@ -146,6 +147,7 @@ export default async function FixturePage({ params, searchParams }: { params: Pr
                 selectionName: sel.name,
                 marketName: m.name,
                 fixtureName,
+                score: liveScore(f),
               });
               // Label left, price right in one compact tile, so three outcomes fit side by side on a phone.
               const rowButton =
@@ -158,7 +160,7 @@ export default async function FixturePage({ params, searchParams }: { params: Pr
                     </svg>
                     <h2 className="font-display text-sm font-bold text-white">{sec.title}</h2>
                     {sec.kind === "lines" && live.length > 1 && <span className="text-xs text-fog-muted">{live.length} lines</span>}
-                    {!live.length && <span className="ml-auto rounded-full bg-white/[0.06] px-2 py-0.5 text-xs font-semibold text-fog-muted">{badge}</span>}
+                    {!live.length && <span className="ml-auto rounded-full bg-ink-500 px-2 py-0.5 text-xs font-semibold text-fog-muted">{badge}</span>}
                   </summary>
                   {live.length > 0 && sec.kind === "single" && (
                     <div className={`mt-2 grid gap-1.5 ${live[0]!.selections.length === 3 ? "grid-cols-3" : "grid-cols-2"}`}>

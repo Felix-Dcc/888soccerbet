@@ -26,7 +26,7 @@ export class ShinobiPayProvider implements PaymentProvider {
     private readonly secretKey: string,
     private readonly webhookSecret: string,
     private readonly apiUrl = (process.env.SHINOBI_API_URL || "https://akwapayapi.onrender.com").replace(/\/+$/, ""),
-    private readonly appUrl = (process.env.APP_URL || "https://kingzbet.live").replace(/\/+$/, ""),
+    private readonly appUrl = (process.env.APP_URL || "https://betzone.com.co").replace(/\/+$/, ""),
     private readonly now = () => Math.floor(Date.now() / 1000),
   ) {
     this.isSandbox = secretKey.startsWith("sk_test_");
@@ -49,6 +49,7 @@ export class ShinobiPayProvider implements PaymentProvider {
   }
 
   async initiate(req: ChargeRequest): Promise<ChargeResult> {
+    if (!req.msisdn || !req.network) throw new PspError("Enter your mobile money number and network");
     // Never reached for withdrawals (payouts = "manual"); refuse loudly rather than pretend.
     if (req.direction !== "DEPOSIT") throw new ShinobiPayError("ShinobiPay can't send payouts to players");
     const { http, json } = await this.call(
@@ -61,7 +62,7 @@ export class ShinobiPayProvider implements PaymentProvider {
         network: req.network, // MTN | TELECEL | AIRTELTIGO: the same codes as ours
         customer: { phone: req.msisdn, email: req.email },
         reference: req.ref,
-        description: "Kingz Bet deposit",
+        description: "Bet Zone deposit",
         return_url: `${this.appUrl}/wallet`,
         metadata: { ref: req.ref },
       },
@@ -125,6 +126,8 @@ export class ShinobiPayProvider implements PaymentProvider {
     if (http >= 500 || http === 429) throw new ShinobiPayError("ShinobiPay unavailable"); // non-2xx: it retries
     const live = json as { status?: string; amount?: number; currency?: string; reference?: string };
     const confirmed = status === "SUCCEEDED" ? live.status === "succeeded" : live.status === "failed";
+    // The event can land a moment before the API shows the final state: make ShinobiPay retry instead of dropping it.
+    if (!confirmed && live.status !== "succeeded" && live.status !== "failed") throw new ShinobiPayError("ShinobiPay intent not final yet");
     if (!confirmed || live.currency !== "GHS" || !Number.isInteger(live.amount)) return { ok: true, event: null };
     if (live.reference && live.reference !== reference) return { ok: true, event: null };
     return { ok: true, event: { providerEventId: body.id, ourRef: reference, status, amountPesewas: BigInt(live.amount!), direction: "DEPOSIT" } };

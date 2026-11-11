@@ -3,7 +3,7 @@ import { LegalPage, LegalTable } from "@/components/LegalPage";
 import { legal } from "@/lib/legal";
 
 export const dynamic = "force-dynamic"; // states the live operator settings
-export const metadata: Metadata = { title: "Cookies Policy — Kingz Bet" };
+export const metadata: Metadata = { title: "Cookies Policy — Bet Zone" };
 
 /**
  * Everything the site stores on a device. All of it is strictly necessary or a choice the player
@@ -20,7 +20,7 @@ export default function CookiesPage() {
         head={["Name", "What it does", "How long"]}
         rows={[
           ["stk_session (cookie)", "Keeps you signed in. Strictly necessary; scripts can't read it.", "14 days, or until you close the browser if you don't tick Remember me"],
-          ["stakra.betslip.v1 (local storage)", "Remembers the selections and stake on your betslip.", "Until you clear your betslip or browser data"],
+          ["sb.betslip.v1 (local storage)", "Remembers the selections and stake on your betslip.", "Until you clear your betslip or browser data"],
           ["kb.hideBalance (local storage)", "Remembers whether you hid your balance.", "Until you change it or clear browser data"],
           ["kb.splash (session storage)", "Plays the opening animation once per visit.", "Until you close the tab"],
         ]}

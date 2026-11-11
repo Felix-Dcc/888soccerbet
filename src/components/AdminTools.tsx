@@ -356,21 +356,104 @@ export function ManualGameForm({ competitions }: { competitions: { sportKey: str
   );
 }
 
+/** Delete or edit a manual/generated match from the "Open created games" list. */
+export function MatchActions({ fixtureId, homeTeam, awayTeam, venue, startsAt, isScheduled }: {
+  fixtureId: string; homeTeam: string; awayTeam: string; venue: string | null; startsAt: string; isScheduled: boolean;
+}) {
+  const router = useRouter();
+  const [busy, setBusy] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [msg, setMsg] = useState<{ ok: boolean; msg: string } | null>(null);
+
+  async function handleDelete() {
+    if (!window.confirm(`Delete "${homeTeam} v ${awayTeam}"? This cannot be undone.`)) return;
+    setBusy(true);
+    try {
+      const r = await fetch("/api/admin/fixtures", { method: "DELETE", headers: { "content-type": "application/json" }, body: JSON.stringify({ fixtureId }) });
+      const d = await r.json();
+      setMsg({ ok: r.ok, msg: r.ok ? "Deleted" : d.error ?? "Cannot delete" });
+      if (r.ok) router.refresh();
+    } catch { setMsg({ ok: false, msg: "Network error" }); }
+    setBusy(false);
+  }
+
+  async function handleEdit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const fd = new FormData(e.currentTarget);
+    const body: Record<string, string> = { fixtureId };
+    const h = (fd.get("homeTeam") as string).trim();
+    const a = (fd.get("awayTeam") as string).trim();
+    const v = (fd.get("venue") as string).trim();
+    const t = fd.get("startsAt") as string;
+    if (h && h !== homeTeam) body.homeTeam = h;
+    if (a && a !== awayTeam) body.awayTeam = a;
+    if (v !== (venue ?? "")) body.venue = v;
+    if (t) { const iso = new Date(t).toISOString(); if (iso !== startsAt) body.startsAt = iso; }
+    if (Object.keys(body).length <= 1) { setEditing(false); return; }
+    setBusy(true);
+    try {
+      const r = await fetch("/api/admin/fixtures", { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+      const d = await r.json();
+      setMsg({ ok: r.ok, msg: r.ok ? "Updated" : d.error ?? "Cannot edit" });
+      if (r.ok) { setEditing(false); router.refresh(); }
+    } catch { setMsg({ ok: false, msg: "Network error" }); }
+    setBusy(false);
+  }
+
+  const local = (iso: string) => { const d = new Date(iso); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 16); };
+  const field = "mt-1 block w-full rounded bg-graphite-800 px-3 py-1.5 text-sm text-white border border-line focus:border-lime focus:outline-none";
+
+  if (editing)
+    return (
+      <form onSubmit={handleEdit} className="w-full space-y-3 border-t border-line pt-3">
+        <div className="grid gap-3 sm:grid-cols-2">
+          <label className="block"><span className="text-xs text-fog">Home</span><input name="homeTeam" defaultValue={homeTeam} maxLength={60} className={field} /></label>
+          <label className="block"><span className="text-xs text-fog">Away</span><input name="awayTeam" defaultValue={awayTeam} maxLength={60} className={field} /></label>
+          <label className="block"><span className="text-xs text-fog">Venue</span><input name="venue" defaultValue={venue ?? ""} maxLength={100} className={field} /></label>
+          <label className="block"><span className="text-xs text-fog">Kick-off</span><input name="startsAt" type="datetime-local" defaultValue={local(startsAt)} className={field} /></label>
+        </div>
+        {msg && <p className={`text-xs ${msg.ok ? "text-lime" : "text-danger"}`}>{msg.msg}</p>}
+        <div className="flex gap-2">
+          <button type="submit" className="btn-lime px-3 py-1 text-xs" disabled={busy}>{busy ? "Saving…" : "Save"}</button>
+          <button type="button" className="btn px-3 py-1 text-xs text-fog" onClick={() => { setEditing(false); setMsg(null); }}>Cancel</button>
+        </div>
+      </form>
+    );
+
+  return (
+    <span className="flex shrink-0 items-center gap-1">
+      {msg && <span className={`text-xs ${msg.ok ? "text-lime" : "text-danger"}`}>{msg.msg}</span>}
+      {isScheduled && (
+        <>
+          <button type="button" title="Edit match" className="rounded p-1 text-fog hover:bg-white/5 hover:text-white" disabled={busy} onClick={() => { setMsg(null); setEditing(true); }}>
+            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path d="M17 3l4 4-10 10H7v-4L17 3z" /></svg>
+          </button>
+          <button type="button" title="Delete match" className="rounded p-1 text-fog hover:bg-danger/10 hover:text-danger" disabled={busy} onClick={handleDelete}>
+            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path d="M3 6h18M8 6V4h8v2M5 6v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V6M10 11v6M14 11v6" /></svg>
+          </button>
+        </>
+      )}
+    </span>
+  );
+}
+
 /** Approve or reject a player's withdrawal verification. Either way the held money goes to their balance. */
-export function VerificationReview({ userId, email, heldGhs, complete }: { userId: string; email: string; heldGhs: string; complete: boolean }) {
+export function VerificationReview({ userId, email, heldGhs, complete, stage = "kyc" }: { userId: string; email: string; heldGhs: string; complete: boolean; stage?: "kyc" | "ntt" }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; msg: string } | null>(null);
+  const stageLabel = stage === "ntt" ? "NTT compliance" : "KYC verification";
 
   async function review(action: "approve" | "reject") {
+    const approveNote = stage === "ntt" ? "withdrawals unlock" : "they move to NTT compliance stage";
     const text =
       action === "approve"
-        ? `Approve ${email}? GHS ${heldGhs} is released to their balance and withdrawals unlock.`
-        : `Reject ${email}? GHS ${heldGhs} is returned to their balance; withdrawals stay locked and they can verify again.`;
+        ? `Approve ${stageLabel} for ${email}? GHS ${heldGhs} is released to their balance and ${approveNote}.`
+        : `Reject ${stageLabel} for ${email}? GHS ${heldGhs} is returned to their balance; they can verify again.`;
     if (!window.confirm(text)) return;
     setBusy(true);
     try {
-      const r = await fetch("/api/admin/verification", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ userId, action }) });
+      const r = await fetch("/api/admin/verification", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ userId, action, stage }) });
       const d = await r.json();
       setMsg({ ok: r.ok, msg: r.ok ? (action === "approve" ? "Approved" : "Rejected") : d.error ?? "Failed" });
       if (r.ok) router.refresh();
@@ -382,7 +465,7 @@ export function VerificationReview({ userId, email, heldGhs, complete }: { userI
 
   return (
     <div className="flex flex-wrap items-center gap-2">
-      <button type="button" className="btn-lime px-3 py-1.5 text-sm" disabled={busy || !complete} title={complete ? undefined : "Both payments must be in first"} onClick={() => review("approve")}>
+      <button type="button" className="btn-lime px-3 py-1.5 text-sm" disabled={busy || !complete} title={complete ? undefined : "All payments must be in first"} onClick={() => review("approve")}>
         Approve
       </button>
       <button type="button" className="btn border border-danger/50 px-3 py-1.5 text-sm text-danger hover:bg-danger/10" disabled={busy} onClick={() => review("reject")}>

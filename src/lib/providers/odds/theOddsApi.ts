@@ -1,7 +1,7 @@
 /**
  * The Odds API adapter — real pre-match odds only. IMPORTANT: this is an odds feed,
  * NOT a licensed sportsbook. It provides no bet placement, settlement, risk management
- * or liability. Kingz Bet's own engine handles those against whatever feed is configured.
+ * or liability. Bet Zone's own engine handles those against whatever feed is configured.
  *
  * Every price is the median of the real bookmaker prices for that exact outcome and line (a
  * single stale or outlier bookmaker can't set ours), and a market is left out when its prices
@@ -30,6 +30,8 @@ const SPORT_KEYS: Record<string, string[]> = {
   football: SOCCER_KEYS,
   basketball: ["basketball_nba"],
 };
+/** Every league this feed syncs. */
+export const ODDS_LEAGUES = Object.values(SPORT_KEYS).flat();
 
 interface Outcome {
   name: string;
@@ -144,7 +146,7 @@ export function toFixture(ev: ApiEvent, sportKey: string, league: string): Provi
 }
 
 /**
- * Per-match markets, as a registry: API market key -> the Kingz Bet market types it produces and
+ * Per-match markets, as a registry: API market key -> the Bet Zone market types it produces and
  * how to build them from the bookmakers' prices. To offer another market the feed prices, add an
  * entry here (and a grading rule in settlement.ts); which keys are requested is configuration
  * (ODDS_EXTRA_MARKETS). Only markets that settle from the final score are listed — the results
@@ -399,7 +401,7 @@ export function parseScore(name: string, home: string, away: string): [number, n
   return [Number(h), Number(a)];
 }
 
-/** Every Kingz Bet market type the per-match sync is responsible for (suspended when not refreshed). */
+/** Every Bet Zone market type the per-match sync is responsible for (suspended when not refreshed). */
 export const EVENT_MARKET_TYPES: MarketType[] = [...new Set(Object.values(EVENT_MARKETS).flatMap((m) => m.types))];
 
 /** Build all per-match markets for the requested API keys (unknown keys are ignored). */
@@ -478,7 +480,7 @@ export class TheOddsApiProvider implements OddsProvider {
 
   async fetchResults(providerRefs: string[], leagues?: string[]): Promise<ProviderResult[]> {
     const want = new Set(providerRefs);
-    return (await this.scores(leagues ?? [...SOCCER_KEYS, "basketball_nba"], "&daysFrom=3")).filter((r) => want.has(r.providerRef));
+    return (await this.scores(leagues ?? ODDS_LEAGUES, "&daysFrom=3")).filter((r) => want.has(r.providerRef));
   }
 
   async fetchLiveScores(leagues: string[]): Promise<ProviderResult[]> {

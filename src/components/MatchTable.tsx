@@ -3,6 +3,7 @@ import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import type { UiFixture, UiMarket } from "@/lib/queries";
 import { OddsButton } from "./betslip/OddsButton";
+import { liveScore } from "@/lib/markets";
 import { Crest } from "./Crest";
 import { kickoffDay, kickoffTime } from "@/lib/time";
 import { liveClockLabel } from "@/lib/liveClock";
@@ -184,6 +185,7 @@ function Cells({ f, market, cols, started }: { f: UiFixture; market: UiMarket | 
                   selectionName: s.name,
                   marketName: market!.name,
                   fixtureName: `${f.homeTeam} v ${f.awayTeam}`,
+                  score: liveScore(f),
                 }}
               />
             ) : (
