@@ -33,7 +33,7 @@ import { prisma } from "../src/lib/db";
 import { houseAccountId, userAccountId, postTransaction, userCashBalance, ledgerIsBalanced } from "../src/lib/ledger";
 import { placeBet, BetError } from "../src/lib/betEngine";
 import { setLiveScore, settleBet, settleFixture, voidFixture, SettlementError } from "../src/lib/settlement";
-import { initiateDeposit, initiateWithdrawal, initiateVerificationPayment, confirmDeposit, manualPayoutQueue, processPaymentEvent, reconcilePendingDeposits, recordManualPayout, reviewVerification, verifyPlayer, verificationState } from "../src/lib/wallet";
+import { depositPauseUntil, initiateDeposit, initiateWithdrawal, initiateVerificationPayment, confirmDeposit, manualPayoutQueue, processPaymentEvent, reconcilePendingDeposits, recordManualPayout, reviewVerification, verifyPlayer, verificationState } from "../src/lib/wallet";
 import { toPesewas } from "../src/lib/money";
 import { referralCode } from "../src/lib/ids";
 import { createBooking, loadBooking, resolvePicks } from "../src/lib/bookings";
@@ -242,6 +242,29 @@ describe("wallet", () => {
     expect(c.lifetime.depositors).toBe(1);
     expect(c.lifetime.net).toBe(toPesewas(150)); // 100 + 70 - 20
     expect(c.lifetime.earned).toBe(toPesewas(15)); // 10%
+  });
+
+  it("pauses deposits for 5 minutes after every 3rd failed deposit in a row, then allows 3 fresh tries", async () => {
+    const user = await fundedUser(0);
+    const fail = (minsAgo: number) =>
+      prisma.paymentIntent.create({
+        data: {
+          ref: `T-${randomUUID().slice(0, 8)}`, userId: user.id, direction: "DEPOSIT", amount: toPesewas(100), status: "FAILED", provider: "sandbox",
+          idempotencyKey: randomUUID(), createdAt: new Date(Date.now() - minsAgo * 60_000 - 1000), settledAt: new Date(Date.now() - minsAgo * 60_000),
+        },
+      });
+    await fail(3);
+    await fail(2);
+    expect(await depositPauseUntil(user.id)).toBeNull(); // two failures: still fine
+    await fail(1);
+    const until = await depositPauseUntil(user.id);
+    expect(until!.getTime()).toBeGreaterThan(Date.now() + 3.5 * 60_000); // ~4 minutes left
+    await expect(initiateDeposit(user.id, 100, "0241234567", randomUUID())).rejects.toMatchObject({ code: "DEPOSIT_PAUSED" });
+    expect(await depositPauseUntil(user.id, Date.now() + 5 * 60_000)).toBeNull(); // over once the 5 minutes pass
+    await fail(0); // a 4th failure after the pause: fresh tries, not paused again yet
+    expect(await depositPauseUntil(user.id)).toBeNull();
+    const ok = await initiateDeposit(user.id, 100, "0241234567", randomUUID()); // a pending (not failed) try breaks the streak
+    expect(ok.status).toBe("PENDING");
   });
 
   it("retries an event an earlier attempt recorded but never finished, crediting it once", async () => {

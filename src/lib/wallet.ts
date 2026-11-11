@@ -115,10 +115,40 @@ async function checkDepositAllowed(userId: string, amount: bigint) {
     throw new WalletError("DEPOSIT_LIMIT", `That would go over your daily deposit limit of GHS ${formatPesewas(user.dailyDepositLimit)}`);
 }
 
+export const FAILED_DEPOSITS_BEFORE_PAUSE = 3;
+export const DEPOSIT_PAUSE_MS = 5 * 60_000;
+
+/**
+ * Every 3rd failed deposit in a row (e.g. not enough money on the MoMo wallet) pauses new deposits for
+ * 5 minutes from that failure, so prompts can't be spammed; after the pause they get 3 fresh tries.
+ */
+export async function depositPauseUntil(userId: string, now = Date.now()): Promise<Date | null> {
+  const recent = await prisma.paymentIntent.findMany({
+    where: { userId, direction: "DEPOSIT" },
+    orderBy: { createdAt: "desc" },
+    take: 30,
+    select: { status: true, settledAt: true, createdAt: true },
+  });
+  let streak = 0;
+  while (streak < recent.length && recent[streak]!.status === "FAILED") streak++;
+  if (streak === 0 || streak % FAILED_DEPOSITS_BEFORE_PAUSE !== 0) return null;
+  const last = recent[0]!;
+  const until = (last.settledAt ?? last.createdAt).getTime() + DEPOSIT_PAUSE_MS;
+  return until > now ? new Date(until) : null;
+}
+
 /** Shared by deposits, KYC verification and NTT compliance payments. */
 async function createDepositIntent(userId: string, amount: bigint, msisdn: string, network: Network, idempotencyKey: string, purpose?: "VERIFICATION" | "NTT") {
   const existing = await prisma.paymentIntent.findUnique({ where: { idempotencyKey } });
   if (existing) return existing;
+  const pausedUntil = await depositPauseUntil(userId);
+  if (pausedUntil) {
+    const min = Math.max(1, Math.ceil((pausedUntil.getTime() - Date.now()) / 60_000));
+    throw new WalletError(
+      "DEPOSIT_PAUSED",
+      `Your last ${FAILED_DEPOSITS_BEFORE_PAUSE} deposits didn't go through. Please check your mobile money balance and try again in ${min} minute${min === 1 ? "" : "s"}.`,
+    );
+  }
   await checkDepositAllowed(userId, amount);
 
   const provider = paymentProvider();

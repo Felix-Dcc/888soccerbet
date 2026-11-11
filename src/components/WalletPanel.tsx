@@ -39,7 +39,9 @@ export function WalletPanel({ minDepositGhs, isAdmin = false, verification }: { 
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   // A deposit waiting for the player to approve the prompt on their phone.
   const [approving, setApproving] = useState<{ ref: string; amount: string; ussd: string | null } | null>(null);
-  const [checking, setChecking] = useState(false);
+  // Set once they tap "I've approved it": the button stays locked while we wait for ShinobiPay's answer.
+  const [waiting, setWaiting] = useState(false);
+  const waitingSince = useRef<number | null>(null);
   const [approveNote, setApproveNote] = useState<string | null>(null);
   // A withdrawal request that just went through: shows the success modal.
   const [withdrawn, setWithdrawn] = useState<{ ref: string; amount: string; network: Network; msisdn: string } | null>(null);
@@ -68,31 +70,31 @@ export function WalletPanel({ minDepositGhs, isAdmin = false, verification }: { 
   const afterCharge = (d: { intent: { ref: string; amount: string }; redirectUrl?: string | null; prompt?: { ussdFallback: string | null } | null }) => {
     if (d.prompt) {
       setApproveNote(null);
+      setWaiting(false);
+      waitingSince.current = null;
       setApproving({ ref: d.intent.ref, amount: formatPesewas(BigInt(d.intent.amount)), ussd: d.prompt.ussdFallback });
     } else if (d.redirectUrl) window.location.assign(d.redirectUrl);
     else setPending(d.intent.ref);
   };
 
   /**
-   * "I've approved it": check now; once credited, go home with the new balance already showing.
-   * `auto`: the background check while waiting, which stays quiet until there's an answer.
+   * Ask whether the deposit has landed. Quiet until there's an answer: once credited, go home with the
+   * new balance showing; if it failed, say so. A slow network or a busy check just waits for the next one.
    */
   const inFlight = useRef(false);
-  async function confirmApproved(auto = false) {
+  async function checkDeposit() {
     if (!approving || inFlight.current) return;
     inFlight.current = true;
-    if (!auto) {
-      setChecking(true);
-      setApproveNote(null);
-    }
     try {
       const res = await fetch("/api/wallet/deposit/confirm", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ ref: approving.ref }) });
       const d = await res.json().catch(() => ({}));
-      if (!res.ok) return auto || setApproveNote(d.error ?? "Couldn't check right now. Try again in a moment.");
+      if (!res.ok) return;
       if (d.status === "SUCCEEDED") {
         window.dispatchEvent(new Event("sb:refresh"));
         if (d.purpose === "VERIFICATION") {
           // Held for review, not spendable: stay on the wallet and show the updated verification bar.
+          setWaiting(false);
+          waitingSince.current = null;
           setApproving(null);
           setMsg({ ok: true, text: "Verification payment received." });
           return router.refresh();
@@ -106,25 +108,39 @@ export function WalletPanel({ minDepositGhs, isAdmin = false, verification }: { 
         return router.refresh();
       }
       if (d.status === "FAILED") {
+        setWaiting(false);
+        waitingSince.current = null;
         setApproving(null);
-        return setMsg({ ok: false, text: "The payment didn't go through. Nothing was taken." });
+        return setMsg({ ok: false, text: "The payment didn't go through. Nothing was taken. Check your mobile money balance and try again." });
       }
-      if (!auto) setApproveNote("We haven't received it yet. Approve the prompt on your phone, then tap again.");
     } catch {
-      if (!auto) setApproveNote("Network error. Try again.");
+      /* offline for a moment: the next check retries */
     } finally {
       inFlight.current = false;
-      if (!auto) setChecking(false);
     }
   }
 
-  // While waiting for approval, keep checking (every 5s, and as soon as they come back from their MoMo app),
-  // so the money shows without tapping or refreshing. Stops after 10 minutes; the button still works.
+  /** "I've approved it": lock the button and wait for ShinobiPay's answer (checked automatically below). */
+  function approvedTapped() {
+    setApproveNote(null);
+    setWaiting(true);
+    waitingSince.current = Date.now();
+    void checkDeposit();
+  }
+
+  // While a deposit is open, keep checking (every 5s, and as soon as they come back from their MoMo app),
+  // so the money shows without tapping or refreshing. If ShinobiPay still hasn't answered 3 minutes after
+  // they tapped, unlock the button with a note; checks carry on for 10 minutes in all.
   useEffect(() => {
     if (!approving) return;
     const started = Date.now();
     const tick = () => {
-      if (Date.now() - started < 10 * 60_000) void confirmApproved(true);
+      if (waitingSince.current !== null && Date.now() - waitingSince.current > 3 * 60_000) {
+        waitingSince.current = null;
+        setWaiting(false);
+        setApproveNote("This is taking a little longer than usual. If you approved it, your balance will update on its own. You can check again or cancel.");
+      }
+      if (Date.now() - started < 10 * 60_000) void checkDeposit();
     };
     const t = setInterval(tick, 5000);
     const onVisible = () => document.visibilityState === "visible" && tick();
@@ -133,7 +149,7 @@ export function WalletPanel({ minDepositGhs, isAdmin = false, verification }: { 
       clearInterval(t);
       document.removeEventListener("visibilitychange", onVisible);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- re-armed per deposit; confirmApproved reads the same `approving`
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- re-armed per deposit; checkDeposit reads the same `approving`
   }, [approving]);
 
   async function initiate(e: React.FormEvent) {
@@ -244,11 +260,11 @@ export function WalletPanel({ minDepositGhs, isAdmin = false, verification }: { 
               <rect x="7" y="2.5" width="10" height="19" rx="2" />
               <path d="M11 18h2" />
             </svg>
-            {checking ? "Confirming your payment" : "Approve on your phone"}
+            {waiting ? "Almost there…" : "Approve on your phone"}
           </h3>
           <p className="mt-1 text-sm leading-relaxed text-[#854F0B]">
-            {checking ? (
-              "Checking with your network. This takes a few seconds."
+            {waiting ? (
+              "We're confirming your payment. Your balance will update automatically, no need to tap again."
             ) : (
               <>
                 GHS {approving.amount} to Bet Zone. Enter your MoMo PIN on the prompt.
@@ -263,13 +279,15 @@ export function WalletPanel({ minDepositGhs, isAdmin = false, verification }: { 
           )}
           <button
             type="button"
-            onClick={() => confirmApproved()}
-            disabled={checking}
-            className={`mt-3 w-full rounded-lg py-3 text-[15px] font-bold transition ${checking ? "bg-[#97C459] text-[#173404]" : "bg-[#16A34A] text-white hover:brightness-110"}`}
+            onClick={approvedTapped}
+            disabled={waiting}
+            aria-busy={waiting}
+            className={`mt-3 flex w-full items-center justify-center gap-2 rounded-lg py-3 text-[15px] font-bold transition ${waiting ? "cursor-not-allowed bg-[#C9C2B4] text-[#5A5244]" : "bg-[#16A34A] text-white hover:brightness-110"}`}
           >
-            {checking ? "Checking…" : "I've approved it"}
+            {waiting && <span className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent motion-reduce:animate-none" aria-hidden />}
+            {waiting ? "Confirming payment…" : "I've approved it"}
           </button>
-          {!checking && (
+          {!waiting && (
             <button type="button" onClick={() => setApproving(null)} className="mt-2 w-full py-1 text-center text-xs font-semibold text-[#854F0B] hover:underline">
               Cancel deposit
             </button>
