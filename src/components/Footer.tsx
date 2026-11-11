@@ -1,6 +1,6 @@
 import { Suspense } from "react";
 import { Logo } from "./Logo";
-import { GhanaFlag } from "./GhanaFlag";
+import { MarketFlag } from "./GhanaFlag";
 import { DraggableSupportFab } from "./DraggableSupportFab";
 import { getPlatformSettings } from "@/lib/platformSettings";
 import { telegramSupport } from "@/lib/support";
@@ -16,7 +16,8 @@ export function SupportFab() {
   return <Suspense><SupportFabInner /></Suspense>;
 }
 
-export function Footer() {
+/** nigeria: the signed-in player is Nigerian (sees Naira), so the brand line names Nigeria. */
+export function Footer({ nigeria = false }: { nigeria?: boolean }) {
   return (
     <footer className="mt-6 border-t border-line bg-ink-800 pb-28 lg:pb-10">
       <div className="h-0.5 bg-lime" />
@@ -26,10 +27,10 @@ export function Footer() {
         <div>
           <span className="inline-flex items-center gap-2.5">
             <Logo />
-            <GhanaFlag className="h-3.5 w-5" />
-            <span className="font-display text-sm font-bold tracking-wide text-white">Ghana</span>
+            <MarketFlag nigeria={nigeria} className="h-3.5 w-5" />
+            <span className="font-display text-sm font-bold tracking-wide text-white">{nigeria ? "Nigeria" : "Ghana"}</span>
           </span>
-          <p className="mt-2 max-w-xs text-sm text-fog">Football and basketball odds, priced in cedis.</p>
+          <p className="mt-2 max-w-xs text-sm text-fog">Football and basketball odds, priced in {nigeria ? "naira" : "cedis"}.</p>
         </div>
 
         {/* Age and harm warning */}

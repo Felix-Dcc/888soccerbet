@@ -1,5 +1,5 @@
 import { Logo } from "./Logo";
-import { formatPesewas } from "@/lib/money";
+import { amountIn, GHS_CURRENCY, unitOf, type Currency } from "@/lib/currency";
 import { monthYear } from "@/lib/time";
 
 /**
@@ -10,7 +10,7 @@ import { monthYear } from "@/lib/time";
  * A card is a physical object, so this is the one surface allowed depth: a gradient body, the
  * logo's speed swoosh in the background, and a sheen that sweeps across on hover.
  */
-export function WalletCard({ balance, holder, phone, since }: { balance: bigint; holder: string; phone: string | null; since: Date }) {
+export function WalletCard({ balance, holder, phone, since, currency = GHS_CURRENCY }: { balance: bigint; holder: string; phone: string | null; since: Date; currency?: Currency }) {
   const last4 = phone?.replace(/\D/g, "").slice(-4);
   return (
     <section
@@ -39,8 +39,8 @@ export function WalletCard({ balance, holder, phone, since }: { balance: bigint;
         <div className="min-w-0">
           <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-white/60">Available balance</div>
           <div className="mt-1 truncate font-display text-[28px] font-extrabold leading-none tabular-nums text-gold sm:text-4xl">
-            <span className="mr-1.5 text-base font-bold text-gold/80 sm:text-lg">GHS</span>
-            {formatPesewas(balance)}
+            <span className="mr-1.5 text-base font-bold text-gold/80 sm:text-lg">{unitOf(currency)}</span>
+            {amountIn(currency, balance)}
           </div>
         </div>
         <Contactless />

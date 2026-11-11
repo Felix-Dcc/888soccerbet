@@ -2,7 +2,9 @@ import Link from "next/link";
 import { BallOrbit } from "@/components/BallOrbit";
 import { getCurrentUser } from "@/lib/session";
 import { prisma } from "@/lib/db";
-import { formatMilliOdds, formatPesewas } from "@/lib/money";
+import { formatMilliOdds } from "@/lib/money";
+import { amountIn } from "@/lib/currency";
+import { playerCurrency } from "@/lib/wallet";
 import { formatStamp, kickoffShortDate, kickoffTime } from "@/lib/time";
 import { SignedOut } from "@/components/SignedOut";
 import { SportIcon } from "@/components/SportIcon";
@@ -52,6 +54,7 @@ function legState(status: string, f: LegFixture, now: Date): LegState {
 export default async function BetsPage({ searchParams }: { searchParams: Promise<{ tab?: string; f?: string }> }) {
   const user = await getCurrentUser();
   if (!user) return <SignedOut title="My bets" />;
+  const currency = await playerCurrency(user); // Nigerian players see Naira
   const sp = await searchParams;
   // "settled" / "unsettled" are the older tab names other pages still link to.
   const history = sp.tab === "history" || sp.tab === "settled";
@@ -213,11 +216,11 @@ export default async function BetsPage({ searchParams }: { searchParams: Promise
                 <dl className="space-y-1.5 border-t border-line px-4 py-3">
                   <div className="flex items-baseline justify-between">
                     <dt className="text-fog">Stake</dt>
-                    <dd className="text-lg font-extrabold tabular-nums text-white">{formatPesewas(placedStake)}</dd>
+                    <dd className="text-lg font-extrabold tabular-nums text-white">{amountIn(currency, placedStake)}</dd>
                   </div>
                   <div className="flex items-baseline justify-between">
                     <dt className="text-fog">{ret === null ? "Pot. Win" : "Return"}</dt>
-                    <dd className={`text-lg font-extrabold tabular-nums ${b.status === "WON" ? "text-teal" : "text-white"}`}>{formatPesewas(ret ?? b.potentialPayout)}</dd>
+                    <dd className={`text-lg font-extrabold tabular-nums ${b.status === "WON" ? "text-teal" : "text-white"}`}>{amountIn(currency, ret ?? b.potentialPayout)}</dd>
                   </div>
                 </dl>
                 {q && (

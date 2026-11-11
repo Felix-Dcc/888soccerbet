@@ -3,9 +3,10 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import Image from "next/image";
 import Link from "next/link";
-import { formatPesewas } from "@/lib/money";
 import { Logo } from "./Logo";
 import { ShareTicket } from "./ShareTicket";
+import { useCurrency } from "./CurrencyContext";
+import { amountIn, moneyIn, unitOf } from "@/lib/currency";
 import trophyArt from "../../public/img/trophy-win.webp";
 
 /** Fetch and decode the trophy before the pop-up opens, so it never pops in late (gives up after 2.5 s). */
@@ -123,9 +124,10 @@ function WinCard({ win, remaining, onClose }: { win: Win; remaining: number; onC
     };
   }, [onClose]);
 
+  const currency = useCurrency(); // Nigerian players see their win in Naira
   const payout = BigInt(win.payout);
-  const amount = formatPesewas(payout);
-  const shown = formatPesewas(useCountUp(payout));
+  const amount = moneyIn(currency, payout);
+  const shown = amountIn(currency, useCountUp(payout));
 
   return (
     <div role="dialog" aria-modal="true" aria-labelledby="win-title" aria-describedby="win-amount" className="fixed inset-0 z-[70] overflow-y-auto">
@@ -156,9 +158,9 @@ function WinCard({ win, remaining, onClose }: { win: Win; remaining: number; onC
           </h2>
           <p className="mt-3 text-[11px] font-bold uppercase tracking-[0.3em] text-teal">Amount won</p>
           <p id="win-amount" className="mt-1 font-display text-[2.4rem] font-extrabold leading-none text-white tabular-nums sm:text-[2.75rem]">
-            <span className="sr-only">GHS {amount}</span>
+            <span className="sr-only">{amount}</span>
             <span aria-hidden>
-              <span className="mr-1.5 text-2xl font-bold text-white/70">GHS</span>
+              <span className="mr-1.5 text-2xl font-bold text-white/70">{unitOf(currency)}</span>
               {shown}
             </span>
           </p>

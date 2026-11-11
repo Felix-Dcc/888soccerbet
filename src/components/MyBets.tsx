@@ -1,7 +1,9 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { formatMilliOdds, formatPesewas } from "@/lib/money";
+import { formatMilliOdds } from "@/lib/money";
+import { moneyIn } from "@/lib/currency";
+import { useCurrency } from "./CurrencyContext";
 import { DATA_CHANGED_EVENT } from "./LiveRefresh";
 
 interface ApiSelection {
@@ -29,6 +31,7 @@ type Filter = "unsettled" | "cashout" | "live";
  * Counts are real; settled bets live on the full My bets page.
  */
 export function MyBets() {
+  const currency = useCurrency();
   const [feed, setFeed] = useState<Feed | null>(null);
   const [signedOut, setSignedOut] = useState(false);
   const [filter, setFilter] = useState<Filter>("unsettled");
@@ -134,8 +137,8 @@ export function MyBets() {
                   </div>
                 ))}
                 <div className="mt-1 flex items-baseline justify-between gap-2 text-[11px] text-fog-muted">
-                  <span className="tabular-nums">Stake GHS {formatPesewas(BigInt(b.stake))}</span>
-                  <span className="tabular-nums">Returns GHS {formatPesewas(BigInt(b.potentialPayout))}</span>
+                  <span className="tabular-nums">Stake {moneyIn(currency, BigInt(b.stake))}</span>
+                  <span className="tabular-nums">Returns {moneyIn(currency, BigInt(b.potentialPayout))}</span>
                 </div>
               </Link>
             </li>

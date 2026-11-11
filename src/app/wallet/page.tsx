@@ -2,10 +2,10 @@ import { SignedOut } from "@/components/SignedOut";
 import { getCurrentUser } from "@/lib/session";
 import { prisma } from "@/lib/db";
 import { userCashBalance } from "@/lib/ledger";
-import { formatPesewas } from "@/lib/money";
+import { moneyIn } from "@/lib/currency";
 import { WalletCard } from "@/components/WalletCard";
 import { WalletPanel } from "@/components/WalletPanel";
-import { minDeposit, reconcilePendingDeposits, verificationState } from "@/lib/wallet";
+import { minDeposit, playerCurrency, reconcilePendingDeposits, verificationState } from "@/lib/wallet";
 import { getPlatformSettings } from "@/lib/platformSettings";
 
 export const dynamic = "force-dynamic";
@@ -16,11 +16,12 @@ export default async function WalletPage() {
   // Settle any deposit whose webhook never came, before showing the balance. Never blocks the page.
   await reconcilePendingDeposits(user.id).catch((e) => console.error("[wallet] reconcile failed:", e instanceof Error ? e.message : e));
 
-  const [balance, intents, verification, settings] = await Promise.all([
+  const [balance, intents, verification, settings, currency] = await Promise.all([
     userCashBalance(prisma, user.id),
     prisma.paymentIntent.findMany({ where: { userId: user.id }, orderBy: { createdAt: "desc" }, take: 20 }),
     verificationState(user.id),
     getPlatformSettings(),
+    playerCurrency(user),
   ]);
 
   return (
@@ -30,11 +31,11 @@ export default async function WalletPage() {
       {/* The card sits on top of the deposit form it funds; transactions run alongside. */}
       <div className="grid items-start gap-6 lg:grid-cols-2">
         <div className="space-y-6">
-          <WalletCard balance={balance} holder={user.displayName ?? user.email.split("@")[0] ?? user.email} phone={user.phone} since={user.createdAt} />
+          <WalletCard balance={balance} holder={user.displayName ?? user.email.split("@")[0] ?? user.email} phone={user.phone} since={user.createdAt} currency={currency} />
           <WalletPanel
           minDepositGhs={Number(await minDeposit()) / 100}
           minWithdrawalGhs={settings.minWithdrawalGhs}
-          ngnPerGhs={user.country === "NG" ? settings.ngnPerGhs : null}
+          nigerian={user.country === "NG"}
           isAdmin={user.role !== "USER"}
           verification={{
             required: verification.required,
@@ -63,7 +64,7 @@ export default async function WalletPage() {
                   </div>
                   <div className="text-right">
                     <div className={`font-bold tabular-nums ${i.direction === "DEPOSIT" ? "text-win" : "text-fog"}`}>
-                      {i.direction === "DEPOSIT" ? "+" : "−"}GHS {formatPesewas(i.amount)}
+                      {i.direction === "DEPOSIT" ? "+" : "−"}{moneyIn(currency, i.amount)}
                     </div>
                     <StatusTag status={i.status} />
                   </div>

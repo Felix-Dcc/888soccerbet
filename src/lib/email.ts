@@ -3,7 +3,7 @@
  * messages are logged instead of sent. Sending never throws: a failed email must not undo the
  * sign-up, payout or payment that triggered it.
  */
-import { formatPesewas } from "./money";
+import { GHS_CURRENCY, moneyIn, type Currency } from "./currency";
 
 const FROM = { name: process.env.EMAIL_FROM_NAME || "Bet Zone", email: process.env.EMAIL_FROM || "no-reply@betzone.com.co" };
 const appUrl = () => (process.env.APP_URL || "https://betzone.com.co").replace(/\/+$/, "");
@@ -52,7 +52,6 @@ function layout(title: string, body: string, cta?: { label: string; href: string
 </table></td></tr></table></body></html>`;
 }
 const p = (s: string) => `<p style="margin:0 0 12px;font-size:15px;line-height:1.5">${s}</p>`;
-const ghs = (pesewas: bigint) => `GHS ${formatPesewas(pesewas)}`;
 
 export const emails = {
   verifyCode(to: string, code: string): Email {
@@ -84,7 +83,9 @@ export const emails = {
     };
   },
 
-  win(to: string, payout: bigint, ref: string): Email {
+  /** currency: the player's (Naira for Nigerian players). */
+  win(to: string, payout: bigint, ref: string, currency: Currency = GHS_CURRENCY): Email {
+    const ghs = (p: bigint) => moneyIn(currency, p);
     return {
       to,
       subject: `You won ${ghs(payout)} on Bet Zone`,
@@ -97,7 +98,8 @@ export const emails = {
     };
   },
 
-  deposit(to: string, amount: bigint, ref: string): Email {
+  deposit(to: string, amount: bigint, ref: string, currency: Currency = GHS_CURRENCY): Email {
+    const ghs = (p: bigint) => moneyIn(currency, p);
     return {
       to,
       subject: `Deposit received: ${ghs(amount)}`,
@@ -106,16 +108,18 @@ export const emails = {
     };
   },
 
-  withdrawal(to: string, amount: bigint, ref: string): Email {
+  withdrawal(to: string, amount: bigint, ref: string, currency: Currency = GHS_CURRENCY): Email {
+    const ghs = (p: bigint) => moneyIn(currency, p);
+    const account = currency.code === "NGN" ? "bank account" : "mobile money account"; // Nigerians are paid to a bank
     return {
       to,
       subject: `Withdrawal paid: ${ghs(amount)}`,
       html: layout(
         "Withdrawal paid",
-        p(`We've sent <strong>${esc(ghs(amount))}</strong> to your mobile money account.`) + p(`Reference: ${esc(ref)}`) + p("If you didn't ask for this, contact support straight away."),
+        p(`We've sent <strong>${esc(ghs(amount))}</strong> to your ${account}.`) + p(`Reference: ${esc(ref)}`) + p("If you didn't ask for this, contact support straight away."),
         { label: "Open wallet", href: `${appUrl()}/wallet` },
       ),
-      text: `We've sent ${ghs(amount)} to your mobile money account. Reference: ${ref}. If you didn't ask for this, contact support straight away.`,
+      text: `We've sent ${ghs(amount)} to your ${account}. Reference: ${ref}. If you didn't ask for this, contact support straight away.`,
     };
   },
 };

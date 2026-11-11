@@ -9,6 +9,8 @@ import { Header } from "./Header";
 import { WinningPopup } from "./WinningPopup";
 import { SportIcon } from "./SportIcon";
 import { DATA_CHANGED_EVENT, LiveRefresh } from "./LiveRefresh";
+import { CurrencyProvider } from "./CurrencyContext";
+import type { Currency } from "@/lib/currency";
 import { FlashNotice } from "./FlashNotice";
 
 /**
@@ -120,6 +122,7 @@ export function AppShell({
   minStakeGhs,
   bonus,
   siteUrl,
+  currency,
   children,
 }: {
   sidebar: React.ReactNode;
@@ -128,6 +131,7 @@ export function AppShell({
   minStakeGhs: number;
   bonus: BonusRules;
   siteUrl: string; // the public address shared links use (betzone.com.co in production)
+  currency: Currency; // what the signed-in player sees money in (Naira for Nigerian players)
   children: React.ReactNode;
 }) {
   const [slipOpen, setSlipOpen] = useState(false);
@@ -154,6 +158,7 @@ export function AppShell({
     return () => window.removeEventListener(OPEN_SLIP_EVENT, onOpen);
   }, []);
   return (
+    <CurrencyProvider value={currency}>
     <BetslipProvider minStake={minStakeGhs} bonus={bonus} siteUrl={siteUrl}>
       {/* Keyboard users jump past the header, sports row and menu straight to the page. */}
       <a
@@ -198,5 +203,6 @@ export function AppShell({
       <WinningPopup />
       {!adminView && <LiveRefresh />}
     </BetslipProvider>
+    </CurrencyProvider>
   );
 }

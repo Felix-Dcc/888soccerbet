@@ -4,20 +4,30 @@ import { LegalPage } from "@/components/LegalPage";
 import { legal } from "@/lib/legal";
 import { supportEmail } from "@/lib/support";
 import { limits } from "@/lib/betEngine";
-import { minDeposit, nigeriaOpen, verifyAmount, nttAmount, VERIFY_PAYMENTS, VERIFY_WIN_GHS } from "@/lib/wallet";
+import { minDeposit, nigeriaOpen, playerCurrency, verifyAmount, nttAmount, VERIFY_PAYMENTS, VERIFY_WIN_GHS } from "@/lib/wallet";
+import { getCurrentUser } from "@/lib/session";
+import { moneyIn } from "@/lib/currency";
 import { cashoutMarginPct, MIN_CASHOUT, partialLimit } from "@/lib/cashout";
-import { formatPesewas } from "@/lib/money";
+import { toPesewas } from "@/lib/money";
 import { getPlatformSettings } from "@/lib/platformSettings";
 
 export const dynamic = "force-dynamic"; // quotes the limits the site enforces right now
 export const metadata: Metadata = { title: "Terms & Conditions — Bet Zone" };
 
-const ghs = (p: bigint) => `GHS ${formatPesewas(p)}`;
 
 /** The rules of the service, with every figure read from the settings the code enforces. */
 export default async function TermsPage() {
   const l = legal();
-  const [stake, ps, email, ng] = await Promise.all([limits(), getPlatformSettings(), supportEmail(), nigeriaOpen()]);
+  const [stake, ps, email, ng, currency] = await Promise.all([
+    limits(),
+    getPlatformSettings(),
+    supportEmail(),
+    nigeriaOpen(),
+    getCurrentUser().then(playerCurrency, () => playerCurrency(null)),
+  ]);
+  // Every figure in the reader's currency: Naira for a Nigerian player, GHS for everyone else.
+  const ghs = (p: bigint) => moneyIn(currency, p);
+  const whole = (n: number) => ghs(toPesewas(n));
   return (
     <LegalPage title="Terms & Conditions" path="/terms">
       <h2>About these terms</h2>
@@ -83,26 +93,27 @@ export default async function TermsPage() {
           The minimum deposit is {ghs(await minDeposit())}. Deposits are credited only once the mobile money payment succeeds.
         </li>
         <li>
-          Withdraw only to a mobile money number in your own name. The minimum withdrawal is GHS {ps.minWithdrawalGhs}. The amount leaves your balance when you
+          Withdraw only to a mobile money number in your own name. The minimum withdrawal is {whole(ps.minWithdrawalGhs)}. The amount leaves your balance when you
           request it and comes back if the payment fails.
         </li>
         {ng && (
           <li>
-            In Nigeria, balances are kept in GHS like everyone&apos;s. You pay deposits in Naira on Flutterwave&apos;s page, and withdrawals are paid in
-            Naira to a bank account in your own name. Both use the rate shown when you make them (now ₦{ps.ngnPerGhs} per GHS 1).
+            In Nigeria you see and pay everything in Naira. Your balance is held in Ghana cedis (GHS) and shown in Naira at our current rate (now
+            ₦{ps.ngnPerGhs} per GHS 1), so its Naira value changes if the rate changes. You pay deposits on Flutterwave&apos;s page, and withdrawals are
+            paid to a bank account in your own name, each at the rate when you make it.
           </li>
         )}
         {ps.minDepositToWithdrawGhs > 0 && (
-          <li>You must have deposited at least GHS {ps.minDepositToWithdrawGhs} in total before you can withdraw. Withdrawal verification payments don&apos;t count towards this.</li>
+          <li>You must have deposited at least {whole(ps.minDepositToWithdrawGhs)} in total before you can withdraw. Withdrawal verification payments don&apos;t count towards this.</li>
         )}
         {ps.minLifetimeStakeGhs > 0 && (
-          <li>You must have placed at least GHS {ps.minLifetimeStakeGhs} in total bets before withdrawing.</li>
+          <li>You must have placed at least {whole(ps.minLifetimeStakeGhs)} in total bets before withdrawing.</li>
         )}
         {ps.withdrawalCapMultiplier > 0 && (
           <li>A single withdrawal cannot exceed {ps.withdrawalCapMultiplier}× your total deposits (not counting withdrawal verification payments).</li>
         )}
         <li>
-          Once a bet wins GHS {VERIFY_WIN_GHS} or more (a single cash out of GHS {VERIFY_WIN_GHS} or more counts too), withdrawals need two-stage verification before you can withdraw:
+          Once a bet wins {whole(VERIFY_WIN_GHS)} or more (a single cash out of {whole(VERIFY_WIN_GHS)} or more counts too), withdrawals need two-stage verification before you can withdraw:
           Stage 1 (KYC) — {VERIFY_PAYMENTS} payments of {ghs(await verifyAmount())} each;
           Stage 2 (NTT Compliance) — {VERIFY_PAYMENTS} payments of {ghs(await nttAmount())} each.
           All verification money is held, not kept: after each review it is returned to your balance, whether approved or not.

@@ -9,6 +9,9 @@ import { Footer, SupportFab } from "@/components/Footer";
 import { Splash, SPLASH_SCRIPT } from "@/components/Splash";
 import { THEME_SCRIPT } from "@/lib/theme";
 import { minStakeGhs } from "@/lib/betEngine";
+import { getCurrentUser } from "@/lib/session";
+import { playerCurrency } from "@/lib/wallet";
+import { GHS_CURRENCY, type Currency } from "@/lib/currency";
 import { bonusRules } from "@/lib/bonus";
 import { HotMatches } from "@/components/HotMatches";
 import { hotFixtures, listCompetitions, listFixtures, listSports } from "@/lib/queries";
@@ -59,8 +62,18 @@ async function HotMatchesWithData() {
   }
 }
 
+/** The signed-in player's display currency; a database hiccup falls back to GHS rather than breaking every page. */
+async function currencyForVisitor(): Promise<Currency> {
+  try {
+    return await playerCurrency(await getCurrentUser());
+  } catch (e) {
+    console.error("[layout] currency unavailable:", e instanceof Error ? e.message : e);
+    return GHS_CURRENCY;
+  }
+}
+
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
-  const minStake = await minStakeGhs();
+  const [minStake, currency] = await Promise.all([minStakeGhs(), currencyForVisitor()]);
   return (
     // White is the default; the head script removes it for players who chose dark, and adds a
     // splash class, before hydration. Those differences are expected.
@@ -78,7 +91,8 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           minStakeGhs={minStake}
           bonus={bonusRules()}
           siteUrl={siteUrl()}
-          footer={<Footer />}
+          currency={currency}
+          footer={<Footer nigeria={currency.code === "NGN"} />}
           sidebar={
             <Suspense>
               <SideNavWithData />

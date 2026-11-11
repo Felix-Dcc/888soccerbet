@@ -3,6 +3,8 @@ import { headers } from "next/headers";
 import { clientIpFromHeaders, rateLimit } from "@/lib/rateLimit";
 import { ticketByVerifyCode } from "@/lib/tickets";
 import { TicketView } from "@/components/TicketView";
+import { prisma } from "@/lib/db";
+import { playerCurrency } from "@/lib/wallet";
 import { VerifyForm } from "@/components/VerifyForm";
 
 export const dynamic = "force-dynamic";
@@ -41,7 +43,7 @@ export default async function VerifyTicketPage({ params }: { params: Promise<{ c
           <div className="text-xs text-fog">Details below come straight from our records.</div>
         </div>
       </div>
-      <TicketView bet={bet} verifyCode={bet.verifyCode} owner={false} />
+      <TicketView bet={bet} verifyCode={bet.verifyCode} owner={false} currency={await playerCurrency(await prisma.user.findUnique({ where: { id: bet.userId }, select: { country: true } }))} />
     </div>
   );
 }

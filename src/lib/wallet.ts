@@ -10,6 +10,7 @@ import { formatPesewas, toPesewas } from "./money";
 import { payRef } from "./ids";
 import { MANUAL_PAYOUT_PROVIDERS, ngDepositProvider, paymentProvider, type PaymentProvider } from "./providers/payments";
 import { NG_BANK_PROVIDER, toKobo } from "./nigeria";
+import { GHS_CURRENCY, type Currency } from "./currency";
 import { audit } from "./audit";
 import { guessNetwork, PspError, type Network, type NormalisedEvent } from "./providers/payments/types";
 import { notifyPayment } from "./emailFlows";
@@ -316,6 +317,13 @@ export async function verifyPlayer(userId: string): Promise<{ released: bigint }
 export async function ngnPerGhs(): Promise<number> {
   const { getPlatformSettings } = await import("./platformSettings");
   return (await getPlatformSettings()).ngnPerGhs;
+}
+
+/** What a player sees money in: Naira at today's rate for a Nigerian player while Nigeria is open, else GHS. */
+export async function playerCurrency(user: { country: string } | null | undefined): Promise<Currency> {
+  if (user?.country !== "NG") return GHS_CURRENCY;
+  const rate = await ngnPerGhs();
+  return rate > 0 ? { code: "NGN", rate } : GHS_CURRENCY;
 }
 
 /** Nigerians can sign up and pay in: a Naira rate is set and a provider takes Naira (or the site is a sandbox). */

@@ -21,12 +21,13 @@ async function copy(text: string): Promise<boolean> {
 }
 
 /** Shares the ticket's public verification link: the system share sheet, else copies the link. */
+/** amount: the win with its currency, e.g. "GHS 1,234.50" or "₦160,485.00". */
 export function ShareTicket({ code, won, amount, className = "btn-lime h-12 w-full text-[15px]" }: { code: string; won: boolean; amount: string; className?: string }) {
   const [note, setNote] = useState<string | null>(null);
 
   async function share() {
     const url = `${window.location.origin}/verify/${code}`;
-    const text = won ? `I won GHS ${amount} on Bet Zone! Verify my ticket:` : "My Bet Zone ticket:";
+    const text = won ? `I won ${amount} on Bet Zone! Verify my ticket:` : "My Bet Zone ticket:";
     if (navigator.share) {
       try {
         await navigator.share({ title: "Bet Zone ticket", text, url });

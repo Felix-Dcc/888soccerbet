@@ -3,7 +3,8 @@ import { SignedOut } from "@/components/SignedOut";
 import { getCurrentUser } from "@/lib/session";
 import { prisma } from "@/lib/db";
 import { userCashBalance } from "@/lib/ledger";
-import { formatPesewas } from "@/lib/money";
+import { amountIn, numberIn, unitOf } from "@/lib/currency";
+import { playerCurrency } from "@/lib/wallet";
 import { monthYear } from "@/lib/time";
 import { LogoutButton, ResponsibleGamblingForm } from "@/components/AccountPanel";
 import { ThemeToggle } from "@/components/ThemeToggle";
@@ -20,10 +21,11 @@ export default async function AccountPage() {
   const user = await getCurrentUser();
   if (!user) return <SignedOut title="Account" />;
 
-  const [balance, byStatus, settings] = await Promise.all([
+  const [balance, byStatus, settings, currency] = await Promise.all([
     userCashBalance(prisma, user.id),
     prisma.bet.groupBy({ by: ["status"], where: { userId: user.id }, _count: { _all: true } }),
     getPlatformSettings().catch(() => null),
+    playerCurrency(user), // Nigerian players see Naira
   ]);
   const telegram = settings ? telegramSupport(settings.telegramSupport) : null;
   const emailAddr = await supportEmail();
@@ -64,8 +66,8 @@ export default async function AccountPage() {
             <div className="mr-auto sm:mr-3 sm:text-right">
               <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-fog-muted">Balance</div>
               <div className="font-display text-2xl font-extrabold tabular-nums text-gold sm:text-3xl">
-                <span className="mr-1 text-sm font-bold text-gold/80">GHS</span>
-                {formatPesewas(balance)}
+                <span className="mr-1 text-sm font-bold text-gold/80">{unitOf(currency)}</span>
+                {amountIn(currency, balance)}
               </div>
             </div>
             <Link href="/wallet" className="btn-lime px-5 py-2.5 text-sm">
@@ -131,8 +133,9 @@ export default async function AccountPage() {
           <div className="p-5">
             <ResponsibleGamblingForm
               initial={{
-                daily: user.dailyDepositLimit ? formatPesewas(user.dailyDepositLimit) : null,
-                maxStake: user.maxStakeLimit ? formatPesewas(user.maxStakeLimit) : null,
+                // Plain numbers in the player's currency, as the inputs take them (no thousands commas).
+                daily: user.dailyDepositLimit ? String(numberIn(currency, user.dailyDepositLimit)) : null,
+                maxStake: user.maxStakeLimit ? String(numberIn(currency, user.maxStakeLimit)) : null,
               }}
             />
           </div>

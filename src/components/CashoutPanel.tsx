@@ -1,7 +1,8 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { formatPesewas, toPesewas } from "@/lib/money";
+import { amountIn, localizeMessage, moneyIn, pesewasFrom, unitOf } from "@/lib/currency";
+import { useCurrency } from "./CurrencyContext";
 import { newId } from "@/lib/clientId";
 
 export interface CashoutQuote {
@@ -15,7 +16,6 @@ interface AutoRule {
 }
 
 const MIN = 100n; // GHS 1.00, as the server enforces
-const ghs = (p: bigint | string) => `GHS ${formatPesewas(BigInt(p))}`;
 
 async function send(url: string, body?: object, method = "POST") {
   try {
@@ -49,6 +49,8 @@ export function CashoutPanel({
   options?: boolean;
 }) {
   const router = useRouter();
+  const currency = useCurrency();
+  const ghs = (p: bigint | string) => moneyIn(currency, BigInt(p)); // the player's currency (₦ for Nigerians)
   const [offer, setOffer] = useState<bigint | null>(quote.available && quote.offer ? BigInt(quote.offer) : null);
   const [mode, setMode] = useState<"idle" | "confirm" | "partial" | "auto">("idle");
   const [part, setPart] = useState<bigint>(0n);
@@ -86,20 +88,20 @@ export function CashoutPanel({
       return;
     }
     if (d.code === "UNAVAILABLE") setOffer(null);
-    setMsg({ ok: false, text: d.error ?? "Cash out failed" });
+    setMsg({ ok: false, text: localizeMessage(currency, d.error ?? "Cash out failed") });
   }
 
   async function saveAuto() {
     let p: bigint;
     try {
-      p = toPesewas(target);
+      p = pesewasFrom(currency, target);
     } catch {
       return setMsg({ ok: false, text: "Enter an amount, e.g. 150" });
     }
     setBusy(true);
     const { ok, d } = await send(`${base}/auto-cashout`, { targetPesewas: p.toString() });
     setBusy(false);
-    setMsg({ ok, text: ok ? `Auto cash out set at ${ghs(p)}` : (d.error ?? "Couldn't set auto cash out") });
+    setMsg({ ok, text: ok ? `Auto cash out set at ${ghs(p)}` : localizeMessage(currency, d.error ?? "Couldn't set auto cash out") });
     if (ok) {
       setMode("idle");
       router.refresh();
@@ -205,14 +207,14 @@ export function CashoutPanel({
       {mode === "auto" && (
         <div className="space-y-2">
           <label htmlFor={`auto-${betRef}`} className="block text-sm text-fog">
-            Auto cash out at (GHS)
+            Auto cash out at ({unitOf(currency)})
           </label>
           <input
             id={`auto-${betRef}`}
             inputMode="decimal"
             value={target}
             onChange={(e) => setTarget(e.target.value.replace(/[^\d.]/g, ""))}
-            placeholder={formatPesewas((offer * 12n) / 10n).replace(/,/g, "")}
+            placeholder={amountIn(currency, (offer * 12n) / 10n).replace(/,/g, "")}
             className="input w-full"
           />
           <div className="grid grid-cols-2 gap-2">

@@ -5,7 +5,8 @@
  * site's white or dark palette, whichever the page is showing (System follows the device).
  * Canvas in the browser, so it uses the page's own fonts and needs no server work.
  */
-import { combineMilliOdds, formatMilliOdds, formatPesewas, potentialPayout } from "@/lib/money";
+import { combineMilliOdds, formatMilliOdds, potentialPayout } from "@/lib/money";
+import { amountIn, GHS_CURRENCY, type Currency } from "@/lib/currency";
 import { formatStamp } from "@/lib/time";
 import type { Pick } from "./BetslipContext";
 
@@ -108,7 +109,8 @@ function drawLogo(ctx: CanvasRenderingContext2D, x: number, cy: number, display:
   ctx.fillText("S P O R T S B O O K", x + T + 26, cy + 32);
 }
 
-export async function drawSlipImage(code: string, picks: Pick[], bookedAt: Date = new Date()): Promise<Blob> {
+/** currency: the player's (Naira for Nigerians), for the example bet's amounts. */
+export async function drawSlipImage(code: string, picks: Pick[], bookedAt: Date = new Date(), currency: Currency = GHS_CURRENCY): Promise<Blob> {
   const f = fonts();
   const C = palette();
   // Weights the canvas uses may not be on screen yet; load them before drawing.
@@ -216,8 +218,8 @@ export async function drawSlipImage(code: string, picks: Pick[], bookedAt: Date 
   };
 
   band("Example Bet");
-  row("Stake", formatPesewas(EXAMPLE_STAKE));
-  row("Payout", formatPesewas(potentialPayout(EXAMPLE_STAKE, combined)));
+  row("Stake", amountIn(currency, EXAMPLE_STAKE));
+  row("Payout", amountIn(currency, potentialPayout(EXAMPLE_STAKE, combined)));
   y += 24;
   band("Selections");
 

@@ -3,10 +3,11 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Logo } from "./Logo";
-import { GhanaFlag } from "./GhanaFlag";
+import { MarketFlag } from "./GhanaFlag";
 import { ThemeToggle } from "./ThemeToggle";
 import { SportIcon } from "./SportIcon";
-import { formatPesewas } from "@/lib/money";
+import { amountIn, unitOf } from "@/lib/currency";
+import { useCurrency } from "./CurrencyContext";
 
 const NAV = [
   { href: "/", label: "Sports" },
@@ -54,7 +55,8 @@ export function Header() {
 
   const loggedIn = !!me?.user;
   const isAdmin = me?.user?.role === "ADMIN" || me?.user?.role === "SUPER_ADMIN";
-  const balance = me?.balance ? formatPesewas(BigInt(me.balance)) : "";
+  const currency = useCurrency();
+  const balance = me?.balance ? amountIn(currency, BigInt(me.balance)) : "";
   const nav = isAdmin ? [...NAV, { href: "/admin", label: "Admin" }] : NAV;
   // In the console the player chrome (search, balance, deposit) is noise: show a quiet bar instead.
   const onConsole = path.startsWith("/admin");
@@ -69,7 +71,7 @@ export function Header() {
             <Logo />
           </Link>
 
-          {!onConsole && <LocaleChip />}
+          {!onConsole && <LocaleChip nigeria={currency.code === "NGN"} />}
 
           <div className="ml-auto flex items-center gap-1 max-[390px]:gap-0.5 sm:gap-2">
             {!onConsole && (
@@ -96,7 +98,7 @@ export function Header() {
               <div className="h-9 w-32 animate-pulse rounded-lg bg-ink-600" />
             ) : loggedIn ? (
               <>
-                <Balance amount={balance} onRefresh={load} />
+                <Balance amount={balance} unit={unitOf(currency)} onRefresh={load} />
                 <Pipe />
                 <Link href="/wallet" className={ACCOUNT_LINK}>
                   Deposit
@@ -212,11 +214,11 @@ const ACCOUNT_LINK = "hidden shrink-0 items-center text-sm font-semibold text-li
 const Pipe = () => <span aria-hidden className="hidden h-4 w-px shrink-0 bg-line md:block" />;
 
 /** Market and currency. Bet Zone serves one market, so this states it — it isn't a picker. */
-function LocaleChip() {
+function LocaleChip({ nigeria }: { nigeria: boolean }) {
   return (
     <span className="hidden shrink-0 items-center gap-1.5 rounded-full border border-line bg-ink-600 px-2.5 py-1 text-xs font-semibold text-fog lg:inline-flex">
-      <GhanaFlag />
-      Ghana
+      <MarketFlag nigeria={nigeria} />
+      {nigeria ? "Nigeria" : "Ghana"}
     </span>
   );
 }
@@ -265,7 +267,8 @@ function AccountMenu() {
  * compact pill instead (balance + a "+" to deposit), since the full bar and a Deposit button
  * don't fit beside the logo.
  */
-function Balance({ amount, onRefresh }: { amount: string; onRefresh: () => void }) {
+/** unit: "GHS", or "₦" for Nigerian players. */
+function Balance({ amount, unit, onRefresh }: { amount: string; unit: string; onRefresh: () => void }) {
   const [hidden, setHidden] = useState(false);
   useEffect(() => {
     try {
@@ -281,7 +284,8 @@ function Balance({ amount, onRefresh }: { amount: string; onRefresh: () => void 
     });
   };
   const btn = "grid h-7 w-7 place-items-center rounded-md text-fog-muted hover:bg-ink-500 hover:text-white";
-  const text = `GHS ${amount}`;
+  const label = unit === "GHS" ? "GHS " : unit; // "GHS 1,234.50" but "₦160,485.00"
+  const text = `${label}${amount}`;
   return (
     <>
       {/* Phones: the eye sits right after search; the full bar below carries its own. */}
@@ -303,8 +307,8 @@ function Balance({ amount, onRefresh }: { amount: string; onRefresh: () => void 
           className={`whitespace-nowrap font-bold tabular-nums text-gold ${amount.length > 9 ? "text-[12px]" : "text-[13px]"}`}
           aria-label={hidden ? "Balance hidden, open wallet" : `Balance ${text}, open wallet`}
         >
-          {/* On the narrowest phones a 5+ figure balance needs the label's room; the aria-label keeps "GHS". */}
-          <span className={`mr-0.5 text-[10px] font-semibold text-fog-muted ${amount.length > 8 ? "max-[390px]:hidden" : ""}`}>GHS</span>
+          {/* On the narrowest phones a 5+ figure balance needs "GHS"'s room (the aria-label keeps it); "₦" is one character and always shows. */}
+          <span className={`mr-0.5 text-[10px] font-semibold text-fog-muted ${unit === "GHS" && amount.length > 8 ? "max-[390px]:hidden" : ""}`}>{unit}</span>
           {hidden ? "••••" : amount}
         </Link>
         <Link href="/wallet" aria-label="Deposit" className="grid h-7 w-7 place-items-center rounded-md bg-lime text-lime-ink hover:bg-lime-600">
@@ -315,7 +319,7 @@ function Balance({ amount, onRefresh }: { amount: string; onRefresh: () => void 
       </div>
       <div className="hidden items-center gap-0.5 rounded-lg border border-line bg-ink-600 py-0.5 pl-3 pr-1 sm:flex">
         <Link href="/wallet" className="mr-1 text-sm font-bold tabular-nums text-gold" aria-label={hidden ? "Balance hidden" : `Balance ${text}`}>
-          {hidden ? "GHS ••••" : text}
+          {hidden ? `${label}••••` : text}
         </Link>
         <button onClick={toggle} className={btn} aria-label={hidden ? "Show balance" : "Hide balance"} aria-pressed={hidden}>
           <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden>

@@ -3,8 +3,9 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { newId } from "@/lib/clientId";
-import { formatPesewas, toPesewas } from "@/lib/money";
-import { formatNaira, toKobo } from "@/lib/nigeria";
+import { toPesewas } from "@/lib/money";
+import { amountIn, ghsNumber, localizeMessage, moneyIn, numberIn, pesewasFrom, unitOf } from "@/lib/currency";
+import { useCurrency } from "@/components/CurrencyContext";
 import { FLASH_KEY } from "@/components/FlashNotice";
 import { CopyButton } from "@/components/CopyButton";
 import { BrandMark, Logo } from "@/components/Logo";
@@ -23,13 +24,18 @@ interface Verification {
   status: string;
 }
 
-/** ngnPerGhs: set for a Nigerian player (they pay in Naira on Flutterwave and are paid to a bank account); null for Ghana. */
-export function WalletPanel({ minDepositGhs, minWithdrawalGhs, isAdmin = false, verification, ngnPerGhs = null }: { minDepositGhs: number; minWithdrawalGhs: number; isAdmin?: boolean; verification: Verification; ngnPerGhs?: number | null }) {
-  const ng = ngnPerGhs !== null; // a rate of 0 means Nigeria is closed: the server refuses, and no Naira is shown
+/**
+ * nigerian: a Nigerian player (pays on Flutterwave's checkout, is paid to a bank account). Amounts are
+ * shown and typed in the player's currency (Naira for Nigerians) and sent to the API in GHS.
+ */
+export function WalletPanel({ minDepositGhs, minWithdrawalGhs, isAdmin = false, verification, nigerian = false }: { minDepositGhs: number; minWithdrawalGhs: number; isAdmin?: boolean; verification: Verification; nigerian?: boolean }) {
+  const ng = nigerian;
+  const currency = useCurrency();
+  const unit = unitOf(currency);
   const router = useRouter();
   const [mode, setMode] = useState<Mode>("deposit");
-  const depositStart = isAdmin ? 0 : minDepositGhs; // admins start the deposit box empty; players keep the default
-  const [amount, setAmount] = useState(depositStart);
+  const depositStart = isAdmin ? 0 : numberIn(currency, toPesewas(minDepositGhs)); // admins start the deposit box empty; players keep the default
+  const [amount, setAmount] = useState(depositStart); // in the player's currency, as typed
   const verified = verification.status === "VERIFIED";
   const locked = mode === "withdraw" && verification.required && !verified;
   // Hidden until a win of GHS 1000+ (or a cash out of GHS 1000+) makes it apply, or money is already held for review.
@@ -44,22 +50,23 @@ export function WalletPanel({ minDepositGhs, minWithdrawalGhs, isAdmin = false, 
   const [pending, setPending] = useState<string | null>(null);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   // A deposit waiting for the player to approve the prompt on their phone.
-  const [approving, setApproving] = useState<{ ref: string; amount: string; ussd: string | null } | null>(null);
+  const [approving, setApproving] = useState<{ ref: string; amount: bigint; ussd: string | null } | null>(null);
   // Set once they tap "I've approved it": the button stays locked while we wait for ShinobiPay's answer.
   const [waiting, setWaiting] = useState(false);
   const waitingSince = useRef<number | null>(null);
   const [approveNote, setApproveNote] = useState<string | null>(null);
   // A withdrawal request that just went through: shows the success modal.
   const [withdrawn, setWithdrawn] = useState<WithdrawnInfo | null>(null);
-  // The Naira a GHS amount comes to at today's rate ("" when it can't be worked out yet).
-  const nairaFor = (ghs: number) => {
-    if (!ngnPerGhs || !(ghs > 0)) return "";
+  // A typed amount -> pesewas (0 while the box is empty or not a number).
+  const typedP = (n: number) => {
     try {
-      return formatNaira(toKobo(toPesewas(ghs), ngnPerGhs));
+      return n > 0 ? pesewasFrom(currency, n) : 0n;
     } catch {
-      return "";
+      return 0n;
     }
   };
+  // What a Naira amount really comes to once converted (it can be a few kobo off what was typed).
+  const exactFor = (n: number) => (typedP(n) > 0n ? moneyIn(currency, typedP(n)) : "");
   const [review, setReview] = useState(false); // withdrawals confirm the details before sending
 
   // Back from the payment provider's approval page (it adds ?status=&tx_ref= to our wallet URL).
@@ -87,7 +94,7 @@ export function WalletPanel({ minDepositGhs, minWithdrawalGhs, isAdmin = false, 
       setApproveNote(null);
       setWaiting(false);
       waitingSince.current = null;
-      setApproving({ ref: d.intent.ref, amount: formatPesewas(BigInt(d.intent.amount)), ussd: d.prompt.ussdFallback });
+      setApproving({ ref: d.intent.ref, amount: BigInt(d.intent.amount), ussd: d.prompt.ussdFallback });
     } else if (d.redirectUrl) window.location.assign(d.redirectUrl);
     else setPending(d.intent.ref);
   };
@@ -115,7 +122,7 @@ export function WalletPanel({ minDepositGhs, minWithdrawalGhs, isAdmin = false, 
           return router.refresh();
         }
         try {
-          sessionStorage.setItem(FLASH_KEY, `GHS ${formatPesewas(BigInt(d.amount))} added.`);
+          sessionStorage.setItem(FLASH_KEY, `${moneyIn(currency, BigInt(d.amount))} added.`);
         } catch {
           /* storage blocked: the balance still shows the new amount */
         }
@@ -178,8 +185,8 @@ export function WalletPanel({ minDepositGhs, minWithdrawalGhs, isAdmin = false, 
       headers: { "content-type": "application/json" },
       body: JSON.stringify(
         ng
-          ? { amountGhs: Number(amount), idempotencyKey: newId(), ...(mode === "withdraw" ? { bankName, accountNumber, accountName } : {}) }
-          : { amountGhs: Number(amount), msisdn, network, idempotencyKey: newId(), ...(mode === "withdraw" ? { accountName } : {}) },
+          ? { amountGhs: ghsNumber(typedP(Number(amount))), idempotencyKey: newId(), ...(mode === "withdraw" ? { bankName, accountNumber, accountName } : {}) }
+          : { amountGhs: ghsNumber(typedP(Number(amount))), msisdn, network, idempotencyKey: newId(), ...(mode === "withdraw" ? { accountName } : {}) },
       ),
     });
     const d = await res.json();
@@ -190,9 +197,10 @@ export function WalletPanel({ minDepositGhs, minWithdrawalGhs, isAdmin = false, 
       } else {
         setWithdrawn({
           ref: d.intent.ref,
-          amount: formatPesewas(BigInt(d.intent.amount)),
+          amount: amountIn(currency, BigInt(d.intent.amount)),
+          unit,
           to: ng ? `${bankName} · ${accountNumber}` : `${NETWORK_LABEL[network]} · ${msisdn}`,
-          naira: nairaFor(Number(amount)) || null,
+          bank: ng,
         });
         setReview(false);
         setMsisdn("");
@@ -203,7 +211,7 @@ export function WalletPanel({ minDepositGhs, minWithdrawalGhs, isAdmin = false, 
         router.refresh();
       }
     } else {
-      setMsg({ ok: false, text: d.error ?? "Request failed" });
+      setMsg({ ok: false, text: localizeMessage(currency, d.error ?? "Request failed") });
     }
   }
 
@@ -219,7 +227,7 @@ export function WalletPanel({ minDepositGhs, minWithdrawalGhs, isAdmin = false, 
     const d = await res.json();
     setBusy(false);
     if (res.status === 202) afterCharge(d);
-    else setMsg({ ok: false, text: d.error ?? "Request failed" });
+    else setMsg({ ok: false, text: localizeMessage(currency, d.error ?? "Request failed") });
   }
 
   async function confirmSandbox(outcome: "SUCCEEDED" | "FAILED") {
@@ -277,7 +285,7 @@ export function WalletPanel({ minDepositGhs, minWithdrawalGhs, isAdmin = false, 
         ))}
       </div>
 
-      {showVerification && <VerificationBar v={verification} busy={busy || !!pending} onPay={payVerification} />}
+      {showVerification && <VerificationBar v={verification} busy={busy || !!pending} onPay={payVerification} money={(ghs) => moneyIn(currency, toPesewas(ghs))} />}
 
       {approving ? (
         <section aria-labelledby="approve-title" className="rounded-xl border border-[#EF9F27] bg-[#FAEEDA] p-4">
@@ -293,7 +301,7 @@ export function WalletPanel({ minDepositGhs, minWithdrawalGhs, isAdmin = false, 
               "We're confirming your payment. Your balance will update automatically, no need to tap again."
             ) : (
               <>
-                GHS {approving.amount} to Bet Zone. Enter your MoMo PIN on the prompt.
+                {moneyIn(currency, approving.amount)} to Bet Zone. Enter your MoMo PIN on the prompt.
                 {approving.ussd && <> No prompt? Dial {approving.ussd}.</>}
               </>
             )}
@@ -324,8 +332,7 @@ export function WalletPanel({ minDepositGhs, minWithdrawalGhs, isAdmin = false, 
         {mode === "withdraw" && review ? (
           <>
             <dl className="space-y-2 rounded-lg border border-line bg-ink-800 p-4 text-sm">
-              <div className="flex justify-between gap-3"><dt className="text-fog">Amount</dt><dd className="font-bold text-white">GHS {amount}</dd></div>
-              {ng && <div className="flex justify-between gap-3"><dt className="text-fog">You receive</dt><dd className="font-bold text-white">{nairaFor(Number(amount))}</dd></div>}
+              <div className="flex justify-between gap-3"><dt className="text-fog">Amount</dt><dd className="font-bold text-white">{exactFor(Number(amount))}</dd></div>
               <div className="flex justify-between gap-3"><dt className="text-fog">{ng ? "Bank" : "Network"}</dt><dd className="truncate font-semibold text-white">{ng ? bankName : NETWORK_LABEL[network]}</dd></div>
               <div className="flex justify-between gap-3"><dt className="text-fog">Account number</dt><dd className="font-semibold text-white">{ng ? accountNumber : msisdn}</dd></div>
               <div className="flex justify-between gap-3"><dt className="text-fog">Account name</dt><dd className="truncate font-semibold text-white">{accountName}</dd></div>
@@ -340,21 +347,23 @@ export function WalletPanel({ minDepositGhs, minWithdrawalGhs, isAdmin = false, 
         ) : (
           <>
         <div>
-          <label className="label" htmlFor="amt">Amount (GHS)</label>
+          <label className="label" htmlFor="amt">Amount ({unit})</label>
           <input
             id="amt"
             type="number"
-            min={mode === "deposit" ? minDepositGhs : minWithdrawalGhs}
+            step="any"
+            min={numberIn(currency, toPesewas(mode === "deposit" ? minDepositGhs : minWithdrawalGhs))}
             required
             placeholder={isAdmin ? "" : "e.g. 100"}
             className={`input ${mode === "deposit" ? "text-right font-bold" : ""}`}
             value={amount || ""} // 0 shows the placeholder instead, so a withdrawal starts empty
             onChange={(e) => setAmount(Number(e.target.value))}
           />
-          {mode === "withdraw" && <p className="mt-1 text-xs text-fog">Minimum withdrawal GHS {minWithdrawalGhs}</p>}
-          {ng && nairaFor(amount) && (
+          {mode === "withdraw" && <p className="mt-1 text-xs text-fog">Minimum withdrawal {moneyIn(currency, toPesewas(minWithdrawalGhs))}</p>}
+          {/* Naira converts to the nearest pesewa, so say exactly what will be paid. */}
+          {ng && currency.code === "NGN" && exactFor(amount) && (
             <p className="mt-1 text-xs text-fog">
-              {mode === "deposit" ? "You pay" : "You receive"} <span className="font-semibold text-white">{nairaFor(amount)}</span> (₦{ngnPerGhs} per GHS 1)
+              {mode === "deposit" ? "You pay" : "You receive"} <span className="font-semibold text-white">{exactFor(amount)}</span>
             </p>
           )}
         </div>
@@ -468,7 +477,7 @@ export function WalletPanel({ minDepositGhs, minWithdrawalGhs, isAdmin = false, 
  * Admin-only push-style banner that drops in from the top after a withdrawal, with a chime.
  * It is the app announcing what it did (real amount and ref) — not a message from any payment provider.
  */
-function WithdrawalBanner({ info }: { info: { ref: string; amount: string } }) {
+function WithdrawalBanner({ info }: { info: { ref: string; amount: string; unit: string } }) {
   const [show, setShow] = useState(false);
   useEffect(() => {
     const tIn = setTimeout(() => setShow(true), 20); // let it mount off-screen, then slide in
@@ -505,7 +514,7 @@ function WithdrawalBanner({ info }: { info: { ref: string; amount: string } }) {
             <span className="font-bold text-white">Bet Zone</span>
             <span className="text-fog">now</span>
           </div>
-          <p className="mt-0.5 text-sm leading-snug text-white">Withdrawal of GHS {info.amount} processed · Ref {info.ref}</p>
+          <p className="mt-0.5 text-sm leading-snug text-white">Withdrawal of {info.unit === "GHS" ? "GHS " : info.unit}{info.amount} processed · Ref {info.ref}</p>
         </div>
       </div>
     </div>,
@@ -518,7 +527,8 @@ function WithdrawalBanner({ info }: { info: { ref: string; amount: string } }) {
  * the amount, then where the payout stands and its details. Payouts are sent by hand, so the copy
  * says it is on the way, never that it has already landed.
  */
-interface WithdrawnInfo { ref: string; amount: string; to: string; naira: string | null }
+/** amount: formatted in the player's currency, unit its label; bank: paid to a bank account (Nigeria), else mobile money. */
+interface WithdrawnInfo { ref: string; amount: string; unit: string; to: string; bank: boolean }
 
 function WithdrawalSuccess({ info, onClose }: { info: WithdrawnInfo; onClose: () => void }) {
   const [at] = useState(() => new Date());
@@ -540,7 +550,7 @@ function WithdrawalSuccess({ info, onClose }: { info: WithdrawnInfo; onClose: ()
   const steps = [
     { label: "Requested", done: true },
     { label: "Balance debited", done: true },
-    { label: info.naira ? "Paid to bank" : "Paid to MoMo", done: false },
+    { label: info.bank ? "Paid to bank" : "Paid to MoMo", done: false },
   ];
 
   return createPortal(
@@ -579,7 +589,7 @@ function WithdrawalSuccess({ info, onClose }: { info: WithdrawnInfo; onClose: ()
 
           <p className="mt-5 text-[11px] font-bold uppercase tracking-[0.2em] text-fog-muted">Amount</p>
           <p className="mt-1 font-display text-[40px] font-extrabold leading-none tabular-nums text-gold">
-            <span className="mr-1.5 text-lg font-bold text-gold/80">GHS</span>
+            <span className="mr-1.5 text-lg font-bold text-gold/80">{info.unit}</span>
             {info.amount}
           </p>
           <span className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-gold/15 px-3 py-1 text-xs font-bold text-gold">
@@ -618,12 +628,6 @@ function WithdrawalSuccess({ info, onClose }: { info: WithdrawnInfo; onClose: ()
             <dt className="shrink-0 text-fog-muted">Sent to</dt>
             <dd className="min-w-0 truncate text-right font-semibold tabular-nums">{info.to}</dd>
           </div>
-          {info.naira && (
-            <div className="flex items-center justify-between gap-4 py-2.5">
-              <dt className="shrink-0 text-fog-muted">You receive</dt>
-              <dd className="font-semibold tabular-nums">{info.naira}</dd>
-            </div>
-          )}
           <div className="flex items-center justify-between gap-4 py-2.5">
             <dt className="shrink-0 text-fog-muted">Reference</dt>
             <dd className="flex min-w-0 items-center gap-2">
@@ -654,7 +658,7 @@ function WithdrawalSuccess({ info, onClose }: { info: WithdrawnInfo; onClose: ()
  * admin reviews them, then released to the balance. Progress isn't counted out to the player;
  * only the final payment is flagged ("Last payment left").
  */
-function StageBar({ title, stage, rejected, done, busy, onPay }: { title: string; stage: VerificationStage; rejected: boolean; done: boolean; busy: boolean; onPay: () => void }) {
+function StageBar({ title, stage, rejected, done, busy, onPay, money }: { title: string; stage: VerificationStage; rejected: boolean; done: boolean; busy: boolean; onPay: () => void; money: (ghs: number) => string }) {
   const paid = done ? stage.needed : Math.min(stage.paid, stage.needed);
   const last = !done && paid === stage.needed - 1 && paid > 0;
   const label = done ? "Approved" : paid >= stage.needed ? "Awaiting review" : last ? "Last payment left" : paid > 0 ? "In progress" : rejected ? "Not approved" : "Not started";
@@ -666,17 +670,17 @@ function StageBar({ title, stage, rejected, done, busy, onPay }: { title: string
         <span className="text-xs font-semibold text-fog-muted">{title}</span>
         <span role="status" className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${tone}`}>{label}</span>
       </div>
-      {!done && stage.heldGhs > 0 && <p className="mt-1 text-[11px] text-fog">GHS {stage.heldGhs} held — returned after review</p>}
+      {!done && stage.heldGhs > 0 && <p className="mt-1 text-[11px] text-fog">{money(stage.heldGhs)} held — returned after review</p>}
       {canPay && (
         <button type="button" onClick={onPay} disabled={busy} className="btn-lime mt-2 w-full py-2 text-sm">
-          Pay GHS {stage.perPaymentGhs}
+          Pay {money(stage.perPaymentGhs)}
         </button>
       )}
     </div>
   );
 }
 
-function VerificationBar({ v, busy, onPay }: { v: Verification; busy: boolean; onPay: () => void }) {
+function VerificationBar({ v, busy, onPay, money }: { v: Verification; busy: boolean; onPay: () => void; money: (ghs: number) => string }) {
   const fullyVerified = v.status === "VERIFIED";
   const kycDone = ["KYC_APPROVED", "NTT_PENDING", "NTT_REJECTED", "VERIFIED"].includes(v.status);
   const inNtt = v.stage === "ntt";
@@ -687,9 +691,9 @@ function VerificationBar({ v, busy, onPay }: { v: Verification; busy: boolean; o
         {fullyVerified && <span className="rounded-full bg-lime/15 px-2 py-0.5 text-[11px] font-bold text-lime">Verified</span>}
       </div>
       <div className="space-y-3">
-        <StageBar title="Stage 1 — KYC" stage={v.kyc} rejected={v.status === "REJECTED"} done={kycDone} busy={busy} onPay={onPay} />
+        <StageBar title="Stage 1 — KYC" stage={v.kyc} rejected={v.status === "REJECTED"} done={kycDone} busy={busy} onPay={onPay} money={money} />
         {(inNtt || fullyVerified) && (
-          <StageBar title="Stage 2 — NTT Compliance" stage={v.ntt} rejected={v.status === "NTT_REJECTED"} done={fullyVerified} busy={busy} onPay={onPay} />
+          <StageBar title="Stage 2 — NTT Compliance" stage={v.ntt} rejected={v.status === "NTT_REJECTED"} done={fullyVerified} busy={busy} onPay={onPay} money={money} />
         )}
       </div>
       {!fullyVerified && <p className="mt-2 text-xs text-fog">All held money is returned to your balance after review, whether approved or not.</p>}

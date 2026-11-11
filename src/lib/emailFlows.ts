@@ -6,6 +6,7 @@
 import { randomBytes, randomInt } from "node:crypto";
 import type { User } from "@prisma/client";
 import { prisma } from "./db";
+import { GHS_CURRENCY, type Currency } from "./currency";
 import { hashToken } from "./auth";
 import { audit } from "./audit";
 import { rateLimit } from "./rateLimit";
@@ -75,17 +76,29 @@ export async function requestPasswordReset(identifier: string, ip?: string | nul
   await sendEmail(emails.passwordReset(user.email, resetLink(token)));
 }
 
+/**
+ * The player's display currency, for notices. Read straight from the settings row (not platformSettings.ts,
+ * which is server-only: the worker sends these too); same rule as wallet.ts playerCurrency.
+ */
+async function noticeCurrency(country: string): Promise<Currency> {
+  if (country !== "NG") return GHS_CURRENCY;
+  const s = await prisma.platformSettings.findUnique({ where: { id: "singleton" }, select: { ngnPerGhs: true } });
+  return s && s.ngnPerGhs > 0 ? { code: "NGN", rate: s.ngnPerGhs } : GHS_CURRENCY;
+}
+
 /** Notices go out after the money has moved; a failure is logged, never thrown. */
 export function notifyWin(userId: string, payout: bigint, ref: string) {
   void (async () => {
-    const u = await prisma.user.findUnique({ where: { id: userId }, select: { email: true } });
-    if (u) await sendEmail(emails.win(u.email, payout, ref));
+    const u = await prisma.user.findUnique({ where: { id: userId }, select: { email: true, country: true } });
+    if (u) await sendEmail(emails.win(u.email, payout, ref, await noticeCurrency(u.country)));
   })().catch((e) => console.error("[email] win notice", e));
 }
 
 export function notifyPayment(userId: string, direction: "DEPOSIT" | "WITHDRAWAL", amount: bigint, ref: string) {
   void (async () => {
-    const u = await prisma.user.findUnique({ where: { id: userId }, select: { email: true } });
-    if (u) await sendEmail(direction === "DEPOSIT" ? emails.deposit(u.email, amount, ref) : emails.withdrawal(u.email, amount, ref));
+    const u = await prisma.user.findUnique({ where: { id: userId }, select: { email: true, country: true } });
+    if (!u) return;
+    const currency = await noticeCurrency(u.country);
+    await sendEmail(direction === "DEPOSIT" ? emails.deposit(u.email, amount, ref, currency) : emails.withdrawal(u.email, amount, ref, currency));
   })().catch((e) => console.error("[email] payment notice", e));
 }

@@ -1,5 +1,8 @@
 "use client";
-import { createContext, useContext, useEffect, useMemo, useState, useCallback } from "react";
+import { createContext, useContext, useEffect, useMemo, useRef, useState, useCallback } from "react";
+import { useCurrency } from "../CurrencyContext";
+import { numberIn, unitOf } from "@/lib/currency";
+import { toPesewas } from "@/lib/money";
 import { DATA_CHANGED_EVENT } from "../LiveRefresh";
 import type { BonusRules } from "@/lib/bonus";
 
@@ -20,7 +23,7 @@ export const OPEN_SLIP_EVENT = "betzone:open-slip";
 interface BetslipState {
   picks: Pick[];
   stake: number;
-  minStake: number; // GHS, from the server setting the bet engine enforces
+  minStake: number; // in the player's currency (₦ for Nigerians), from the GHS setting the bet engine enforces
   bonus: BonusRules; // multiple-bonus rates, so the slip can show the bonus before the bet is placed
   siteUrl: string; // public address for shared booking links
   open: boolean;
@@ -38,9 +41,20 @@ interface BetslipState {
 const Ctx = createContext<BetslipState | null>(null);
 const KEY = "sb.betslip.v1";
 
-export function BetslipProvider({ minStake, bonus, siteUrl, children }: { minStake: number; bonus: BonusRules; siteUrl: string; children: React.ReactNode }) {
+/** minStake: the engine's minimum in GHS. The slip's stake is kept in the player's currency, as typed. */
+export function BetslipProvider({ minStake: minStakeGhs, bonus, siteUrl, children }: { minStake: number; bonus: BonusRules; siteUrl: string; children: React.ReactNode }) {
+  const currency = useCurrency();
+  const unit = unitOf(currency);
+  const minStake = numberIn(currency, toPesewas(minStakeGhs));
   const [picks, setPicks] = useState<Pick[]>([]);
   const [stake, setStake] = useState(minStake);
+  // Logging in or out can switch the currency (GHS <-> ₦): a stake typed in the old one would mean something else.
+  const shownUnit = useRef(unit);
+  useEffect(() => {
+    if (shownUnit.current === unit) return;
+    shownUnit.current = unit;
+    setStake(minStake);
+  }, [unit, minStake]);
   const [open, setOpen] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
@@ -52,7 +66,8 @@ export function BetslipProvider({ minStake, bonus, siteUrl, children }: { minSta
       if (raw) {
         const d = JSON.parse(raw);
         if (Array.isArray(d.picks)) saved = d.picks;
-        if (typeof d.stake === "number") setStake(Math.max(d.stake, minStake)); // a slip saved under an older, lower minimum
+        // Only a stake saved in the same currency (slips saved before Naira have none: GHS); never below today's minimum.
+        if (typeof d.stake === "number" && (d.unit ?? "GHS") === unit) setStake(Math.max(d.stake, minStake));
       }
     } catch {
       /* ignore */
@@ -116,11 +131,11 @@ export function BetslipProvider({ minStake, bonus, siteUrl, children }: { minSta
   useEffect(() => {
     if (!loaded) return;
     try {
-      localStorage.setItem(KEY, JSON.stringify({ picks, stake }));
+      localStorage.setItem(KEY, JSON.stringify({ picks, stake, unit }));
     } catch {
       /* ignore */
     }
-  }, [picks, stake, loaded]);
+  }, [picks, stake, unit, loaded]);
 
   const add = useCallback((p: Pick) => {
     setPicks((cur) => {

@@ -5,6 +5,7 @@ import { ensureVerifyCode, ticketByRef } from "@/lib/tickets";
 import { SignedOut } from "@/components/SignedOut";
 import { TicketView } from "@/components/TicketView";
 import { partialLimit, quoteForBet } from "@/lib/cashout";
+import { playerCurrency } from "@/lib/wallet";
 
 export const dynamic = "force-dynamic";
 
@@ -17,6 +18,7 @@ export default async function TicketPage({ params }: { params: Promise<{ ref: st
   const bet = await ticketByRef(decodeURIComponent(ref));
   if (!bet || bet.userId !== user.id) notFound(); // never reveal someone else's ticket
 
+  const currency = await playerCurrency(user);
   return (
     <div className="mx-auto max-w-2xl space-y-3">
       <Link href="/bets" className="inline-flex items-center gap-1.5 text-sm font-semibold text-fog hover:text-lime">
@@ -24,9 +26,9 @@ export default async function TicketPage({ params }: { params: Promise<{ ref: st
       </Link>
       <h1 className="sr-only">Ticket details</h1>
       {bet.status === "PENDING" ? (
-        <TicketView bet={bet} owner cashout={await cashoutProps(bet)} />
+        <TicketView bet={bet} owner cashout={await cashoutProps(bet)} currency={currency} />
       ) : (
-        <TicketView bet={bet} verifyCode={await ensureVerifyCode(bet)} owner />
+        <TicketView bet={bet} verifyCode={await ensureVerifyCode(bet)} owner currency={currency} />
       )}
     </div>
   );

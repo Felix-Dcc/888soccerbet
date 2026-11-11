@@ -1,8 +1,11 @@
 import Image from "next/image";
 import { photos } from "@/lib/photos";
 import { PageHero } from "@/components/PageHero";
+import { getCurrentUser } from "@/lib/session";
+import { playerCurrency } from "@/lib/wallet";
+import { localizeMessage } from "@/lib/currency";
 
-export const dynamic = "force-static";
+export const dynamic = "force-dynamic"; // amounts follow the player's currency (Naira for Nigerians)
 
 // None of these is implemented in the bonus engine yet, so each is shown as "Coming soon"
 // with no claim action. Flip `live` only once the offer is actually wired and funded.
@@ -13,7 +16,8 @@ const PROMOS = [
   { name: "Early payout", value: "Winner paid early", terms: "If your team goes two goals clear, your single on them is paid out — win or lose after.", photo: photos.footballBallNight, live: false },
 ];
 
-export default function PromotionsPage() {
+export default async function PromotionsPage() {
+  const currency = await playerCurrency(await getCurrentUser().catch(() => null));
   return (
     <div className="space-y-6">
       <PageHero title="Promotions" photo={photos.basketballRimSmoke} position="center 40%" />
@@ -29,8 +33,8 @@ export default function PromotionsPage() {
             </div>
             <div className="relative -mt-6 p-5 pt-0">{/* relative: must paint above the positioned photo it overlaps */}
               <h2 className="text-xs font-bold uppercase tracking-wider text-lime">{p.name}</h2>
-              <p className="mt-1.5 font-display text-2xl font-extrabold text-white">{p.value}</p>
-              <p className="mt-1.5 text-sm text-fog">{p.terms}</p>
+              <p className="mt-1.5 font-display text-2xl font-extrabold text-white">{localizeMessage(currency, p.value)}</p>
+              <p className="mt-1.5 text-sm text-fog">{localizeMessage(currency, p.terms)}</p>
             </div>
           </article>
         ))}

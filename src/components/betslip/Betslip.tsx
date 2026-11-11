@@ -4,7 +4,10 @@ import Link from "next/link";
 import { createPortal } from "react-dom";
 import { useBetslip, type Pick } from "./BetslipContext";
 import { drawSlipImage } from "./slipImage";
-import { combineMilliOdds, formatMilliOdds, formatPesewas, potentialPayout, toPesewas } from "@/lib/money";
+import { combineMilliOdds, formatMilliOdds, potentialPayout } from "@/lib/money";
+import { amountIn, ghsNumber, localizeMessage, moneyIn, pesewasFrom, unitOf } from "@/lib/currency";
+import { useCurrency } from "../CurrencyContext";
+import { MarketFlag } from "../GhanaFlag";
 import { multipleBonus } from "@/lib/bonus";
 import { newId } from "@/lib/clientId";
 import { Logo } from "../Logo";
@@ -15,6 +18,10 @@ type Status =
 /** `bare` drops the card chrome and title, for when the rail's tab bar is already the header. */
 export function Betslip({ bare = false }: { bare?: boolean } = {}) {
   const { picks, stake, minStake, bonus, setStake, remove, clear, replace } = useBetslip();
+  const currency = useCurrency();
+  const unit = unitOf(currency);
+  // A whole amount in the player's currency, as the stake box and chips show it: "GHS 250" / "₦32,500".
+  const plain = (n: number) => `${unit === "GHS" ? "GHS " : "₦"}${n.toLocaleString("en-GB", { maximumFractionDigits: 2 })}`;
   const [status, setStatus] = useState<Status>({ k: "idle" });
   const stakeId = useId(); // the slip renders twice (desktop rail + mobile drawer): ids must be unique
   const idemRef = useRef<string>(newId());
@@ -26,12 +33,12 @@ export function Betslip({ bare = false }: { bare?: boolean } = {}) {
   const combined = picks.length ? combineMilliOdds(picks.map((p) => p.milliOdds)) : 0;
   const stakeP = (() => {
     try {
-      return toPesewas(stake || 0);
+      return pesewasFrom(currency, stake || 0);
     } catch {
       return 0n;
     }
   })();
-  const tooLow = stakeP < toPesewas(minStake); // the engine rejects it too; this just says so up front
+  const tooLow = stakeP < pesewasFrom(currency, minStake); // the engine rejects it too; this just says so up front
   const paused = picks.some((p) => p.suspended); // a live match repricing after a goal: back in seconds
   const payout = singles ? picks.reduce((sum, p) => sum + potentialPayout(stakeP, p.milliOdds), 0n) : picks.length ? potentialPayout(stakeP, combined) : 0n;
   const totalStake = singles ? stakeP * BigInt(picks.length) : stakeP;
@@ -46,7 +53,7 @@ export function Betslip({ bare = false }: { bare?: boolean } = {}) {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           idempotencyKey: idemRef.current,
-          stakeGhs: Number(stake),
+          stakeGhs: ghsNumber(stakeP),
           acceptOddsChange,
           selections: picks.map((p) => ({
             selectionId: p.selectionId,
@@ -72,7 +79,7 @@ export function Betslip({ bare = false }: { bare?: boolean } = {}) {
         replace(picks.map((p) => (p.selectionId === selectionId ? { ...p, milliOdds: now } : p)));
         return setStatus({ k: "oddschanged" });
       }
-      setStatus({ k: "error", msg: data.error ?? "Could not place bet" });
+      setStatus({ k: "error", msg: localizeMessage(currency, data.error ?? "Could not place bet") });
     } catch {
       setStatus({ k: "error", msg: "Network error — try again" });
     }
@@ -98,7 +105,7 @@ export function Betslip({ bare = false }: { bare?: boolean } = {}) {
           headers: { "content-type": "application/json" },
           body: JSON.stringify({
             idempotencyKey: key,
-            stakeGhs: Number(stake),
+            stakeGhs: ghsNumber(stakeP),
             acceptOddsChange,
             selections: [{ selectionId: p.selectionId, expectedMilliOdds: p.milliOdds }],
           }),
@@ -114,7 +121,7 @@ export function Betslip({ bare = false }: { bare?: boolean } = {}) {
         else if (data.code === "ODDS_CHANGED") {
           changed = data.data as { selectionId: string; now: number };
           next = { k: "oddschanged" };
-        } else next = { k: "error", msg: data.error ?? "Could not place bet" };
+        } else next = { k: "error", msg: localizeMessage(currency, data.error ?? "Could not place bet") };
       } catch {
         next = { k: "error", msg: "Network error — try again" };
       }
@@ -258,10 +265,10 @@ export function Betslip({ bare = false }: { bare?: boolean } = {}) {
             <div>
               <label className="mb-1.5 flex items-center justify-between text-xs font-semibold text-fog" htmlFor={stakeId}>
                 {singles ? "Stake per bet" : "Stake"}
-                <span className="font-normal text-fog-muted">Min GHS {minStake}</span>
+                <span className="font-normal text-fog-muted">Min {plain(minStake)}</span>
               </label>
               <div className="relative">
-                <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm font-bold text-fog">GHS</span>
+                <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm font-bold text-fog">{unit}</span>
                 <input
                   id={stakeId}
                   type="number"
@@ -290,7 +297,7 @@ export function Betslip({ bare = false }: { bare?: boolean } = {}) {
               </div>
               {tooLow && (
                 <p id={`${stakeId}-min`} role="status" className="mt-2 text-xs font-semibold text-warn">
-                  Minimum stake is GHS {minStake}{singles ? " per bet" : ""}. Top up GHS {Math.max(0, Math.round((minStake - (Number(stake) || 0)) * 100) / 100)} to place the bet.
+                  Minimum stake is {plain(minStake)}{singles ? " per bet" : ""}. Top up {plain(Math.max(0, Math.round((minStake - (Number(stake) || 0)) * 100) / 100))} to place the bet.
                 </p>
               )}
             </div>
@@ -299,7 +306,7 @@ export function Betslip({ bare = false }: { bare?: boolean } = {}) {
               {singles ? (
                 <div className="flex justify-between text-fog">
                   <dt>Total stake ({picks.length} bets)</dt>
-                  <dd className="font-semibold tabular-nums text-white">GHS {formatPesewas(totalStake)}</dd>
+                  <dd className="font-semibold tabular-nums text-white">{moneyIn(currency, totalStake)}</dd>
                 </div>
               ) : (
                 <div className="flex justify-between text-fog">
@@ -310,12 +317,12 @@ export function Betslip({ bare = false }: { bare?: boolean } = {}) {
               {maxBonus > 0n && (
                 <div className="flex justify-between text-fog">
                   <dt>Max bonus</dt>
-                  <dd className="font-semibold tabular-nums text-gold">+ GHS {formatPesewas(maxBonus)}</dd>
+                  <dd className="font-semibold tabular-nums text-gold">+ {moneyIn(currency, maxBonus)}</dd>
                 </div>
               )}
               <div className="flex items-end justify-between border-t border-line pt-2">
                 <dt className="text-sm font-semibold text-white">{singles ? "Max potential win" : "Potential win"}</dt>
-                <dd className="font-display text-xl font-extrabold tabular-nums text-gold">GHS {formatPesewas(payout + maxBonus)}</dd>
+                <dd className="font-display text-xl font-extrabold tabular-nums text-gold">{moneyIn(currency, payout + maxBonus)}</dd>
               </div>
             </dl>
 
@@ -366,6 +373,7 @@ type BookingState = { k: "idle" } | { k: "busy" } | { k: "loaded"; skipped: numb
  */
 function Booking({ picks, onLoad }: { picks: Pick[]; onLoad: (picks: Pick[]) => void }) {
   const { notice, setNotice } = useBetslip();
+  const currency = useCurrency();
   const [state, setState] = useState<BookingState>({ k: "idle" });
   const [booked, setBooked] = useState<Booked | null>(null);
   const [open, setOpen] = useState(false);
@@ -391,7 +399,7 @@ function Booking({ picks, onLoad }: { picks: Pick[]; onLoad: (picks: Pick[]) => 
       const d = await res.json();
       if (res.status !== 201) return setState({ k: "error", msg: d.error ?? "Could not book" });
       const at = new Date();
-      const image = await drawSlipImage(d.code, picks, at)
+      const image = await drawSlipImage(d.code, picks, at, currency)
         .then((b) => new File([b], `betzone-${d.code}.png`, { type: "image/png" }))
         .catch(() => null); // the code is still usable without the picture
       setBooked({ code: d.code, image, at });
@@ -495,6 +503,7 @@ function Booking({ picks, onLoad }: { picks: Pick[]; onLoad: (picks: Pick[]) => 
 function BookingDialog({ booked, picks, onClose }: { booked: Booked; picks: Pick[]; onClose: () => void }) {
   const { code, image, at } = booked;
   const { bonus, siteUrl } = useBetslip();
+  const currency = useCurrency();
   const closeRef = useRef<HTMLButtonElement>(null);
   const [url, setUrl] = useState<string | null>(null);
   const [copied, setCopied] = useState<"code" | "link" | null>(null);
@@ -565,8 +574,8 @@ function BookingDialog({ booked, picks, onClose }: { booked: Booked; picks: Pick
         <div className="flex items-center gap-3 border-b border-line bg-ink-700 py-3 pl-4 pr-2">
           <Logo size="sm" />
           <span className="flex shrink-0 items-center gap-1.5 text-sm text-white">
-            <GhanaFlag />
-            Ghana
+            <MarketFlag nigeria={currency.code === "NGN"} className="h-4 w-6" />
+            {currency.code === "NGN" ? "Nigeria" : "Ghana"}
           </span>
           <span className="ml-auto text-right text-xs leading-snug text-fog">
             Betslip
@@ -608,15 +617,15 @@ function BookingDialog({ booked, picks, onClose }: { booked: Booked; picks: Pick
             <dl className="space-y-1.5 bg-ink-700 px-5 py-3 text-sm text-white">
               <div className={row}>
                 <dt>Stake</dt>
-                <dd>{formatPesewas(EXAMPLE_STAKE)}</dd>
+                <dd>{amountIn(currency, EXAMPLE_STAKE)}</dd>
               </div>
               <div className={row}>
                 <dt>Bonus</dt>
-                <dd>{formatPesewas(extra)}</dd>
+                <dd>{amountIn(currency, extra)}</dd>
               </div>
               <div className={row}>
                 <dt>Payout</dt>
-                <dd>{formatPesewas(win + extra)}</dd>
+                <dd>{amountIn(currency, win + extra)}</dd>
               </div>
             </dl>
 
@@ -700,17 +709,6 @@ const slipTime = (d: Date) =>
   new Intl.DateTimeFormat("en-GB", { timeZone: "Africa/Accra", day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit", hour12: false })
     .format(d)
     .replace(",", "");
-
-function GhanaFlag() {
-  return (
-    <svg viewBox="0 0 30 20" className="h-4 w-6 rounded-sm" aria-hidden>
-      <rect width="30" height="20" fill="#006B3F" />
-      <rect width="30" height="13.33" fill="#FCD116" />
-      <rect width="30" height="6.67" fill="#CE1126" />
-      <path fill="#000" d="m15 6.9.75 2.3h2.42l-1.96 1.42.75 2.3L15 11.5l-1.96 1.42.75-2.3-1.96-1.42h2.42z" />
-    </svg>
-  );
-}
 
 function BallIcon() {
   return (
