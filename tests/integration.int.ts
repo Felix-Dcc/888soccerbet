@@ -2113,6 +2113,18 @@ describe("clearing demo data", () => {
     const tryerCash = await userAccountId(prisma, tryer.id, "USER_CASH");
     await postTransaction(prisma, "DEPOSIT", `deposit:${sbRef}`, [{ accountId: clearing, amount: -toPesewas(50) }, { accountId: tryerCash, amount: toPesewas(50) }]);
     await placeBet(tryer.id, pick(m.home));
+    // A test-address account with a ShinobiPay payout: real money left, so the account and its ledger stay.
+    const payee = await fundedUser(30);
+    await prisma.user.update({ where: { id: payee.id }, data: { kycStatus: "VERIFIED" } });
+    psp.override = { name: "shinobipay", isSandbox: false, payouts: "manual", initiate: async () => ({ providerRef: null, status: "PENDING" as const }), verifyWebhook: async () => ({ ok: false as const }) };
+    try {
+      await initiateWithdrawal(payee.id, 20, "0241234567", randomUUID());
+    } finally {
+      psp.override = null;
+    }
+    // A test-address account whose only ShinobiPay payment failed: no real money, but the provider's record stays, so it's closed.
+    const failedPayer = await fundedUser(0);
+    await prisma.paymentIntent.create({ data: { ref: `DEP-${randomUUID().slice(0, 8)}`, userId: failedPayer.id, direction: "DEPOSIT", amount: toPesewas(50), status: "FAILED", provider: "shinobipay", idempotencyKey: randomUUID() } });
     await settleFixture(m.fixture.id, 2, 0); // everyone on it wins GHS 20
     const realStaff = (await prisma.user.findMany({ where: { role: { not: "USER" } }, select: { email: true } })).filter((u) => !isTestAccount(u.email)).length;
 
@@ -2138,6 +2150,8 @@ describe("clearing demo data", () => {
 
     // The demo side is gone, and staff are never touched.
     expect(await prisma.paymentIntent.count({ where: { provider: "sandbox" } })).toBe(0);
+    expect(await userCashBalance(prisma, payee.id)).toBe(toPesewas(10)); // 30 in, 20 paid out
+    expect((await prisma.user.findUnique({ where: { id: failedPayer.id } }))?.status).toBe("CLOSED");
     const demoLeft = await prisma.user.findUnique({ where: { id: demo.id } });
     expect(demoLeft === null || demoLeft.status === "CLOSED").toBe(true);
 

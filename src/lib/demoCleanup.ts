@@ -1,7 +1,7 @@
 /**
  * Clearing the demo data left over from building and testing, keeping real money.
  *
- * Real money = a SUCCEEDED ShinobiPay deposit; nothing else is proof. Demo money = every other payment
+ * Real money = a SUCCEEDED ShinobiPay deposit, or any ShinobiPay withdrawal (money already left); nothing else is proof. Demo money = every other payment
  * (sandbox, other providers), every admin balance adjustment, plus everything done by players without a
  * real deposit (their bets, cash outs, verification releases). That fake money is removed from whoever
  * holds it, real sign-up or not. A player with a real deposit keeps every bet; only their non-ShinobiPay money goes.
@@ -68,7 +68,8 @@ async function assess(): Promise<Doomed> {
 
   const realPays = pays.filter((p) => p.provider === REAL_PROVIDER);
   const demoPays = pays.filter((p) => p.provider !== REAL_PROVIDER);
-  const realPlayers = new Set(realPays.filter((p) => p.direction === "DEPOSIT" && p.status === "SUCCEEDED").map((p) => p.userId));
+  // A ShinobiPay withdrawal moved real money out, so its ledger can't be unwound: that player is kept too.
+  const realPlayers = new Set(realPays.filter((p) => p.direction === "WITHDRAWAL" || p.status === "SUCCEEDED").map((p) => p.userId));
   // Only test accounts go. Never a super admin, and never anyone who has put real money in.
   const demoUsers = users.filter((u) => isTestAccount(u.email) && u.role !== "SUPER_ADMIN" && !realPlayers.has(u.id));
   const demoUserIds = new Set(demoUsers.map((u) => u.id));
@@ -105,8 +106,11 @@ async function assess(): Promise<Doomed> {
   );
 
   const actors = new Set((await prisma.auditLog.findMany({ where: { actorUserId: { not: null } }, select: { actorUserId: true }, distinct: ["actorUserId"] })).map((a) => a.actorUserId!));
-  const toDelete = demoUsers.filter((u) => !actors.has(u.id));
-  const toClose = demoUsers.filter((u) => actors.has(u.id) && u.status !== "CLOSED");
+  // ShinobiPay payment rows are the provider's record and stay, so their owner can only be closed too.
+  const hasRealPay = new Set(realPays.map((p) => p.userId));
+  const mustClose = (id: string) => actors.has(id) || hasRealPay.has(id);
+  const toDelete = demoUsers.filter((u) => !mustClose(u.id));
+  const toClose = demoUsers.filter((u) => mustClose(u.id) && u.status !== "CLOSED");
 
   return {
     txIds: doomed.map((t) => t.id),
@@ -148,6 +152,8 @@ export async function runDemoCleanup(): Promise<CleanupPlan> {
   const d = await assess();
   await prisma.$transaction(
     async (tx) => {
+      const refsNow = async () => new Set((await tx.ledgerTransaction.findMany({ select: { reference: true } })).map((t) => t.reference));
+      const refsBefore = await refsNow();
       await tx.ledgerEntry.deleteMany({ where: { transactionId: { in: d.txIds } } });
       await tx.ledgerTransaction.deleteMany({ where: { id: { in: d.txIds } } });
       await tx.bet.deleteMany({ where: { id: { in: d.demoBetIds } } }); // their selections and cash outs cascade
@@ -169,8 +175,9 @@ export async function runDemoCleanup(): Promise<CleanupPlan> {
       if (negative) throw new Error(`a player would be left owing money (${negative.bal}) — their stake came from demo funds`);
 
       // Real money is never touched: every real payment keeps the ledger transaction behind it.
-      const keptRefs = new Set((await tx.ledgerTransaction.findMany({ select: { reference: true } })).map((t) => t.reference));
-      const lost = d.realPays.find((p) => p.status === "SUCCEEDED" && !keptRefs.has(p.direction === "DEPOSIT" ? `deposit:${p.ref}` : `wdr_hold:${p.ref}`));
+      const keptRefs = await refsNow();
+      const ledgerRef = (p: { ref: string; direction: string }) => (p.direction === "DEPOSIT" ? `deposit:${p.ref}` : `wdr_hold:${p.ref}`);
+      const lost = d.realPays.find((p) => p.status === "SUCCEEDED" && refsBefore.has(ledgerRef(p)) && !keptRefs.has(ledgerRef(p)));
       if (lost) throw new Error(`a real payment (${lost.ref}) would lose its ledger entries`);
     },
     { timeout: 120_000, isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
