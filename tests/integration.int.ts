@@ -552,6 +552,29 @@ describe("minimums and withdrawal verification", () => {
     expect(await ledgerIsBalanced()).toBe(true);
   });
 
+  it("counts only real deposits, never verification payments, for the deposit-to-withdraw rule and the withdrawal cap", async () => {
+    await pinSettings({ minDepositToWithdrawGhs: 600, kycVerificationFeeGhs: 300 });
+    try {
+      const user = await fundedUser(0);
+      await win(user.id, 1002); // verification now required
+      await succeed(await initiateDeposit(user.id, 200, "0241234567", randomUUID())); // real deposit: GHS 200
+      for (let i = 0; i < VERIFY_PAYMENTS; i++) await pay(user.id); // 5 x GHS 300 verification payments
+      expect(await verifyPlayer(user.id)).toEqual({ released: toPesewas(1500) });
+
+      // GHS 200 real + GHS 1,500 verification: still short of GHS 600 in real deposits.
+      await expect(initiateWithdrawal(user.id, 100, "0241234567", randomUUID())).rejects.toMatchObject({ code: "DEPOSIT_REQUIREMENT" });
+      await succeed(await initiateDeposit(user.id, 400, "0241234567", randomUUID())); // GHS 600 real in total
+      await initiateWithdrawal(user.id, 100, "0241234567", randomUUID());
+
+      await pinSettings({ withdrawalCapMultiplier: 2 }); // cap = 2 x GHS 600 real = GHS 1,200
+      await expect(initiateWithdrawal(user.id, 1201, "0241234567", randomUUID())).rejects.toMatchObject({ code: "WITHDRAWAL_CAP" });
+      await initiateWithdrawal(user.id, 1200, "0241234567", randomUUID());
+      expect(await ledgerIsBalanced()).toBe(true);
+    } finally {
+      await pinSettings(TEST_SETTINGS);
+    }
+  });
+
   it("keeps a stage submitted under the old 2-payment rule complete: no more payments asked, and it can be approved", async () => {
     const user = await fundedUser(0);
     await win(user.id, 1002);

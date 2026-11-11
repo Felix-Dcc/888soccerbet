@@ -87,13 +87,13 @@ export default async function TermsPage() {
           request it and comes back if the payment fails.
         </li>
         {ps.minDepositToWithdrawGhs > 0 && (
-          <li>You must have deposited at least GHS {ps.minDepositToWithdrawGhs} in total before your first withdrawal.</li>
+          <li>You must have deposited at least GHS {ps.minDepositToWithdrawGhs} in total before you can withdraw. Withdrawal verification payments don&apos;t count towards this.</li>
         )}
         {ps.minLifetimeStakeGhs > 0 && (
           <li>You must have placed at least GHS {ps.minLifetimeStakeGhs} in total bets before withdrawing.</li>
         )}
         {ps.withdrawalCapMultiplier > 0 && (
-          <li>A single withdrawal cannot exceed {ps.withdrawalCapMultiplier}× your total deposits.</li>
+          <li>A single withdrawal cannot exceed {ps.withdrawalCapMultiplier}× your total deposits (not counting withdrawal verification payments).</li>
         )}
         <li>
           Once a single bet pays out more than {ghs(verifyAfterWin())}, withdrawals need two-stage verification before you can withdraw:

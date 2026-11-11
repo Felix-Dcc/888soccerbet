@@ -301,10 +301,12 @@ export async function initiateWithdrawal(userId: string, amountGhs: number, msis
     throw new WalletError("VERIFICATION_REQUIRED", "Complete withdrawal verification before withdrawing");
 
   if (!isStaff(user)) {
-    const totalDeposits = (await prisma.paymentIntent.aggregate({
-      where: { userId, direction: "DEPOSIT", status: "SUCCEEDED" },
-      _sum: { amount: true },
-    }))._sum.amount ?? 0n;
+    // Real deposits only: verification payments (KYC/NTT) are held and returned, so they count for neither rule below.
+    const [deposited] = await prisma.$queryRaw<{ total: bigint }[]>`
+      SELECT COALESCE(SUM(amount), 0)::bigint AS total FROM "PaymentIntent"
+      WHERE "userId" = ${userId} AND direction = 'DEPOSIT' AND status = 'SUCCEEDED'
+        AND COALESCE(metadata->>'purpose', '') NOT IN ('VERIFICATION', 'NTT')`;
+    const totalDeposits = deposited?.total ?? 0n;
 
     if (settings.minDepositToWithdrawGhs > 0 && totalDeposits < toPesewas(settings.minDepositToWithdrawGhs))
       throw new WalletError("DEPOSIT_REQUIREMENT", `You need at least GHS ${settings.minDepositToWithdrawGhs} in total deposits before withdrawing`);
