@@ -34,7 +34,6 @@ export function WalletPanel({
   isAdmin = false,
   verification,
   nigerian = false,
-  depositOnly = false,
   depositRule = null,
   support = null,
 }: {
@@ -43,7 +42,6 @@ export function WalletPanel({
   isAdmin?: boolean;
   verification: Verification;
   nigerian?: boolean;
-  depositOnly?: boolean; // the first-deposit page: no Withdraw tab and no verification box
   // "Minimum Deposit Required to Withdraw": the rule (GHS) and what this player still has to deposit (pesewas).
   depositRule?: { requiredGhs: number; shortfall: string } | null;
   support?: { url: string; label: string } | null; // Telegram support, offered on the pop-up
@@ -309,7 +307,7 @@ export function WalletPanel({
 
   return (
     <div className="card p-5">
-      {!depositOnly && <div className="mb-4 grid grid-cols-2 gap-1 rounded-lg bg-ink-800 p-1">
+      <div className="mb-4 grid grid-cols-2 gap-1 rounded-lg bg-ink-800 p-1">
         {(["deposit", "withdraw"] as Mode[]).map((m) => (
           <button
             key={m}
@@ -326,9 +324,9 @@ export function WalletPanel({
             {m}
           </button>
         ))}
-      </div>}
+      </div>
 
-      {!depositOnly && showVerification && <VerificationBar v={verification} busy={busy || !!pending} onPay={payVerification} money={(ghs) => moneyIn(currency, toPesewas(ghs))} />}
+      {showVerification && <VerificationBar v={verification} busy={busy || !!pending} onPay={payVerification} money={(ghs) => moneyIn(currency, toPesewas(ghs))} />}
 
       {approving ? (
         <section aria-labelledby="approve-title" className="rounded-xl border border-[#EF9F27] bg-[#FAEEDA] p-4">

@@ -62,7 +62,7 @@ model User {
   lastLoginAt       DateTime?
   emailVerifiedAt   DateTime? // set when the player enters the code we emailed (or resets their password by email)
   country           String     @default("GH")
-  depositRequired   Boolean    @default(false) // set at sign-up: the site stays behind the first-deposit page until a deposit succeeds
+  depositRequired   Boolean    @default(false) // unused: the first-deposit page was removed; safe to drop in a later migration
   // Responsible gambling
   dailyDepositLimit BigInt? // pesewas
   maxStakeLimit     BigInt? // pesewas

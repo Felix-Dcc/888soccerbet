@@ -2344,22 +2344,3 @@ describe("Nigeria (Naira on Flutterwave, GHS balances, bank payouts by hand)", (
   });
 });
 
-describe("first-deposit page", () => {
-  it("keeps a new sign-up behind the first-deposit page until a spendable deposit is credited", async () => {
-    const u = await registerUser({ email: `fd_${randomUUID()}@t.gh`, password: "password1", acceptTerms: true });
-    expect(u.depositRequired).toBe(true);
-    const flag = async () => (await prisma.user.findUniqueOrThrow({ where: { id: u.id } })).depositRequired;
-
-    const failed = await initiateDeposit(u.id, 50, "0241234567", randomUUID());
-    await processPaymentEvent("sandbox", { providerEventId: `f_${randomUUID()}`, ourRef: failed.ref, status: "FAILED", amountPesewas: failed.amount });
-    expect(await flag()).toBe(true); // a failed deposit doesn't open the site
-
-    const ok = await initiateDeposit(u.id, 50, "0241234567", randomUUID());
-    await processPaymentEvent("sandbox", { providerEventId: `s_${randomUUID()}`, ourRef: ok.ref, status: "SUCCEEDED", amountPesewas: ok.amount });
-    expect(await flag()).toBe(false);
-    expect(await userCashBalance(prisma, u.id)).toBe(toPesewas(50));
-
-    // Players who signed up before this existed are never put behind it.
-    expect((await fundedUser(0)).depositRequired).toBe(false);
-  });
-});

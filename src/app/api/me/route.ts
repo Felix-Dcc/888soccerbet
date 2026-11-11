@@ -18,7 +18,6 @@ export async function GET() {
       user: { id: user.id, email: user.email, displayName: user.displayName, role: user.role, kycStatus: user.kycStatus, emailVerified: emailVerified(user) },
       balance,
       openBets,
-      mustDeposit: user.depositRequired, // a new player who hasn't made a first deposit yet
     });
   } catch (e) {
     return errorResponse(e);
