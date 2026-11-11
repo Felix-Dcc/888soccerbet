@@ -8,21 +8,58 @@ import { BetslipRail } from "./BetslipRail";
 import { Header } from "./Header";
 import { WinningPopup } from "./WinningPopup";
 import { SportIcon } from "./SportIcon";
-import { LiveRefresh } from "./LiveRefresh";
+import { DATA_CHANGED_EVENT, LiveRefresh } from "./LiveRefresh";
 import { FlashNotice } from "./FlashNotice";
+
+/**
+ * The signed-in player's open (unsettled) bets, for the My Bets badge; 0 when signed out. Re-read on
+ * every page change, when a bet is placed or cashed out (sb:refresh), when match data changes
+ * (settlement) and when the player comes back to the tab.
+ */
+function useOpenBets(path: string): number {
+  const [count, setCount] = useState(0);
+  useEffect(() => {
+    let alive = true;
+    const load = () => {
+      fetch("/api/me", { cache: "no-store" })
+        .then((r) => r.json())
+        .then((d) => alive && setCount(Number(d?.openBets) || 0))
+        .catch(() => {}); // offline for a moment: keep the last count
+    };
+    const onVisible = () => document.visibilityState === "visible" && load();
+    load();
+    window.addEventListener("sb:refresh", load);
+    window.addEventListener(DATA_CHANGED_EVENT, load);
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      alive = false;
+      window.removeEventListener("sb:refresh", load);
+      window.removeEventListener(DATA_CHANGED_EVENT, load);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, [path]);
+  return count;
+}
 
 /** Mobile tab bar with the betslip in the centre, as on native sportsbook apps. */
 function BottomNav({ onSlip }: { onSlip: () => void }) {
   const { picks } = useBetslip();
   const path = usePathname();
-  const tab = (href: string, label: string, icon: string, active: boolean) => (
+  const openBets = useOpenBets(path);
+  const tab = (href: string, label: string, icon: string, active: boolean, badge = 0) => (
     <Link
       href={href}
       aria-current={active ? "page" : undefined}
-      className={`flex flex-1 flex-col items-center gap-0.5 py-2 text-[10px] font-semibold ${active ? "text-lime" : "text-fog"}`}
+      aria-label={badge ? `${label}, ${badge} open` : undefined}
+      className={`relative flex flex-1 flex-col items-center gap-0.5 py-2 text-[10px] font-semibold ${active ? "text-lime" : "text-fog"}`}
     >
       <SportIcon sport={icon} />
       {label}
+      {badge > 0 && (
+        <span key={badge} aria-hidden className="absolute left-1/2 top-0.5 ml-1.5 grid h-[18px] min-w-[18px] animate-pop place-items-center rounded-full bg-danger px-1 text-[10px] font-bold leading-none text-white ring-2 ring-ink-900">
+          {badge > 99 ? "99+" : badge}
+        </span>
+      )}
     </Link>
   );
   return (
@@ -41,7 +78,7 @@ function BottomNav({ onSlip }: { onSlip: () => void }) {
             </span>
           )}
         </button>
-        {tab("/bets", "My Bets", "bets", path.startsWith("/bets"))}
+        {tab("/bets", "My Bets", "bets", path.startsWith("/bets"), openBets)}
         {tab("/account", "Account", "account", path.startsWith("/account"))}
       </div>
     </nav>
