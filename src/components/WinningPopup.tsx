@@ -6,7 +6,14 @@ import Link from "next/link";
 import { formatPesewas } from "@/lib/money";
 import { Logo } from "./Logo";
 import { ShareTicket } from "./ShareTicket";
-import trophyArt from "../../public/img/trophy-win.png";
+import trophyArt from "../../public/img/trophy-win.webp";
+
+/** Fetch and decode the trophy before the pop-up opens, so it never pops in late (gives up after 2.5 s). */
+function trophyReady(): Promise<unknown> {
+  const img = new window.Image();
+  img.src = trophyArt.src;
+  return Promise.race([img.decode().catch(() => {}), new Promise((r) => setTimeout(r, 2500))]);
+}
 
 interface Win {
   id: string;
@@ -42,6 +49,7 @@ export function WinningPopup() {
       const fresh = wins.filter((w) => !known.current.has(w.id));
       if (fresh.length) {
         fresh.forEach((w) => known.current.add(w.id));
+        await trophyReady();
         setQueue((q) => [...q, ...fresh]);
         window.dispatchEvent(new Event("sb:refresh")); // the header balance now includes the winnings
       }
@@ -207,7 +215,7 @@ function TrophyArt() {
       src={trophyArt}
       alt=""
       priority
-      sizes="304px"
+      unoptimized // the exact file trophyReady() already loaded, so it shows at once
       className="relative mx-auto h-full w-auto animate-win-trophy object-contain drop-shadow-[0_18px_28px_rgba(0,0,0,.55)] motion-reduce:animate-none"
     />
   );
