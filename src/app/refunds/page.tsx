@@ -2,13 +2,15 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { LegalPage } from "@/components/LegalPage";
 import { legal } from "@/lib/legal";
+import { supportEmail } from "@/lib/support";
 
 export const dynamic = "force-dynamic"; // states the live operator settings
 export const metadata: Metadata = { title: "Refund Policy — Bet Zone" };
 
 /** When money comes back to the player, and when it can't. Mirrors what the wallet and settlement code do. */
-export default function RefundsPage() {
+export default async function RefundsPage() {
   const l = legal();
+  const email = await supportEmail();
   return (
     <LegalPage title="Refund Policy" path="/refunds">
       <h2>Bets</h2>
@@ -40,7 +42,7 @@ export default function RefundsPage() {
 
       <h2>Closing your account</h2>
       <p>
-        If you close your account, you can withdraw your remaining balance first. Contact <a href={`mailto:${l.email}`}>{l.email}</a> for anything not covered
+        If you close your account, you can withdraw your remaining balance first. Contact <a href={`mailto:${email}`}>{email}</a> for anything not covered
         here.
       </p>
     </LegalPage>

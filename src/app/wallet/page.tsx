@@ -6,6 +6,7 @@ import { formatPesewas } from "@/lib/money";
 import { WalletCard } from "@/components/WalletCard";
 import { WalletPanel } from "@/components/WalletPanel";
 import { minDeposit, reconcilePendingDeposits, verificationState } from "@/lib/wallet";
+import { getPlatformSettings } from "@/lib/platformSettings";
 
 export const dynamic = "force-dynamic";
 
@@ -31,6 +32,7 @@ export default async function WalletPage() {
           <WalletCard balance={balance} holder={user.displayName ?? user.email.split("@")[0] ?? user.email} phone={user.phone} since={user.createdAt} />
           <WalletPanel
           minDepositGhs={Number(await minDeposit()) / 100}
+          minWithdrawalGhs={(await getPlatformSettings()).minWithdrawalGhs}
           isAdmin={user.role !== "USER"}
           verification={{
             required: verification.required,

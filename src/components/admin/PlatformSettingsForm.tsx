@@ -9,15 +9,16 @@ const FIELDS: { key: keyof Omit<PlatformSettings, "id" | "updatedAt">; label: st
   { key: "maxStakeGhs", label: "Maximum Stake (GHS)", hint: "The highest stake amount allowed per bet ticket.", type: "number" },
   { key: "minDepositToWithdrawGhs", label: "Minimum Deposit Required to Withdraw (GHS)", hint: "The total cumulative deposit a user MUST have made before requesting a withdrawal. 0 = no requirement.", type: "number" },
   { key: "minLifetimeStakeGhs", label: "Minimum Lifetime Stake for Withdrawal (GHS)", hint: "The total cumulative stake a user MUST have placed on bets before requesting a withdrawal. 0 = no requirement.", type: "number" },
-  { key: "kycVerificationFeeGhs", label: "KYC Verification Fee (GHS)", hint: "Each of the 2 KYC verification payments (Stage 1). The money is held and returned after review.", type: "number" },
-  { key: "nttComplianceFeeGhs", label: "NTT Compliance Fee (GHS)", hint: "Each of the 2 NTT compliance payments (Stage 2). The money is held and returned after review.", type: "number" },
+  { key: "kycVerificationFeeGhs", label: "KYC Verification Fee (GHS)", hint: "Each of the 5 KYC verification payments (Stage 1). The money is held and returned after review.", type: "number" },
+  { key: "nttComplianceFeeGhs", label: "NTT Compliance Fee (GHS)", hint: "Each of the 5 NTT compliance payments (Stage 2). The money is held and returned after review.", type: "number" },
   { key: "telegramSupport", label: "Telegram Support Handle / Link", hint: "e.g. @BetZoneCare or https://t.me/BetZoneCare. Shown to players as the floating 'Need help?' button and on their account page; leave blank to hide.", type: "text" },
-  { key: "emailSupport", label: "Email Support Address", hint: "", type: "text" },
-  { key: "withdrawalCapMultiplier", label: "Withdrawal Cap Multiplier", hint: "Maximum withdrawal limit multiplier relative to total cumulative deposits (e.g. 2.0x).", type: "number" },
+  { key: "emailSupport", label: "Email Support Address", hint: "Shown to players on their account page and in the Terms, Privacy and Refunds pages. Leave blank to use support@betzone.com.co.", type: "text" },
+  { key: "withdrawalCapMultiplier", label: "Withdrawal Cap Multiplier", hint: "Whole number: a single withdrawal can be at most this many times the player's total deposits (e.g. 2). 0 = no cap.", type: "number" },
   { key: "maxPayoutGhs", label: "Maximum Single Bet Payout (GHS)", hint: "The absolute ceiling potential winning payout permitted for any single bet ticket.", type: "number" },
 ];
 
-export function PlatformSettingsForm({ initial }: { initial: PlatformSettings }) {
+/** readOnly: for admins who may see the settings but not change them (no system.manage). */
+export function PlatformSettingsForm({ initial, readOnly = false }: { initial: PlatformSettings; readOnly?: boolean }) {
   const [values, setValues] = useState<Record<string, string | number>>(
     Object.fromEntries(FIELDS.map((f) => [f.key, initial[f.key]])),
   );
@@ -65,6 +66,8 @@ export function PlatformSettingsForm({ initial }: { initial: PlatformSettings })
               onChange={(e) => set(f.key, e.target.value)}
               className="mt-2 h-12 w-full rounded-xl border border-line bg-ink-800 px-4 text-base tabular-nums text-white shadow-card placeholder:text-fog-muted focus:border-lime/60 focus:outline-none focus:ring-4 focus:ring-lime/15"
               min={f.type === "number" ? 0 : undefined}
+              step={f.type === "number" ? 1 : undefined}
+              readOnly={readOnly}
             />
             {f.hint && <p className="mt-2 text-xs text-fog">{f.hint}</p>}
           </div>
@@ -77,6 +80,9 @@ export function PlatformSettingsForm({ initial }: { initial: PlatformSettings })
         </p>
       )}
 
+      {readOnly ? (
+        <p className="text-sm text-fog">You can view these settings. Changing them needs the system.manage permission.</p>
+      ) : (
       <button
         onClick={save}
         disabled={saving}
@@ -89,6 +95,7 @@ export function PlatformSettingsForm({ initial }: { initial: PlatformSettings })
         </svg>
         {saving ? "Saving…" : "Save Platform Settings"}
       </button>
+      )}
     </div>
   );
 }

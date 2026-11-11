@@ -2,19 +2,21 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { LegalPage, LegalTable } from "@/components/LegalPage";
 import { legal } from "@/lib/legal";
+import { supportEmail } from "@/lib/support";
 
 export const dynamic = "force-dynamic"; // states the live operator settings
 export const metadata: Metadata = { title: "Privacy Policy — Bet Zone" };
 
 /** What we collect, why, who sees it, how long we keep it, and the player's rights (Act 843). */
-export default function PrivacyPage() {
+export default async function PrivacyPage() {
   const l = legal();
+  const email = await supportEmail();
   return (
     <LegalPage title="Privacy Policy" path="/privacy">
       <h2>Who we are</h2>
       <p>
         {l.operator} (&quot;Bet Zone&quot;, &quot;we&quot;) runs this website and is responsible for your personal data. {l.address}. Contact:{" "}
-        <a href={`mailto:${l.email}`}>{l.email}</a>.
+        <a href={`mailto:${email}`}>{email}</a>.
         {l.dpcRegistration
           ? ` We are registered with Ghana's Data Protection Commission (${l.dpcRegistration}).`
           : " Registration with Ghana's Data Protection Commission will be completed before launch."}
@@ -82,7 +84,7 @@ export default function PrivacyPage() {
       <h2>Your rights</h2>
       <p>
         You can ask us for a copy of your data, to correct it, or to delete it (except records the law requires us to keep), and you can object to how we use it.
-        Email <a href={`mailto:${l.email}`}>{l.email}</a>. If you are unhappy with our answer you can complain to the Data Protection Commission of Ghana.
+        Email <a href={`mailto:${email}`}>{email}</a>. If you are unhappy with our answer you can complain to the Data Protection Commission of Ghana.
       </p>
 
       <h2>Age</h2>

@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { LegalPage } from "@/components/LegalPage";
 import { legal } from "@/lib/legal";
+import { supportEmail } from "@/lib/support";
 import { limits } from "@/lib/betEngine";
 import { minDeposit, verifyAfterWin, verifyAmount, nttAmount, VERIFY_PAYMENTS } from "@/lib/wallet";
 import { cashoutMarginPct, MIN_CASHOUT, partialLimit } from "@/lib/cashout";
@@ -16,7 +17,7 @@ const ghs = (p: bigint) => `GHS ${formatPesewas(p)}`;
 /** The rules of the service, with every figure read from the settings the code enforces. */
 export default async function TermsPage() {
   const l = legal();
-  const [stake, ps] = await Promise.all([limits(), getPlatformSettings()]);
+  const [stake, ps, email] = await Promise.all([limits(), getPlatformSettings(), supportEmail()]);
   return (
     <LegalPage title="Terms & Conditions" path="/terms">
       <h2>About these terms</h2>
@@ -120,7 +121,7 @@ export default async function TermsPage() {
       <h2>Changes and contact</h2>
       <p>
         If we change these terms in a way that matters, we will ask you to accept the new version. Questions or complaints:{" "}
-        <a href={`mailto:${l.email}`}>{l.email}</a>.
+        <a href={`mailto:${email}`}>{email}</a>.
       </p>
     </LegalPage>
   );

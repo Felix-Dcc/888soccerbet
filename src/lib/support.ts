@@ -11,3 +11,10 @@ export function telegramSupport(setting: string | null | undefined): { url: stri
   if (link && handle.startsWith("+")) return { url: `https://t.me/${handle}`, label: "Telegram" };
   return null;
 }
+
+/** The support email players see everywhere: the admin's Email Support setting, else the legal default. */
+export async function supportEmail(): Promise<string> {
+  const [{ getPlatformSettings }, { legal }] = await Promise.all([import("./platformSettings"), import("./legal")]); // server-only; keeps this module importable in tests
+  const set = await getPlatformSettings().then((x) => x.emailSupport.trim(), () => "");
+  return set || legal().email;
+}

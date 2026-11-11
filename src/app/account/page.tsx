@@ -8,7 +8,7 @@ import { monthYear } from "@/lib/time";
 import { LogoutButton, ResponsibleGamblingForm } from "@/components/AccountPanel";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { getPlatformSettings } from "@/lib/platformSettings";
-import { telegramSupport } from "@/lib/support";
+import { supportEmail, telegramSupport } from "@/lib/support";
 
 export const dynamic = "force-dynamic";
 
@@ -26,7 +26,7 @@ export default async function AccountPage() {
     getPlatformSettings().catch(() => null),
   ]);
   const telegram = settings ? telegramSupport(settings.telegramSupport) : null;
-  const emailAddr = settings?.emailSupport || "support@betzone.com.co";
+  const emailAddr = await supportEmail();
   const count = (s: string) => byStatus.find((b) => b.status === s)?._count._all ?? 0;
   const total = byStatus.reduce((n, b) => n + b._count._all, 0);
 

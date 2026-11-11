@@ -36,7 +36,7 @@ export default async function SystemPage() {
           <Panel title="Global Platform Rules & Thresholds" icon="system">
             <p className="mb-4 text-sm text-fog">Configure deposit limits, minimum stakes, and withdrawal eligibility controls.</p>
           </Panel>
-          <PlatformSettingsForm initial={settings} />
+          <PlatformSettingsForm initial={settings} readOnly={!can(u, "system.manage")} />
         </>
       )}
 

@@ -22,7 +22,7 @@ interface Verification {
   status: string;
 }
 
-export function WalletPanel({ minDepositGhs, isAdmin = false, verification }: { minDepositGhs: number; isAdmin?: boolean; verification: Verification }) {
+export function WalletPanel({ minDepositGhs, minWithdrawalGhs, isAdmin = false, verification }: { minDepositGhs: number; minWithdrawalGhs: number; isAdmin?: boolean; verification: Verification }) {
   const router = useRouter();
   const [mode, setMode] = useState<Mode>("deposit");
   const depositStart = isAdmin ? 0 : minDepositGhs; // admins start the deposit box empty; players keep the default
@@ -317,13 +317,14 @@ export function WalletPanel({ minDepositGhs, isAdmin = false, verification }: { 
           <input
             id="amt"
             type="number"
-            min={mode === "deposit" ? minDepositGhs : 1}
+            min={mode === "deposit" ? minDepositGhs : minWithdrawalGhs}
             required
             placeholder={isAdmin ? "" : "e.g. 100"}
             className={`input ${mode === "deposit" ? "text-right font-bold" : ""}`}
             value={amount || ""} // 0 shows the placeholder instead, so a withdrawal starts empty
             onChange={(e) => setAmount(Number(e.target.value))}
           />
+          {mode === "withdraw" && <p className="mt-1 text-xs text-fog">Minimum withdrawal GHS {minWithdrawalGhs}</p>}
         </div>
         {/* Withdrawals are paid by hand, so they ask the way the admin needs it: network, number, then the name on the account. */}
         {mode === "withdraw" && networkField}
@@ -577,30 +578,26 @@ function WithdrawalSuccess({ info, onClose }: { info: { ref: string; amount: str
 }
 
 /**
- * Withdrawal verification: two separate GHS 500 verification payments (normal deposits don't
- * count). The bar fills halfway after the first and completely after the second; the money is
- * held until an admin reviews it, then released to the balance.
+ * One verification stage: separate fixed payments (normal deposits don't count), held until an
+ * admin reviews them, then released to the balance. Progress isn't counted out to the player;
+ * only the final payment is flagged ("Last payment left").
  */
-function StageBar({ title, stage, status, rejected, done, busy, onPay }: { title: string; stage: VerificationStage; status: string; rejected: boolean; done: boolean; busy: boolean; onPay: () => void }) {
+function StageBar({ title, stage, rejected, done, busy, onPay }: { title: string; stage: VerificationStage; rejected: boolean; done: boolean; busy: boolean; onPay: () => void }) {
   const paid = done ? stage.needed : Math.min(stage.paid, stage.needed);
-  const pct = Math.round((paid / stage.needed) * 100);
-  const label = done ? "Approved" : paid >= stage.needed ? "Awaiting review" : paid > 0 ? "Partly paid" : rejected ? "Not approved" : "Not started";
+  const last = !done && paid === stage.needed - 1 && paid > 0;
+  const label = done ? "Approved" : paid >= stage.needed ? "Awaiting review" : last ? "Last payment left" : paid > 0 ? "In progress" : rejected ? "Not approved" : "Not started";
   const tone = done ? "bg-lime/15 text-lime" : paid > 0 ? "bg-warn/15 text-warn" : rejected ? "bg-danger/15 text-danger" : "bg-ink-500 text-fog";
   const canPay = !done && paid < stage.needed;
   return (
     <div>
       <div className="mb-1.5 flex items-center justify-between gap-2">
         <span className="text-xs font-semibold text-fog-muted">{title}</span>
-        <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${tone}`}>{label}</span>
-      </div>
-      <div role="progressbar" aria-label={title} aria-valuemin={0} aria-valuemax={stage.needed} aria-valuenow={paid} className="relative h-2.5 overflow-hidden rounded-full bg-ink-500">
-        <div className={`h-full rounded-full transition-[width] duration-700 ${done ? "bg-lime" : "bg-warn"}`} style={{ width: `${pct}%` }} />
-        <span aria-hidden className="absolute inset-y-0 left-1/2 w-0.5 -translate-x-1/2 bg-ink-700" />
+        <span role="status" className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${tone}`}>{label}</span>
       </div>
       {!done && stage.heldGhs > 0 && <p className="mt-1 text-[11px] text-fog">GHS {stage.heldGhs} held — returned after review</p>}
       {canPay && (
         <button type="button" onClick={onPay} disabled={busy} className="btn-lime mt-2 w-full py-2 text-sm">
-          Pay GHS {stage.perPaymentGhs}{paid > 0 ? ` (${paid + 1} of ${stage.needed})` : ""}
+          Pay GHS {stage.perPaymentGhs}
         </button>
       )}
     </div>
@@ -618,9 +615,9 @@ function VerificationBar({ v, busy, onPay }: { v: Verification; busy: boolean; o
         {fullyVerified && <span className="rounded-full bg-lime/15 px-2 py-0.5 text-[11px] font-bold text-lime">Verified</span>}
       </div>
       <div className="space-y-3">
-        <StageBar title="Stage 1 — KYC" stage={v.kyc} status={v.status} rejected={v.status === "REJECTED"} done={kycDone} busy={busy} onPay={onPay} />
+        <StageBar title="Stage 1 — KYC" stage={v.kyc} rejected={v.status === "REJECTED"} done={kycDone} busy={busy} onPay={onPay} />
         {(inNtt || fullyVerified) && (
-          <StageBar title="Stage 2 — NTT Compliance" stage={v.ntt} status={v.status} rejected={v.status === "NTT_REJECTED"} done={fullyVerified} busy={busy} onPay={onPay} />
+          <StageBar title="Stage 2 — NTT Compliance" stage={v.ntt} rejected={v.status === "NTT_REJECTED"} done={fullyVerified} busy={busy} onPay={onPay} />
         )}
       </div>
       {!fullyVerified && <p className="mt-2 text-xs text-fog">All held money is returned to your balance after review, whether approved or not.</p>}
