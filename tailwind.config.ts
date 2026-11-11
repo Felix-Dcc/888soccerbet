@@ -28,6 +28,7 @@ const config: Config = {
       fontFamily: {
         sans: ["var(--font-body)", "ui-sans-serif", "system-ui", "sans-serif"],
         display: ["var(--font-display)", "var(--font-body)", "sans-serif"],
+        brand: ["var(--font-brand)", "var(--font-display)", "sans-serif"],
       },
       borderRadius: { xl2: "1rem" },
       boxShadow: {

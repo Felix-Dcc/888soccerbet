@@ -1,19 +1,20 @@
 "use client";
 import { Children, useEffect, useRef, useState } from "react";
 
-const AUTOPLAY_MS = 7000;
+const AUTOPLAY_MS = 3800; // a new slide every 3.8 s
+const SLIDE_MS = 800; // each slide glides in over 0.8 s
 const SWIPE_PX = 40; // a drag shorter than this snaps back to the current slide
 
 /**
- * Sliding hero. Phones and tablets swipe it with a finger (vertical page scrolling still works);
- * laptops get ‹ › arrows on its edges; the arrow keys work once it has focus. Dots sit below the
- * frame so they never cover a banner's own text or buttons. Accessible: labelled slides, hidden
- * slides are inert, autoplay pauses on hover/focus/touch and is off for reduced-motion users.
+ * Promo banner carousel: 3:1 banners (made at 1440x480) that glide forward on their own and loop
+ * endlessly (after the last comes the first again, never a rewind), with small dots on the image.
+ * Swipe with a finger or drag with the mouse; the dots and arrow keys jump. Accessible: labelled
+ * slides, hidden slides are inert, autoplay pauses on hover/focus/touch and is off for reduced-motion users.
  */
 export function HeroCarousel({
   labels,
   children,
-  aspect = "aspect-[16/9] sm:aspect-[2/1] lg:aspect-[12/5]",
+  aspect = "aspect-[3/1]",
 }: {
   labels: string[];
   children: React.ReactNode;
@@ -21,38 +22,70 @@ export function HeroCarousel({
 }) {
   const slides = Children.toArray(children);
   const count = slides.length;
-  const [i, setI] = useState(0);
+  const loop = count > 1;
+  // Track: [copy of last, ...slides, copy of first]. pos 1 is the first real slide.
+  const track = loop ? [slides[count - 1], ...slides, slides[0]] : slides;
+  const [pos, setPos] = useState(loop ? 1 : 0);
+  const [animate, setAnimate] = useState(true);
   const [paused, setPaused] = useState(false);
   const [reduced, setReduced] = useState(true); // assume reduced until measured: no surprise motion
-  const [drag, setDrag] = useState<number | null>(null); // finger offset in px while swiping
-  const touch = useRef<{ id: number; x: number; y: number; horizontal: boolean | null } | null>(null);
+  const [drag, setDrag] = useState<number | null>(null); // pointer offset in px while swiping
+  const press = useRef<{ id: number; x: number; y: number; horizontal: boolean | null } | null>(null);
   const swiped = useRef(false); // swallow the click that ends a swipe, so a banner link doesn't open
+  const active = loop ? (pos - 1 + count) % count : 0;
 
   useEffect(() => setReduced(window.matchMedia("(prefers-reduced-motion: reduce)").matches), []);
   useEffect(() => {
-    if (paused || reduced || count < 2 || drag !== null) return;
-    const t = setTimeout(() => setI((n) => (n + 1) % count), AUTOPLAY_MS);
+    if (paused || reduced || !loop || drag !== null) return;
+    const t = setTimeout(() => {
+      setAnimate(true);
+      setPos((p) => p + 1);
+    }, AUTOPLAY_MS);
     return () => clearTimeout(t);
-  }, [i, paused, reduced, count, drag]);
+  }, [pos, paused, reduced, loop, drag]);
 
-  const go = (n: number) => setI(((n % count) + count) % count);
+  // After gliding onto a copy at either end, jump (without animation) to the real slide it copies.
+  const onTransitionEnd = () => {
+    if (pos === count + 1) jumpTo(1);
+    else if (pos === 0) jumpTo(count);
+  };
+  const jumpTo = (p: number) => {
+    setAnimate(false);
+    setPos(p);
+  };
+  // Turn the animation back on once the jump has been painted.
+  useEffect(() => {
+    if (animate) return;
+    const raf = requestAnimationFrame(() => requestAnimationFrame(() => setAnimate(true)));
+    return () => cancelAnimationFrame(raf);
+  }, [animate]);
+
+  const step = (d: 1 | -1) => {
+    if (!loop || pos === 0 || pos === count + 1) return; // mid-wrap: let the jump land first
+    setAnimate(true);
+    setPos((p) => p + d);
+  };
+  const show = (n: number) => {
+    setAnimate(true);
+    setPos(n + 1);
+  };
 
   const onPointerDown = (e: React.PointerEvent) => {
-    swiped.current = false; // every new press starts clean, mouse included
-    if (e.pointerType === "mouse" || count < 2) return; // laptops use the arrows
-    touch.current = { id: e.pointerId, x: e.clientX, y: e.clientY, horizontal: null };
+    swiped.current = false; // every new press starts clean
+    if (!loop || (e.pointerType === "mouse" && e.button !== 0)) return;
+    press.current = { id: e.pointerId, x: e.clientX, y: e.clientY, horizontal: null };
   };
   const onPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
-    const t = touch.current;
-    if (!t || e.pointerId !== t.id) return;
-    const dx = e.clientX - t.x;
-    const dy = e.clientY - t.y;
-    if (t.horizontal === null) {
+    const p = press.current;
+    if (!p || e.pointerId !== p.id) return;
+    const dx = e.clientX - p.x;
+    const dy = e.clientY - p.y;
+    if (p.horizontal === null) {
       if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return;
-      t.horizontal = Math.abs(dx) > Math.abs(dy); // decide once: swipe the slider, or let the page scroll
-      if (!t.horizontal) return (touch.current = null);
+      p.horizontal = Math.abs(dx) > Math.abs(dy); // decide once: swipe the banner, or let the page scroll
+      if (!p.horizontal) return (press.current = null);
       try {
-        e.currentTarget.setPointerCapture(e.pointerId); // keep getting moves if the finger leaves the frame
+        e.currentTarget.setPointerCapture(e.pointerId); // keep getting moves if the pointer leaves the frame
       } catch {
         /* capture is a nicety; the swipe works without it */
       }
@@ -60,39 +93,40 @@ export function HeroCarousel({
     setDrag(dx);
   };
   const onPointerEnd = (e: React.PointerEvent) => {
-    const t = touch.current;
-    touch.current = null;
-    if (!t?.horizontal) return;
-    const dx = e.clientX - t.x;
+    const p = press.current;
+    press.current = null;
+    if (!p?.horizontal) return;
+    const dx = e.clientX - p.x;
     swiped.current = Math.abs(dx) > 8;
-    if (dx <= -SWIPE_PX) go(i + 1);
-    else if (dx >= SWIPE_PX) go(i - 1);
     setDrag(null);
+    if (dx <= -SWIPE_PX) step(1);
+    else if (dx >= SWIPE_PX) step(-1);
   };
 
   return (
     <section
       aria-roledescription="carousel"
-      aria-label="Highlights"
+      aria-label="Promotions"
       tabIndex={0}
       onKeyDown={(e) => {
-        if (e.key === "ArrowRight") go(i + 1);
-        if (e.key === "ArrowLeft") go(i - 1);
+        if (e.key === "ArrowRight") step(1);
+        if (e.key === "ArrowLeft") step(-1);
       }}
       onMouseEnter={() => setPaused(true)}
       onMouseLeave={() => setPaused(false)}
       onFocus={() => setPaused(true)}
       onBlur={() => setPaused(false)}
-      className="space-y-2.5 rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-lime/60"
+      className="rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-lime/60 md:rounded-[20px]"
     >
       <div
-        className={`theme-dark group relative touch-pan-y select-none overflow-hidden rounded-xl border border-white/[0.08] bg-ink-800 shadow-lift ${aspect}`}
+        className={`relative touch-pan-y select-none overflow-hidden rounded-lg bg-ink-800 md:rounded-[20px] ${aspect}`}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerEnd}
         onPointerCancel={onPointerEnd}
+        onDragStart={(e) => e.preventDefault()}
         onClickCapture={(e) => {
-          if (!swiped.current || (e.target as HTMLElement).closest("button[aria-label$='slide']")) return;
+          if (!swiped.current || (e.target as HTMLElement).closest("button[aria-label^='Show slide']")) return;
           e.preventDefault();
           e.stopPropagation();
           swiped.current = false;
@@ -100,64 +134,45 @@ export function HeroCarousel({
       >
         <div
           className="flex h-full"
+          onTransitionEnd={(e) => e.target === e.currentTarget && onTransitionEnd()}
           style={{
-            transform: `translateX(calc(${-i * 100}% + ${drag ?? 0}px))`,
-            transition: drag !== null || reduced ? "none" : "transform 500ms cubic-bezier(.2,.8,.2,1)",
+            transform: `translateX(calc(${-pos * 100}% + ${drag ?? 0}px))`,
+            transition: drag !== null || reduced || !animate ? "none" : `transform ${SLIDE_MS}ms ease`,
           }}
         >
-          {slides.map((slide, n) => (
-            <div
-              key={n}
-              role="group"
-              aria-roledescription="slide"
-              aria-label={`${n + 1} of ${count}: ${labels[n] ?? ""}`}
-              aria-hidden={n !== i}
-              inert={n !== i}
-              className="h-full w-full shrink-0"
-            >
-              {slide}
-            </div>
-          ))}
+          {track.map((slide, n) => {
+            const real = loop ? n - 1 : n; // -1 and count are the copies at the ends
+            const copy = real < 0 || real >= count;
+            return (
+              <div
+                key={n}
+                {...(copy
+                  ? { "aria-hidden": true }
+                  : { role: "group", "aria-roledescription": "slide", "aria-label": `${real + 1} of ${count}: ${labels[real] ?? ""}`, "aria-hidden": real !== active })}
+                inert={copy || real !== active}
+                className="h-full w-full shrink-0"
+              >
+                {slide}
+              </div>
+            );
+          })}
         </div>
 
-        {count > 1 && (
-          <>
-            <Arrow dir={-1} onClick={() => go(i - 1)} />
-            <Arrow dir={1} onClick={() => go(i + 1)} />
-          </>
+        {loop && (
+          <div className="absolute inset-x-0 bottom-1.5 z-10 flex justify-center gap-1 md:bottom-2.5 md:gap-2">
+            {slides.map((_, n) => (
+              <button
+                key={n}
+                type="button"
+                onClick={() => show(n)}
+                aria-label={`Show slide ${n + 1}: ${labels[n] ?? ""}`}
+                aria-current={n === active}
+                className={`size-1 rounded-full bg-white transition-opacity md:size-1.5 ${n === active ? "opacity-100" : "opacity-80 hover:opacity-100"}`}
+              />
+            ))}
+          </div>
         )}
       </div>
-
-      {count > 1 && (
-        <div className="flex justify-center gap-1.5">
-          {slides.map((_, n) => (
-            <button
-              key={n}
-              onClick={() => go(n)}
-              aria-label={`Show slide ${n + 1}: ${labels[n] ?? ""}`}
-              aria-current={n === i}
-              className={`h-1.5 rounded-full transition-all ${n === i ? "w-6 bg-lime" : "w-1.5 bg-fog-muted/50 hover:bg-fog"}`}
-            />
-          ))}
-        </div>
-      )}
     </section>
-  );
-}
-
-/** Edge arrow for laptops and desktops; phones swipe instead. */
-function Arrow({ dir, onClick }: { dir: -1 | 1; onClick: () => void }) {
-  return (
-    <button
-      onClick={onClick}
-      aria-label={dir < 0 ? "Previous slide" : "Next slide"}
-      className={`absolute top-1/2 z-10 hidden h-10 w-10 -translate-y-1/2 place-items-center rounded-full bg-black/50 text-2xl leading-none text-white opacity-0 backdrop-blur transition hover:bg-black/75 focus-visible:opacity-100 group-hover:opacity-100 md:grid ${
-        dir < 0 ? "left-3" : "right-3"
-      }`}
-    >
-      <span aria-hidden className="-mt-0.5">
-        {dir < 0 ? "‹" : "›"}
-      </span>
-    </button>
   );
 }

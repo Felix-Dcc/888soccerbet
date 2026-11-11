@@ -1,6 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Suspense } from "react";
-import { Sora, Manrope } from "next/font/google";
+import { Sora, Manrope, Exo_2 } from "next/font/google";
 import "./globals.css";
 import { AppShell } from "@/components/AppShell";
 import { SideNav, type NavData } from "@/components/SideNav";
@@ -14,6 +14,8 @@ import { hotFixtures, listCompetitions, listFixtures, listSports } from "@/lib/q
 
 const display = Sora({ subsets: ["latin"], weight: ["600", "700", "800"], variable: "--font-display" });
 const body = Manrope({ subsets: ["latin"], weight: ["400", "500", "600", "700", "800"], variable: "--font-body" });
+// The wordmark: heavy, wide, forward-leaning lettering.
+const brand = Exo_2({ subsets: ["latin"], weight: ["800", "900"], style: ["italic"], variable: "--font-brand" });
 
 export const metadata: Metadata = {
   title: "Bet Zone — Sports Betting",
@@ -63,7 +65,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   return (
     // White is the default; the head script removes it for players who chose dark, and adds a
     // splash class, before hydration. Those differences are expected.
-    <html lang="en" data-theme="light" className={`${display.variable} ${body.variable}`} suppressHydrationWarning>
+    <html lang="en" data-theme="light" className={`${display.variable} ${body.variable} ${brand.variable}`} suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />
         <script dangerouslySetInnerHTML={{ __html: SPLASH_SCRIPT }} />

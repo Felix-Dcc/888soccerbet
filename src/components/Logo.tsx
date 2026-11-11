@@ -33,8 +33,12 @@ export function Logo({ size = "md", className = "" }: { size?: keyof typeof SIZE
         <TrendingUp strokeWidth={2} className={s.icon} />
       </span>
       <span aria-hidden className="flex flex-col">
-        <span className={`truncate font-display font-extrabold leading-none tracking-tight text-white ${s.name}`}>Bet Zone</span>
-        <span className={`mt-0.5 font-display font-extrabold uppercase leading-tight tracking-widest text-lime ${s.tag}`}>Sportsbook</span>
+        {/* Wordmark: heavy, wide italic caps (pr keeps the slanted last letter from being clipped). */}
+        <span className={`truncate pr-1 font-brand font-black uppercase italic leading-none tracking-tight ${s.name}`}>
+          <span className="text-white">Bet</span>
+          <span className="bg-gradient-to-b from-lime to-lime-600 bg-clip-text text-transparent">Zone</span>
+        </span>
+        <span className={`mt-0.5 font-brand font-extrabold uppercase italic leading-tight tracking-widest text-lime ${s.tag}`}>Sportsbook</span>
       </span>
     </span>
   );

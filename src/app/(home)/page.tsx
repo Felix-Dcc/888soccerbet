@@ -67,7 +67,7 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
       )}
 
       {unfiltered && (
-        <HeroCarousel labels={BANNERS.map((b) => b.label)} aspect="aspect-video">
+        <HeroCarousel labels={BANNERS.map((b) => b.label)}>
           {BANNERS.map((b, n) => (
             <BannerSlide key={b.label} {...b} priority={n === 0} />
           ))}
