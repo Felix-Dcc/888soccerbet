@@ -54,3 +54,10 @@ export function liveClockLabel(sport: string, startsAtMs: number, nowMs: number)
   if (e < breakEnd + t.reg) return `${t.reg + Math.max(1, Math.ceil(e - breakEnd))}'`; // reg+1..2*reg
   return `${2 * t.reg}+${Math.max(1, Math.ceil(e - breakEnd - t.reg))}'`; // 2*reg + stoppage
 }
+
+/** Which half a running clock label is in: "H1" / "H2", or null at half-time. "45+2'" is still the first half. */
+export function liveHalf(sport: string, label: string): "H1" | "H2" | null {
+  if (label === "HT") return null;
+  const reg = (sport === "basketball" ? MATCH_TIMING.basketball : MATCH_TIMING.football).reg;
+  return parseInt(label, 10) <= reg ? "H1" : "H2";
+}

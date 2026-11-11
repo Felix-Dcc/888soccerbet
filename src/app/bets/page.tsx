@@ -9,6 +9,7 @@ import { SportIcon } from "@/components/SportIcon";
 import { ticketTotals } from "@/lib/tickets";
 import { quotesFor, partialLimit } from "@/lib/cashout";
 import { CashoutPanel } from "@/components/CashoutPanel";
+import { LegClock } from "@/components/LegClock";
 
 export const dynamic = "force-dynamic";
 
@@ -186,7 +187,7 @@ export default async function BetsPage({ searchParams }: { searchParams: Promise
                           </Link>
                           <div className="mt-1 text-xs tabular-nums text-fog-muted">
                             {state === "live" ? (
-                              <span className="font-bold text-danger">Live</span>
+                              <LegClock startsAt={s.fixture.startsAt.toISOString()} sportKey={s.fixture.sportKey} home={s.fixture.homeScore} away={s.fixture.awayScore} />
                             ) : state === "upcoming" ? (
                               `${kickoffShortDate(s.fixture.startsAt.toISOString())} ${kickoffTime(s.fixture.startsAt.toISOString())}`
                             ) : s.fixture.status === "CANCELLED" ? (
@@ -198,7 +199,8 @@ export default async function BetsPage({ searchParams }: { searchParams: Promise
                             )}
                           </div>
                         </div>
-                        {scored && state !== "upcoming" && (
+                        {/* Live picks show the score beside the clock instead. */}
+                        {scored && state !== "upcoming" && state !== "live" && (
                           <span className="self-center rounded-md bg-ink-600 px-2 py-1 text-sm font-extrabold tabular-nums text-white" aria-label={`Score ${score}`}>
                             {score}
                           </span>

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { liveClockLabel, matchRealMinutes, MAX_STOPPAGE_MIN, stoppageFor } from "../src/lib/liveClock";
+import { liveClockLabel, liveHalf, matchRealMinutes, MAX_STOPPAGE_MIN, stoppageFor } from "../src/lib/liveClock";
 
 const KO = Date.UTC(2026, 10, 11, 18, 0); // any kick-off time
 const at = (min: number) => liveClockLabel("football", KO, KO + min * 60_000);
@@ -55,5 +55,18 @@ describe("liveClockLabel (basketball)", () => {
     expect(liveClockLabel("basketball", 0, 30 * 60_000)).toBe("HT"); // 24 + 10-min interval
     expect(liveClockLabel("basketball", 0, 40 * 60_000)).toBe("30'");
     expect(liveClockLabel("basketball", 0, 58 * 60_000)).toBeNull();
+  });
+});
+
+describe("liveHalf", () => {
+  it("tells the first half (stoppage included) from the second, and nothing at half-time", () => {
+    expect(liveHalf("football", "23'")).toBe("H1");
+    expect(liveHalf("football", "45'")).toBe("H1");
+    expect(liveHalf("football", "45+2'")).toBe("H1");
+    expect(liveHalf("football", "HT")).toBeNull();
+    expect(liveHalf("football", "46'")).toBe("H2");
+    expect(liveHalf("football", "90+3'")).toBe("H2");
+    expect(liveHalf("basketball", "24'")).toBe("H1");
+    expect(liveHalf("basketball", "25'")).toBe("H2");
   });
 });
