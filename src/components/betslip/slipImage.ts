@@ -1,7 +1,8 @@
 /**
  * Draws a booked slip as a shareable PNG, laid out like a printed betslip: brand bar with the
- * booking time, booking code and total odds on a dark panel, then a white card with an
- * example bet (GHS 100 at the slip's real total odds — no invented bonus) and each selection.
+ * booking time, booking code and total odds on a panel, then a card with an example bet
+ * (GHS 100 at the slip's real total odds — no invented bonus) and each selection. Drawn in the
+ * site's white or dark palette, whichever the page is showing (System follows the device).
  * Canvas in the browser, so it uses the page's own fonts and needs no server work.
  */
 import { combineMilliOdds, formatMilliOdds, formatPesewas, potentialPayout } from "@/lib/money";
@@ -11,19 +12,44 @@ import type { Pick } from "./BetslipContext";
 const W = 1080;
 const PAD = 48; // dark margin around the white card
 const IN = 48; // text inset inside the white card
-const C = {
-  // The Bet Zone site's palette: its dark theme for the bars, its light theme for the card.
-  brand: "#17202E",
-  brandDark: "#040913",
+// The Bet Zone site's two palettes (globals.css tokens), so the picture matches the page it was saved from.
+const DARK = {
+  barFrom: "#17202E",
+  barTo: "#040913",
+  onBar: "#FFFFFF", // headings on the bar and panel
+  onBarMuted: "rgba(255,255,255,.7)",
   panel: "#0C1421",
   code: "#00BA3B",
+  box: "rgba(255,255,255,.06)",
+  gold: "#8EF39E", // value: total odds
+  card: "#171F2E",
+  cardBorder: "#1F2733",
+  ink: "#F5F9FB",
+  fog: "#8C9AAB",
+  line: "#1F2733",
+  band: "#10301D",
+  bandText: "#8EF39E",
+};
+const LIGHT: typeof DARK = {
+  barFrom: "#FFFFFF",
+  barTo: "#EEF5F0",
+  onBar: "#040C06",
+  onBarMuted: "rgba(4,12,6,.6)",
+  panel: "#F8FBF9",
+  code: "#00A01B",
+  box: "rgba(4,12,6,.05)",
+  gold: "#005600",
+  card: "#FFFFFF",
+  cardBorder: "#D2DAD4",
   ink: "#040C06",
   fog: "#556159",
   line: "#D2DAD4",
   band: "#D6F5D9",
   bandText: "#005600",
-  gold: "#8EF39E",
 };
+type Palette = typeof DARK;
+/** The palette of the mode the page is in right now (the <html> attribute the theme script sets). */
+const palette = (): Palette => (document.documentElement.dataset.theme === "light" ? LIGHT : DARK);
 const EXAMPLE_STAKE = 10_000n; // GHS 100 in pesewas
 
 /** Resolve the hashed next/font family names from the CSS variables the layout sets. */
@@ -50,7 +76,7 @@ function pickLabel(p: Pick): string {
 }
 
 /** The Bet Zone logo, drawn: the green tile with its rising-trend arrow, the name and SPORTSBOOK. */
-function drawLogo(ctx: CanvasRenderingContext2D, x: number, cy: number, display: string) {
+function drawLogo(ctx: CanvasRenderingContext2D, x: number, cy: number, display: string, C: Palette) {
   const T = 96;
   const y = cy - T / 2;
   const g = ctx.createLinearGradient(x, y, x + T, y + T);
@@ -74,7 +100,7 @@ function drawLogo(ctx: CanvasRenderingContext2D, x: number, cy: number, display:
     ctx.stroke();
   }
   ctx.textAlign = "left";
-  ctx.fillStyle = "#FFFFFF";
+  ctx.fillStyle = C.onBar;
   ctx.font = `800 56px ${display}`;
   ctx.fillText("Bet Zone", x + T + 24, cy - 12);
   ctx.fillStyle = C.code;
@@ -84,6 +110,7 @@ function drawLogo(ctx: CanvasRenderingContext2D, x: number, cy: number, display:
 
 export async function drawSlipImage(code: string, picks: Pick[], bookedAt: Date = new Date()): Promise<Blob> {
   const f = fonts();
+  const C = palette();
   // Weights the canvas uses may not be on screen yet; load them before drawing.
   await Promise.all(
     [`800 40px ${f.display}`, `800 36px ${f.body}`, `700 30px ${f.body}`, `600 30px ${f.body}`, `500 30px ${f.body}`].map((x) => document.fonts.load(x).catch(() => [])),
@@ -106,11 +133,10 @@ export async function drawSlipImage(code: string, picks: Pick[], bookedAt: Date 
   const ctx = canvas.getContext("2d")!;
   ctx.textBaseline = "middle";
 
-  // Brand bar: the logo left, "BETSLIP" + booking time right, on the site's dark navy with a
-  // soft green swoosh behind it.
+  // Brand bar: the logo left, "BETSLIP" + booking time right, with a soft green swoosh behind it.
   const grad = ctx.createLinearGradient(0, 0, W, BAR);
-  grad.addColorStop(0, C.brand);
-  grad.addColorStop(1, C.brandDark);
+  grad.addColorStop(0, C.barFrom);
+  grad.addColorStop(1, C.barTo);
   ctx.fillStyle = grad;
   ctx.fillRect(0, 0, W, BAR);
   ctx.fillStyle = "rgba(0,186,59,.12)";
@@ -122,21 +148,20 @@ export async function drawSlipImage(code: string, picks: Pick[], bookedAt: Date 
   ctx.fill();
   ctx.fillStyle = C.code;
   ctx.fillRect(0, BAR - 4, W, 4);
-  drawLogo(ctx, PAD, BAR / 2, f.display);
+  drawLogo(ctx, PAD, BAR / 2, f.display, C);
   ctx.textAlign = "right";
-  ctx.fillStyle = "#FFFFFF";
+  ctx.fillStyle = C.onBar;
   ctx.font = `800 34px ${f.display}`;
   ctx.fillText("BETSLIP", W - PAD, BAR / 2 - 20);
-  ctx.fillStyle = "rgba(255,255,255,.7)";
+  ctx.fillStyle = C.onBarMuted;
   ctx.font = `600 28px ${f.body}`;
   ctx.fillText(formatStamp(bookedAt), W - PAD, BAR / 2 + 24);
 
-  // Dark panel: booking code and total odds.
+  // Panel: booking code and total odds.
   ctx.fillStyle = C.panel;
   ctx.fillRect(0, BAR, W, H - BAR);
   ctx.textAlign = "center";
-  ctx.fillStyle = "#FFFFFF";
-  ctx.fillStyle = "rgba(255,255,255,.7)";
+  ctx.fillStyle = C.onBarMuted;
   ctx.font = `700 28px ${f.body}`;
   ctx.fillText("BOOKING CODE", W / 2, BAR + 64);
   ctx.fillStyle = C.code;
@@ -146,14 +171,14 @@ export async function drawSlipImage(code: string, picks: Pick[], bookedAt: Date 
   const boxW = 620;
   const boxX = (W - boxW) / 2;
   const boxY = BAR + 236;
-  ctx.fillStyle = "rgba(255,255,255,.06)";
+  ctx.fillStyle = C.box;
   ctx.beginPath();
   ctx.roundRect(boxX, boxY, boxW, 104, 12);
   ctx.fill();
   ctx.fillStyle = C.gold;
   ctx.fillRect(boxX, boxY + 100, boxW, 4);
   ctx.textAlign = "left";
-  ctx.fillStyle = "#FFFFFF";
+  ctx.fillStyle = C.onBar;
   ctx.font = `600 32px ${f.body}`;
   ctx.fillText("Total odds", boxX + 32, boxY + 52);
   ctx.textAlign = "right";
@@ -161,11 +186,14 @@ export async function drawSlipImage(code: string, picks: Pick[], bookedAt: Date 
   ctx.font = `800 52px ${f.display}`;
   ctx.fillText(formatMilliOdds(combined), boxX + boxW - 32, boxY + 52);
 
-  // White card.
+  // Card, outlined so it stands off the panel in either palette.
   const cx = PAD;
   const cw = W - PAD * 2;
-  ctx.fillStyle = "#FFFFFF";
+  ctx.fillStyle = C.card;
   ctx.fillRect(cx, cardTop, cw, cardH);
+  ctx.strokeStyle = C.cardBorder;
+  ctx.lineWidth = 2;
+  ctx.strokeRect(cx + 1, cardTop + 1, cw - 2, cardH - 2);
   let y = cardTop;
 
   const band = (label: string) => {
@@ -219,11 +247,11 @@ export async function drawSlipImage(code: string, picks: Pick[], bookedAt: Date 
   // Footer: where the code works, and the age/harm line a shared betting picture should carry.
   const fy = cardTop + cardH + FOOT / 2;
   ctx.textAlign = "left";
-  ctx.fillStyle = "#FFFFFF";
+  ctx.fillStyle = C.onBar;
   ctx.font = `800 30px ${f.display}`;
   ctx.fillText(location.host, PAD, fy); // the address the slip was booked on
   ctx.textAlign = "right";
-  ctx.fillStyle = "rgba(255,255,255,.6)";
+  ctx.fillStyle = C.onBarMuted;
   ctx.font = `600 26px ${f.body}`;
   ctx.fillText("18+ · Play responsibly", W - PAD, fy);
 
