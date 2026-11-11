@@ -19,6 +19,8 @@ const schema = z.object({
   msisdn: z.string().regex(/^0\d{9}$/, "Enter a 10-digit mobile number, e.g. 0241234567"),
   network,
 });
+// Nigerians pay on Flutterwave's checkout page: no number.
+const ngSchema = z.object({ idempotencyKey: z.string().min(8).max(100) });
 
 /** One withdrawal-verification payment (fixed amount, held until an admin reviews). */
 export async function POST(req: Request) {
@@ -27,8 +29,11 @@ export async function POST(req: Request) {
     requireVerifiedEmail(user);
     if (!rateLimit(`verify:${user.id}`, 10, 60_000).ok)
       return json({ error: "Too many requests", code: "RATE_LIMIT" }, { status: 429 });
-    const input = schema.parse(await req.json());
-    const intent = await initiateVerificationPayment(user.id, input.msisdn, input.idempotencyKey, input.network);
+    const body = await req.json();
+    const intent =
+      user.country === "NG"
+        ? await initiateVerificationPayment(user.id, "", ngSchema.parse(body).idempotencyKey)
+        : await (async () => { const i = schema.parse(body); return initiateVerificationPayment(user.id, i.msisdn, i.idempotencyKey, i.network); })();
     // PENDING on purpose: the hold is only credited when the signed webhook arrives.
     return json({ intent: { ref: intent.ref, status: intent.status, amount: intent.amount }, ...approvalOf(intent.metadata) }, { status: 202 });
   } catch (e) {

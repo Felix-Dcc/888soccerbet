@@ -10,7 +10,7 @@ const WEBHOOK_HEADERS = ["x-akwapay-signature", "verif-hash", "x-sb-signature"];
  */
 export function middleware(req: NextRequest) {
   if (req.method === "POST" && WEBHOOK_HEADERS.some((h) => req.headers.has(h)))
-    return NextResponse.rewrite(new URL("/api/webhooks/payments", req.url));
+    return NextResponse.rewrite(new URL(req.headers.has("verif-hash") ? "/api/webhooks/flutterwave" : "/api/webhooks/payments", req.url));
   return NextResponse.next();
 }
 

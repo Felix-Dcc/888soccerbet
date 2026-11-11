@@ -568,6 +568,7 @@ model PlatformSettings {
   telegramSupport         String   @default("")
   emailSupport            String   @default("")
   defaultCommissionBp     Int      @default(0) // admin commission, basis points of net deposits (100 = 1%)
+  ngnPerGhs               Int      @default(0) // Naira per 1 GHS for Nigerian players; 0 = Nigeria closed
   updatedAt               DateTime @updatedAt
 }
 

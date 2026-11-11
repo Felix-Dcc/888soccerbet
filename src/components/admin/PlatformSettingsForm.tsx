@@ -15,6 +15,7 @@ const FIELDS: { key: keyof Omit<PlatformSettings, "id" | "updatedAt">; label: st
   { key: "emailSupport", label: "Email Support Address", hint: "Shown to players on their account page and in the Terms, Privacy and Refunds pages. Leave blank to use support@betzone.com.co.", type: "text" },
   { key: "withdrawalCapMultiplier", label: "Withdrawal Cap Multiplier", hint: "Whole number: a single withdrawal can be at most this many times the player's total deposits (e.g. 2). 0 = no cap.", type: "number" },
   { key: "maxPayoutGhs", label: "Maximum Single Bet Payout (GHS)", hint: "The absolute ceiling potential winning payout permitted for any single bet ticket.", type: "number" },
+  { key: "ngnPerGhs", label: "Naira per 1 GHS (Nigeria)", hint: "Whole Naira for each GHS, e.g. 130: Nigerians pay ₦130 for GHS 1 and are paid out at the same rate. 0 = Nigeria closed (no Nigerian sign-ups, deposits or withdrawals). Needs the Flutterwave keys on the server.", type: "number" },
 ];
 
 /** readOnly: for admins who may see the settings but not change them (no system.manage). */

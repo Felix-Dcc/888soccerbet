@@ -4,6 +4,7 @@ import { prisma } from "./db";
 import { hashPassword } from "./auth";
 import { normaliseCode, referralCode } from "./ids";
 import { TERMS_VERSION } from "./legal";
+import { normalizeNgPhone, type Country } from "./nigeria";
 
 /**
  * The account a referral code belongs to (dashes, spaces and case ignored). Admin codes used to be
@@ -50,6 +51,7 @@ export interface RegisterInput {
   email: string;
   password: string;
   phone: string;
+  country?: Country; // GH unless the player picked Nigeria
   dateOfBirth: string;
   referralCode?: string;
   referralSource?: "LINK" | "CODE"; // arrived on a referral link, or typed the code
@@ -57,8 +59,12 @@ export interface RegisterInput {
 }
 
 export async function registerUser(input: RegisterInput): Promise<User> {
-  const phone = normalizePhone(input.phone);
-  if (!phone) throw new AccountError("BAD_PHONE", "Enter a 10-digit mobile number, e.g. 0241234567");
+  const country: Country = input.country ?? "GH";
+  // Imported here, not at the top: wallet -> emailFlows -> accounts would make an import cycle.
+  if (country === "NG" && !(await (await import("./wallet")).nigeriaOpen())) throw new AccountError("NIGERIA_CLOSED", "Sign-ups from Nigeria aren't open yet");
+  const phone = country === "NG" ? normalizeNgPhone(input.phone) : normalizePhone(input.phone);
+  if (!phone)
+    throw new AccountError("BAD_PHONE", country === "NG" ? "Enter an 11-digit Nigerian mobile number, e.g. 08031234567" : "Enter a 10-digit mobile number, e.g. 0241234567");
 
   const dob = new Date(input.dateOfBirth);
   if (!isAdult(dob)) throw new AccountError("UNDERAGE", "You must be 18 or older to register", 403);
@@ -88,6 +94,7 @@ export async function registerUser(input: RegisterInput): Promise<User> {
           displayName: input.name?.trim() || null,
           passwordHash,
           phone,
+          country,
           dateOfBirth: dob,
           termsAcceptedAt: new Date(),
           termsVersion: TERMS_VERSION,
@@ -108,10 +115,10 @@ export async function registerUser(input: RegisterInput): Promise<User> {
   throw new Error("could not allocate a referral code");
 }
 
-/** Login accepts an email or a phone number in any common Ghana format. */
+/** Login accepts an email or a phone number in any common Ghana or Nigeria format (the two never overlap). */
 export function findUserByIdentifier(identifier: string): Promise<User | null> {
   const id = identifier.trim();
   if (id.includes("@")) return prisma.user.findUnique({ where: { email: id.toLowerCase() } });
-  const phone = normalizePhone(id);
+  const phone = normalizePhone(id) ?? normalizeNgPhone(id);
   return phone ? prisma.user.findUnique({ where: { phone } }) : Promise.resolve(null);
 }

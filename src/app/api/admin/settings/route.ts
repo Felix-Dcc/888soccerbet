@@ -15,7 +15,7 @@ export async function GET() {
 
 const INT_FIELDS: (keyof SettingsPayload)[] = [
   "minWithdrawalGhs", "minDepositGhs", "minStakeGhs", "maxStakeGhs", "maxPayoutGhs",
-  "minDepositToWithdrawGhs", "minLifetimeStakeGhs", "kycVerificationFeeGhs", "nttComplianceFeeGhs", "withdrawalCapMultiplier",
+  "minDepositToWithdrawGhs", "minLifetimeStakeGhs", "kycVerificationFeeGhs", "nttComplianceFeeGhs", "withdrawalCapMultiplier", "ngnPerGhs",
 ];
 const STR_FIELDS: (keyof SettingsPayload)[] = ["telegramSupport", "emailSupport"];
 

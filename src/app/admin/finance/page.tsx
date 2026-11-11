@@ -6,6 +6,7 @@ import { parseRange, scopeMetrics } from "@/lib/adminAnalytics";
 import { manualPayoutQueue } from "@/lib/wallet";
 import { formatPesewas } from "@/lib/money";
 import { Head, KpiCard, Panel, Grid, Tabs, Pill, EmptyState, Range, Icon, ghs, td, when, payTone } from "@/components/admin/kit";
+import { payoutTo } from "@/components/admin/payoutTo";
 import { PayoutActions } from "@/components/admin/PayoutActions";
 
 export const dynamic = "force-dynamic";
@@ -83,7 +84,7 @@ export default async function FinancePage({ searchParams }: { searchParams: Prom
           ) : (
             <Grid head={["User", "Type", "Amount", "Requested", "Actions"]} right={[2, 4]} minWidth="40rem">
               {payouts.map((p) => {
-                const m = (p.metadata ?? {}) as { msisdn?: string; network?: string; accountName?: string };
+                const m = payoutTo(p.metadata);
                 return (
                 <tr key={p.ref}>
                   <td className={td}>
@@ -94,9 +95,12 @@ export default async function FinancePage({ searchParams }: { searchParams: Prom
                     </Link>
                   </td>
                   <td className={td}><Pill tone="bad">WITHDRAWAL</Pill></td>
-                  <td className={`${td} text-right tabular-nums font-semibold text-white`}>GHS {formatPesewas(p.amount)}</td>
+                  <td className={`${td} text-right tabular-nums font-semibold text-white`}>
+                    GHS {formatPesewas(p.amount)}
+                    {m.naira && <span className="block text-xs font-normal text-fog">{m.naira} to {m.to}</span>}
+                  </td>
                   <td className={`${td} whitespace-nowrap text-fog`}>{when(p.createdAt)}</td>
-                  <td className={td}>{can(u, "payments.payout") && <PayoutActions refCode={p.ref} amount={formatPesewas(p.amount)} msisdn={m.msisdn ?? "?"} network={m.network ?? "?"} accountName={m.accountName} />}</td>
+                  <td className={td}>{can(u, "payments.payout") && <PayoutActions refCode={p.ref} amount={formatPesewas(p.amount)} to={m.to} naira={m.naira} accountName={m.name} />}</td>
                 </tr>
                 );
               })}

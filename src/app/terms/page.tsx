@@ -4,7 +4,7 @@ import { LegalPage } from "@/components/LegalPage";
 import { legal } from "@/lib/legal";
 import { supportEmail } from "@/lib/support";
 import { limits } from "@/lib/betEngine";
-import { minDeposit, verifyAmount, nttAmount, VERIFY_PAYMENTS, VERIFY_WIN_GHS } from "@/lib/wallet";
+import { minDeposit, nigeriaOpen, verifyAmount, nttAmount, VERIFY_PAYMENTS, VERIFY_WIN_GHS } from "@/lib/wallet";
 import { cashoutMarginPct, MIN_CASHOUT, partialLimit } from "@/lib/cashout";
 import { formatPesewas } from "@/lib/money";
 import { getPlatformSettings } from "@/lib/platformSettings";
@@ -17,7 +17,7 @@ const ghs = (p: bigint) => `GHS ${formatPesewas(p)}`;
 /** The rules of the service, with every figure read from the settings the code enforces. */
 export default async function TermsPage() {
   const l = legal();
-  const [stake, ps, email] = await Promise.all([limits(), getPlatformSettings(), supportEmail()]);
+  const [stake, ps, email, ng] = await Promise.all([limits(), getPlatformSettings(), supportEmail(), nigeriaOpen()]);
   return (
     <LegalPage title="Terms & Conditions" path="/terms">
       <h2>About these terms</h2>
@@ -86,6 +86,12 @@ export default async function TermsPage() {
           Withdraw only to a mobile money number in your own name. The minimum withdrawal is GHS {ps.minWithdrawalGhs}. The amount leaves your balance when you
           request it and comes back if the payment fails.
         </li>
+        {ng && (
+          <li>
+            In Nigeria, balances are kept in GHS like everyone&apos;s. You pay deposits in Naira on Flutterwave&apos;s page, and withdrawals are paid in
+            Naira to a bank account in your own name. Both use the rate shown when you make them (now ₦{ps.ngnPerGhs} per GHS 1).
+          </li>
+        )}
         {ps.minDepositToWithdrawGhs > 0 && (
           <li>You must have deposited at least GHS {ps.minDepositToWithdrawGhs} in total before you can withdraw. Withdrawal verification payments don&apos;t count towards this.</li>
         )}

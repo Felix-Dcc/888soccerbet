@@ -97,7 +97,7 @@ export default async function AccountPage() {
               <Row label="Name" value={user.displayName ?? "—"} />
               <Row label="Email" value={user.email} />
               <Row label="Mobile" value={user.phone ?? "—"} />
-              <Row label="Country" value={user.country === "GH" ? "Ghana" : user.country} />
+              <Row label="Country" value={user.country === "GH" ? "Ghana" : user.country === "NG" ? "Nigeria" : user.country} />
               <Row label="Self-exclusion" value={excluded ? `Until ${excluded.toLocaleDateString("en-GB")}` : "None"} />
             </dl>
           </section>

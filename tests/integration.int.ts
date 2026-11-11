@@ -33,7 +33,7 @@ import { prisma } from "../src/lib/db";
 import { houseAccountId, userAccountId, postTransaction, userCashBalance, ledgerIsBalanced } from "../src/lib/ledger";
 import { placeBet, BetError } from "../src/lib/betEngine";
 import { setLiveScore, settleBet, settleFixture, voidFixture, SettlementError } from "../src/lib/settlement";
-import { depositPauseUntil, initiateDeposit, initiateWithdrawal, initiateVerificationPayment, confirmDeposit, manualPayoutQueue, processPaymentEvent, reconcilePendingDeposits, recordManualPayout, reviewNttCompliance, reviewVerification, verifyPlayer, verificationState, VERIFY_PAYMENTS } from "../src/lib/wallet";
+import { depositPauseUntil, initiateBankWithdrawal, initiateDeposit, initiateWithdrawal, initiateVerificationPayment, confirmDeposit, manualPayoutQueue, processPaymentEvent, reconcilePendingDeposits, recordManualPayout, reviewNttCompliance, reviewVerification, verifyPlayer, verificationState, VERIFY_PAYMENTS } from "../src/lib/wallet";
 import { toPesewas } from "../src/lib/money";
 import { referralCode } from "../src/lib/ids";
 import { createBooking, loadBooking, resolvePicks } from "../src/lib/bookings";
@@ -2287,6 +2287,80 @@ describe("super admin from environment", () => {
       expect(await verifyAuditChain()).toMatchObject({ ok: true });
     } finally {
       await prisma.user.updateMany({ where: { email }, data: { email: `gone_${randomUUID()}@t.gh`, adminUsername: null, role: "USER" } });
+    }
+  });
+});
+
+describe("Nigeria (Naira on Flutterwave, GHS balances, bank payouts by hand)", () => {
+  const ngPhone = () => `080${Math.floor(10_000_000 + Math.random() * 89_999_999)}`;
+  const ngUser = async (ghs: number) => {
+    const u = await fundedUser(ghs);
+    await prisma.user.update({ where: { id: u.id }, data: { country: "NG", kycStatus: "VERIFIED" } });
+    return u;
+  };
+  beforeAll(() => pinSettings({ ngnPerGhs: 130 }));
+  afterAll(() => pinSettings({ ngnPerGhs: 0 }));
+
+  it("opens sign-up only once a Naira rate is set, with a Nigerian number they can log in by", async () => {
+    const local = ngPhone();
+    const input = { name: "Ada Obi", email: `ng_${randomUUID()}@t.gh`, password: "password1", phone: local, dateOfBirth: "1990-01-01", country: "NG" as const, acceptTerms: true as const };
+    await pinSettings({ ngnPerGhs: 0 });
+    await expect(registerUser(input)).rejects.toMatchObject({ code: "NIGERIA_CLOSED" });
+    await pinSettings({ ngnPerGhs: 130 });
+    await expect(registerUser({ ...input, phone: "0241234567" })).rejects.toMatchObject({ code: "BAD_PHONE" }); // a Ghana number
+    const u = await registerUser(input);
+    expect(u).toMatchObject({ country: "NG", phone: `+234${local.slice(1)}` });
+    expect((await findUserByIdentifier(local))?.id).toBe(u.id);
+    expect((await findUserByIdentifier(`+234 ${local.slice(1)}`))?.id).toBe(u.id);
+  });
+
+  it("credits a Naira deposit its GHS amount, and only when the Naira asked was paid", async () => {
+    const u = await ngUser(0);
+    const intent = await initiateDeposit(u.id, 100, "", randomUUID());
+    expect(intent.metadata).toMatchObject({ country: "NG", ngn: { kobo: "1300000", rate: 130 } }); // GHS 100 = ₦13,000
+    expect(intent.metadata).not.toHaveProperty("msisdn");
+    // As on live: Flutterwave's charge, checked in Naira.
+    const meta = { ...(intent.metadata as Prisma.JsonObject), charge: { currency: "NGN", minor: "1300000" } };
+    await prisma.paymentIntent.update({ where: { id: intent.id }, data: { provider: "flutterwave_ng", metadata: meta } });
+    const ev = (id: string, amountPesewas: bigint, currency?: "NGN") => ({ providerEventId: id, ourRef: intent.ref, status: "SUCCEEDED" as const, amountPesewas, direction: "DEPOSIT" as const, ...(currency ? { currency } : {}) });
+
+    expect(await processPaymentEvent("flutterwave_ng", ev(`a${randomUUID()}`, 10000n))).toBe("ignored"); // GHS 100 reported: wrong currency
+    expect(await processPaymentEvent("flutterwave_ng", ev(`b${randomUUID()}`, 1299999n, "NGN"))).toBe("ignored"); // a kobo short
+    expect(await userCashBalance(prisma, u.id)).toBe(0n);
+    expect(await processPaymentEvent("flutterwave_ng", ev(`c${randomUUID()}`, 1300000n, "NGN"))).toBe("processed");
+    expect(await userCashBalance(prisma, u.id)).toBe(toPesewas(100));
+    expect(await processPaymentEvent("flutterwave_ng", ev(`d${randomUUID()}`, 1300000n, "NGN"))).toBe("ignored"); // once
+    expect(await userCashBalance(prisma, u.id)).toBe(toPesewas(100));
+    expect(await ledgerIsBalanced()).toBe(true);
+  });
+
+  it("pays Nigerian withdrawals by hand to a bank account in Naira at the rate when asked", async () => {
+    const sa = await prisma.user.create({ data: { email: `sa_${randomUUID()}@t.gh`, passwordHash: "x", role: "SUPER_ADMIN", referralCode: referralCode() } });
+    const u = await ngUser(200);
+    const bank = { bankName: "GTBank", accountNumber: "0123456789", accountName: "Ada Obi" };
+    await expect(initiateWithdrawal(u.id, 50, "0241234567", randomUUID())).rejects.toMatchObject({ code: "WRONG_PAYOUT" });
+    const w = await initiateBankWithdrawal(u.id, 50, bank, randomUUID());
+    expect(w).toMatchObject({ provider: "ng_bank", status: "PENDING", metadata: { ...bank, country: "NG", ngn: { kobo: "650000", rate: 130 } } });
+    expect(await userCashBalance(prisma, u.id)).toBe(toPesewas(150)); // held
+    expect((await manualPayoutQueue()).map((i) => i.ref)).toContain(w.ref);
+    await recordManualPayout(sa.id, w.ref, "PAID");
+    expect((await prisma.paymentIntent.findUniqueOrThrow({ where: { ref: w.ref } })).status).toBe("SUCCEEDED");
+
+    const gh = await fundedUser(100);
+    await prisma.user.update({ where: { id: gh.id }, data: { kycStatus: "VERIFIED" } });
+    await expect(initiateBankWithdrawal(gh.id, 50, bank, randomUUID())).rejects.toMatchObject({ code: "WRONG_PAYOUT" });
+    expect(await ledgerIsBalanced()).toBe(true);
+  });
+
+  it("refuses Nigerian money in and out while Nigeria is closed (rate 0)", async () => {
+    const u = await ngUser(100);
+    await pinSettings({ ngnPerGhs: 0 });
+    try {
+      await expect(initiateDeposit(u.id, 100, "", randomUUID())).rejects.toMatchObject({ code: "NIGERIA_CLOSED" });
+      await expect(initiateBankWithdrawal(u.id, 50, { bankName: "GTBank", accountNumber: "0123456789", accountName: "Ada Obi" }, randomUUID())).rejects.toMatchObject({ code: "NIGERIA_CLOSED" });
+      expect(await userCashBalance(prisma, u.id)).toBe(toPesewas(100));
+    } finally {
+      await pinSettings({ ngnPerGhs: 130 });
     }
   });
 });

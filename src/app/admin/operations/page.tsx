@@ -9,6 +9,7 @@ import { kickoffDay, kickoffTime } from "@/lib/time";
 import { Crest } from "@/components/Crest";
 import { SyncButton, SettleForm, VerificationReview } from "@/components/AdminTools";
 import { readScript } from "@/lib/scriptedMatches";
+import { payoutTo } from "@/components/admin/payoutTo";
 import { PayoutActions } from "@/components/admin/PayoutActions";
 import { BarList, EmptyState, Figure, Head, Panel, Pill, Strip, Tabs, ago, ghs, ghsShort } from "@/components/admin/kit";
 
@@ -66,20 +67,20 @@ export default async function OperationsPage({ searchParams }: { searchParams: P
         <Panel title="Withdrawals to pay" icon="coins" flush actions={<span className="text-xs text-fog">{ghs(payouts.reduce((n, p) => n + p.amount, 0n))} total</span>}>
           <ul className="divide-y divide-line">
             {payouts.map((p) => {
-              const m = (p.metadata ?? {}) as { msisdn?: string; network?: string; accountName?: string };
+              const m = payoutTo(p.metadata);
               return (
                 <li key={p.id} className="flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3">
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-sm font-semibold text-white">
-                      {ghs(p.amount)} <span className="font-normal text-fog">to</span> <span className="font-mono">{m.msisdn ?? "—"}</span> <span className="text-fog">{m.network ?? ""}</span>
+                      {m.naira ? <>{m.naira} <span className="font-normal text-fog">({ghs(p.amount)})</span></> : ghs(p.amount)} <span className="font-normal text-fog">to</span> <span className="font-mono">{m.to}</span>
                     </span>
                     <span className="block truncate text-xs text-fog">
-                      {m.accountName ? <span className="text-white">{m.accountName}</span> : null}
-                      {m.accountName ? " · " : ""}
+                      {m.name ? <span className="text-white">{m.name}</span> : null}
+                      {m.name ? " · " : ""}
                       {p.user.displayName ?? p.user.email} · {p.ref} · asked {ago(p.createdAt)}
                     </span>
                   </span>
-                  <PayoutActions refCode={p.ref} amount={formatPesewas(p.amount)} msisdn={m.msisdn ?? "?"} network={m.network ?? "?"} accountName={m.accountName} />
+                  <PayoutActions refCode={p.ref} amount={formatPesewas(p.amount)} to={m.to} naira={m.naira} accountName={m.name} />
                 </li>
               );
             })}

@@ -16,10 +16,11 @@ export default async function WalletPage() {
   // Settle any deposit whose webhook never came, before showing the balance. Never blocks the page.
   await reconcilePendingDeposits(user.id).catch((e) => console.error("[wallet] reconcile failed:", e instanceof Error ? e.message : e));
 
-  const [balance, intents, verification] = await Promise.all([
+  const [balance, intents, verification, settings] = await Promise.all([
     userCashBalance(prisma, user.id),
     prisma.paymentIntent.findMany({ where: { userId: user.id }, orderBy: { createdAt: "desc" }, take: 20 }),
     verificationState(user.id),
+    getPlatformSettings(),
   ]);
 
   return (
@@ -32,7 +33,8 @@ export default async function WalletPage() {
           <WalletCard balance={balance} holder={user.displayName ?? user.email.split("@")[0] ?? user.email} phone={user.phone} since={user.createdAt} />
           <WalletPanel
           minDepositGhs={Number(await minDeposit()) / 100}
-          minWithdrawalGhs={(await getPlatformSettings()).minWithdrawalGhs}
+          minWithdrawalGhs={settings.minWithdrawalGhs}
+          ngnPerGhs={user.country === "NG" ? settings.ngnPerGhs : null}
           isAdmin={user.role !== "USER"}
           verification={{
             required: verification.required,

@@ -20,13 +20,14 @@
  */
 import { Prisma } from "@prisma/client";
 import { prisma } from "./db";
+import { NG_BANK_PROVIDER } from "./nigeria";
 
 /** Addresses only ever used for testing. A real sign-up never matches, so it is never removed. */
 const TEST_ACCOUNT = /@(example\.test|t\.gh|test\.gh)$|^(verifytest|refplayer|partner\.e2e|local\.tester|demo@)|^(gggg|ron)@gmail\.com$/i; // last two: the owner's own test sign-ups on live
 export const isTestAccount = (email: string) => TEST_ACCOUNT.test(email);
 
-/** The only payment provider whose deposits count as real money. */
-const REAL_PROVIDER = "shinobipay";
+/** The payment providers whose payments count as real money: ShinobiPay (Ghana), Flutterwave Naira deposits and Nigerian bank payouts. */
+const REAL_PROVIDERS = ["shinobipay", "flutterwave_ng", NG_BANK_PROVIDER];
 
 export interface CleanupPlan {
   realPayments: { provider: string; direction: string; status: string; amount: bigint; email: string }[];
@@ -66,8 +67,8 @@ async function assess(): Promise<Doomed> {
   const bets = await prisma.bet.findMany({ select: { id: true, userId: true } });
   const email = (id: string) => users.find((u) => u.id === id)?.email ?? id;
 
-  const realPays = pays.filter((p) => p.provider === REAL_PROVIDER);
-  const demoPays = pays.filter((p) => p.provider !== REAL_PROVIDER);
+  const realPays = pays.filter((p) => REAL_PROVIDERS.includes(p.provider));
+  const demoPays = pays.filter((p) => !REAL_PROVIDERS.includes(p.provider));
   // A ShinobiPay withdrawal moved real money out, so its ledger can't be unwound: that player is kept too.
   const realPlayers = new Set(realPays.filter((p) => p.direction === "WITHDRAWAL" || p.status === "SUCCEEDED").map((p) => p.userId));
   // Only test accounts go. Never a super admin, and never anyone who has put real money in.
@@ -139,7 +140,7 @@ async function assess(): Promise<Doomed> {
       deleteAccounts: toDelete.map((u) => u.email),
       closeAccounts: toClose.map((u) => u.email),
       manualFixtures: await prisma.fixture.count({ where: demoFixtures(demoBets.map((b) => b.id)) }),
-      sandboxWebhooks: await prisma.webhookEvent.count({ where: { provider: { not: REAL_PROVIDER } } }),
+      sandboxWebhooks: await prisma.webhookEvent.count({ where: { provider: { notIn: REAL_PROVIDERS } } }),
     },
   };
 }
@@ -157,8 +158,8 @@ export async function runDemoCleanup(): Promise<CleanupPlan> {
       await tx.ledgerEntry.deleteMany({ where: { transactionId: { in: d.txIds } } });
       await tx.ledgerTransaction.deleteMany({ where: { id: { in: d.txIds } } });
       await tx.bet.deleteMany({ where: { id: { in: d.demoBetIds } } }); // their selections and cash outs cascade
-      await tx.paymentIntent.deleteMany({ where: { provider: { not: REAL_PROVIDER } } });
-      await tx.webhookEvent.deleteMany({ where: { provider: { not: REAL_PROVIDER } } });
+      await tx.paymentIntent.deleteMany({ where: { provider: { notIn: REAL_PROVIDERS } } });
+      await tx.webhookEvent.deleteMany({ where: { provider: { notIn: REAL_PROVIDERS } } });
       await tx.fixture.deleteMany({ where: demoFixtures(d.demoBetIds) });
       await tx.ledgerAccount.deleteMany({ where: { userId: { in: d.demoUserIds } } });
       await tx.user.updateMany({ where: { id: { in: d.closeIds } }, data: { status: "CLOSED" } });

@@ -49,6 +49,7 @@ export class ShinobiPayProvider implements PaymentProvider {
   }
 
   async initiate(req: ChargeRequest): Promise<ChargeResult> {
+    if (!req.msisdn || !req.network) throw new PspError("Enter your mobile money number and network");
     // Never reached for withdrawals (payouts = "manual"); refuse loudly rather than pretend.
     if (req.direction !== "DEPOSIT") throw new ShinobiPayError("ShinobiPay can't send payouts to players");
     const { http, json } = await this.call(

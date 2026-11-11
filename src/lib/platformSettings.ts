@@ -16,6 +16,7 @@ const DEFAULTS: Omit<PlatformSettings, "id" | "updatedAt"> = {
   telegramSupport: "",
   emailSupport: "",
   defaultCommissionBp: 0,
+  ngnPerGhs: 0,
 };
 
 let cached: PlatformSettings | null = null;

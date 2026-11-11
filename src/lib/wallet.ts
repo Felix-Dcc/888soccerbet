@@ -8,7 +8,8 @@ import { prisma } from "./db";
 import { accountBalance, postTransaction, userAccountId, houseAccountId, userCashBalance } from "./ledger";
 import { formatPesewas, toPesewas } from "./money";
 import { payRef } from "./ids";
-import { MANUAL_PAYOUT_PROVIDERS, paymentProvider } from "./providers/payments";
+import { MANUAL_PAYOUT_PROVIDERS, ngDepositProvider, paymentProvider, type PaymentProvider } from "./providers/payments";
+import { NG_BANK_PROVIDER, toKobo } from "./nigeria";
 import { audit } from "./audit";
 import { guessNetwork, PspError, type Network, type NormalisedEvent } from "./providers/payments/types";
 import { notifyPayment } from "./emailFlows";
@@ -158,20 +159,41 @@ async function createDepositIntent(userId: string, amount: bigint, msisdn: strin
   }
   await checkDepositAllowed(userId, amount);
 
-  const provider = paymentProvider();
+  const user = await prisma.user.findUniqueOrThrow({ where: { id: userId }, select: { email: true, displayName: true, country: true } });
+  // Nigerians pay the Naira equivalent on Flutterwave's checkout; Ghanaians pay by mobile money.
+  let provider: PaymentProvider;
+  let ngn: { kobo: string; rate: number } | null = null;
+  if (user.country === "NG") {
+    const p = ngDepositProvider();
+    const rate = await ngnPerGhs();
+    if (!p || rate <= 0) throw new WalletError("NIGERIA_CLOSED", "Deposits from Nigeria aren't open yet");
+    provider = p;
+    ngn = { kobo: toKobo(amount, rate).toString(), rate };
+  } else {
+    if (!/^0\d{9}$/.test(msisdn)) throw new WalletError("BAD_NUMBER", "Enter a 10-digit mobile number, e.g. 0241234567");
+    provider = paymentProvider();
+  }
   const ref = payRef(purpose === "NTT" ? "NTT" : purpose === "VERIFICATION" ? "VER" : "DEP");
-  const user = await prisma.user.findUniqueOrThrow({ where: { id: userId }, select: { email: true, displayName: true } });
   let charge;
   try {
-    charge = await provider.initiate({ ref, amountPesewas: amount, msisdn, network, direction: "DEPOSIT", email: user.email, name: user.displayName });
+    charge = await provider.initiate({
+      ref, amountPesewas: amount, direction: "DEPOSIT", email: user.email, name: user.displayName,
+      ...(ngn ? { ngnKobo: BigInt(ngn.kobo) } : { msisdn, network }),
+    });
   } catch (e) {
     if (e instanceof PspError) throw new WalletError("PAYMENT_REFUSED", e.message);
     throw e;
   }
   // The approval page (if the PSP has one) is kept on the intent so a retried request gets it back.
   const meta = {
-    msisdn,
-    network,
+    ...(ngn
+      ? {
+          country: "NG",
+          ngn,
+          // What the PSP must report as paid, checked before anything is credited (the sandbox reports GHS).
+          ...(provider.name === "flutterwave_ng" ? { charge: { currency: "NGN", minor: ngn.kobo } } : {}),
+        }
+      : { msisdn, network }),
     ...(purpose ? { purpose } : {}),
     ...(charge.redirectUrl ? { redirectUrl: charge.redirectUrl } : {}),
     ...(charge.prompt ? { prompt: charge.prompt } : {}),
@@ -290,7 +312,32 @@ export async function verifyPlayer(userId: string): Promise<{ released: bigint }
   });
 }
 
+/** Naira per GHS for Nigerian players (admin setting); 0 = Nigeria closed. */
+export async function ngnPerGhs(): Promise<number> {
+  const { getPlatformSettings } = await import("./platformSettings");
+  return (await getPlatformSettings()).ngnPerGhs;
+}
+
+/** Nigerians can sign up and pay in: a Naira rate is set and a provider takes Naira (or the site is a sandbox). */
+export async function nigeriaOpen(): Promise<boolean> {
+  return ngDepositProvider() !== null && (await ngnPerGhs()) > 0;
+}
+
+type PayoutTo =
+  | { kind: "momo"; msisdn: string; network: Network; accountName?: string }
+  | { kind: "bank"; bankName: string; accountNumber: string; accountName: string };
+
+/** Ghana: a withdrawal to mobile money. */
 export async function initiateWithdrawal(userId: string, amountGhs: number, msisdn: string, idempotencyKey: string, network: Network = guessNetwork(msisdn), accountName?: string) {
+  return requestWithdrawal(userId, amountGhs, idempotencyKey, { kind: "momo", msisdn, network, accountName });
+}
+
+/** Nigeria: a withdrawal an admin pays by hand to the player's bank account, in Naira at today's rate. */
+export async function initiateBankWithdrawal(userId: string, amountGhs: number, bank: { bankName: string; accountNumber: string; accountName: string }, idempotencyKey: string) {
+  return requestWithdrawal(userId, amountGhs, idempotencyKey, { kind: "bank", ...bank });
+}
+
+async function requestWithdrawal(userId: string, amountGhs: number, idempotencyKey: string, to: PayoutTo) {
   const amount = toPesewas(amountGhs);
   if (amount <= 0n) throw new WalletError("BAD_AMOUNT", "Amount must be positive");
   const { getPlatformSettings } = await import("./platformSettings");
@@ -301,7 +348,18 @@ export async function initiateWithdrawal(userId: string, amountGhs: number, msis
   const existing = await prisma.paymentIntent.findUnique({ where: { idempotencyKey } });
   if (existing) return existing;
 
-  const user = await prisma.user.findUniqueOrThrow({ where: { id: userId }, select: { kycStatus: true, email: true, displayName: true, role: true } });
+  const user = await prisma.user.findUniqueOrThrow({ where: { id: userId }, select: { kycStatus: true, email: true, displayName: true, role: true, country: true } });
+  if ((user.country === "NG") !== (to.kind === "bank"))
+    throw new WalletError("WRONG_PAYOUT", user.country === "NG" ? "Withdrawals from Nigeria go to a bank account" : "Withdrawals go to a mobile money number");
+  let payoutMeta: Prisma.InputJsonObject;
+  if (to.kind === "bank") {
+    const rate = await ngnPerGhs();
+    if (rate <= 0) throw new WalletError("NIGERIA_CLOSED", "Withdrawals from Nigeria aren't open yet");
+    // The Naira the admin sends, fixed at today's rate when the player asks.
+    payoutMeta = { country: "NG", bankName: to.bankName, accountNumber: to.accountNumber, accountName: to.accountName, ngn: { kobo: toKobo(amount, rate).toString(), rate } };
+  } else {
+    payoutMeta = { msisdn: to.msisdn, network: to.network, ...(to.accountName ? { accountName: to.accountName } : {}) };
+  }
   if (user.kycStatus !== "VERIFIED" && (await verificationRequired(prisma, userId)))
     throw new WalletError("VERIFICATION_REQUIRED", "Complete withdrawal verification before withdrawing");
 
@@ -329,7 +387,9 @@ export async function initiateWithdrawal(userId: string, amountGhs: number, msis
     }
   }
 
-  const provider = paymentProvider();
+  // Nigerian payouts are always sent by hand; Ghana's go through the PSP (or by hand, ShinobiPay).
+  const provider: Pick<PaymentProvider, "name" | "payouts" | "initiate"> =
+    to.kind === "bank" ? { name: NG_BANK_PROVIDER, payouts: "manual", initiate: () => Promise.reject(new Error("paid by hand")) } : paymentProvider();
   const ref = payRef("WDR");
   let intent;
   try {
@@ -343,7 +403,7 @@ export async function initiateWithdrawal(userId: string, amountGhs: number, msis
       const intent = await tx.paymentIntent.create({
         data: {
           ref, userId, direction: "WITHDRAWAL", amount, status: "PENDING",
-          provider: provider.name, idempotencyKey, metadata: { msisdn, network, ...(accountName ? { accountName } : {}) },
+          provider: provider.name, idempotencyKey, metadata: payoutMeta,
         },
       });
       // Hold the funds now so they can't be spent while the payout is in flight.
@@ -370,9 +430,10 @@ export async function initiateWithdrawal(userId: string, amountGhs: number, msis
   }
 
   // The money is held (committed above) before the payout is asked for, so it can't be spent twice.
+  if (to.kind !== "momo") return intent; // unreachable: bank payouts are manual
   let payout;
   try {
-    payout = await provider.initiate({ ref: intent.ref, amountPesewas: amount, msisdn, network, direction: "WITHDRAWAL", email: user.email, name: user.displayName });
+    payout = await provider.initiate({ ref: intent.ref, amountPesewas: amount, msisdn: to.msisdn, network: to.network, direction: "WITHDRAWAL", email: user.email, name: user.displayName });
   } catch (e) {
     // Unclear outcome (timeout, 5xx): the payout may exist, so keep the hold; the webhook settles it.
     console.error(`[wallet] payout ${intent.ref} outcome unknown, left pending:`, e);
@@ -414,12 +475,17 @@ export async function processPaymentEvent(provider: string, ev: NormalisedEvent)
     await prisma.webhookEvent.update({ where: { provider_providerEventId: { provider, providerEventId: ev.providerEventId } }, data: { status: "IGNORED", processedAt: new Date() } });
     return "ignored";
   }
-  // Money moves only for exactly what we asked: a different amount or kind of payment is flagged, never applied.
+  // Money moves only for exactly what we asked: a different amount, currency or kind of payment is flagged, never applied.
+  // A Naira deposit is checked against the Naira asked (metadata.charge) and credited its GHS amount.
+  const charge = intent.direction === "DEPOSIT" ? (intent.metadata as { charge?: { currency: string; minor: string } } | null)?.charge : undefined;
+  const askedCurrency = charge?.currency ?? "GHS";
+  const asked = charge ? BigInt(charge.minor) : intent.amount;
   const mismatch =
     ev.direction && ev.direction !== intent.direction ? `direction ${ev.direction} != ${intent.direction}`
+    : (ev.currency ?? "GHS") !== askedCurrency ? `currency ${ev.currency ?? "GHS"} != ${askedCurrency}`
     // A PSP may charge its fee on top of a deposit (ShinobiPay: +2%), so a deposit needs at least the
     // amount asked and is credited exactly that; a payout must match exactly.
-    : (intent.direction === "DEPOSIT" ? ev.amountPesewas < intent.amount : ev.amountPesewas !== intent.amount) ? `amount ${ev.amountPesewas} vs ${intent.amount}`
+    : (intent.direction === "DEPOSIT" ? ev.amountPesewas < asked : ev.amountPesewas !== asked) ? `amount ${ev.amountPesewas} vs ${asked}`
     : null;
   if (mismatch) {
     console.error(`[wallet] payment event for ${intent.ref} rejected: ${mismatch}`);
@@ -495,8 +561,20 @@ export async function processPaymentEvent(provider: string, ev: NormalisedEvent)
  * webhook arriving later finds the deposit already settled and is ignored. Runs when a player opens
  * their wallet (their own deposits only), and every few seconds on the server for everyone's recent ones.
  */
+/** Every provider deposits can be open with right now: Ghana's, plus Nigeria's when it is a different one. */
+function depositProviders(): PaymentProvider[] {
+  const gh = paymentProvider();
+  const ng = ngDepositProvider();
+  return ng && ng.name !== gh.name ? [gh, ng] : [gh];
+}
+
 export async function reconcilePendingDeposits(userId?: string, maxAgeMs = 7 * 86_400_000): Promise<number> {
-  const provider = paymentProvider();
+  let settled = 0;
+  for (const provider of depositProviders()) settled += await reconcileWith(provider, userId, maxAgeMs);
+  return settled;
+}
+
+async function reconcileWith(provider: PaymentProvider, userId: string | undefined, maxAgeMs: number): Promise<number> {
   if (!provider.checkDeposit) return 0;
   const now = Date.now();
   const pending = await prisma.paymentIntent.findMany({
@@ -517,7 +595,7 @@ export async function reconcilePendingDeposits(userId?: string, maxAgeMs = 7 * 8
 }
 
 /** Ask the PSP about one pending deposit and apply a final answer once. True if it was settled now. */
-async function settleFromProvider(provider: ReturnType<typeof paymentProvider>, intent: { ref: string; providerRef: string | null }): Promise<boolean> {
+async function settleFromProvider(provider: PaymentProvider, intent: { ref: string; providerRef: string | null }): Promise<boolean> {
   if (!provider.checkDeposit || !intent.providerRef) return false;
   try {
     const r = await provider.checkDeposit(intent.providerRef);
@@ -527,6 +605,7 @@ async function settleFromProvider(provider: ReturnType<typeof paymentProvider>, 
       ourRef: intent.ref,
       status: r.status,
       amountPesewas: r.amountPesewas,
+      ...(r.currency ? { currency: r.currency } : {}),
       direction: "DEPOSIT",
     });
     return res === "processed";
@@ -545,8 +624,8 @@ export async function confirmDeposit(userId: string, ref: string): Promise<{ sta
   const intent = await prisma.paymentIntent.findUnique({ where: { ref } });
   if (!intent || intent.userId !== userId || intent.direction !== "DEPOSIT") throw new WalletError("NOT_FOUND", "Deposit not found");
   if (intent.status === "PENDING") {
-    const provider = paymentProvider();
-    if (intent.provider === provider.name) await settleFromProvider(provider, intent);
+    const provider = depositProviders().find((p) => p.name === intent.provider);
+    if (provider) await settleFromProvider(provider, intent);
   }
   const now = await prisma.paymentIntent.findUniqueOrThrow({ where: { id: intent.id } });
   const status = now.status === "SUCCEEDED" || now.status === "PENDING" ? now.status : "FAILED";
@@ -582,13 +661,16 @@ export async function recordManualPayout(actorId: string, ref: string, outcome: 
     direction: "WITHDRAWAL",
   });
   if (result !== "processed") throw new WalletError("ALREADY_DONE", "This withdrawal has already been settled");
-  const meta = intent.metadata as { msisdn?: string; network?: string } | null;
+  const meta = intent.metadata as { msisdn?: string; network?: string; bankName?: string; accountNumber?: string; ngn?: { kobo: string } } | null;
   await audit({
     actorUserId: actorId,
     action: outcome === "PAID" ? "PAYOUT_MARKED_PAID" : "PAYOUT_MARKED_FAILED",
     targetType: "PaymentIntent",
     targetId: intent.id,
-    after: { ref, userId: intent.userId, amount: intent.amount.toString(), msisdn: meta?.msisdn ?? null, network: meta?.network ?? null },
+    after: {
+      ref, userId: intent.userId, amount: intent.amount.toString(), msisdn: meta?.msisdn ?? null, network: meta?.network ?? null,
+      ...(meta?.bankName ? { bankName: meta.bankName, accountNumber: meta.accountNumber ?? null, ngnKobo: meta.ngn?.kobo ?? null } : {}),
+    },
     ip: ip ?? undefined,
   });
 }

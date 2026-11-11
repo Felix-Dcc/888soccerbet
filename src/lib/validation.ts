@@ -17,6 +17,7 @@ export const registerSchema = z
     password: z.string().min(8, "Password must be at least 8 characters").max(200),
     confirmPassword: z.string(),
     phone: z.string().trim().min(1, "Enter your mobile number").max(20),
+    country: z.enum(["GH", "NG"]).default("GH"),
     dateOfBirth: z.string().refine((s) => !Number.isNaN(Date.parse(s)), "Enter your date of birth"),
     referralCode: optionalText(24),
     referralSource: z.enum(["LINK", "CODE"]).optional(),
@@ -62,6 +63,18 @@ export const depositSchema = z.object({
   idempotencyKey: z.string().min(8).max(100),
   msisdn,
   network,
+});
+
+/** Nigerian players pay on Flutterwave's checkout: no mobile money number. */
+export const ngDepositSchema = z.object({ amountGhs, idempotencyKey: z.string().min(8).max(100) });
+
+/** Nigerian withdrawals: paid by hand to a bank account (10-digit NUBAN account number). */
+export const ngWithdrawSchema = z.object({
+  amountGhs,
+  idempotencyKey: z.string().min(8).max(100),
+  bankName: z.string().trim().min(2, "Enter your bank").max(60),
+  accountNumber: z.string().trim().regex(/^\d{10}$/, "Enter your 10-digit account number"),
+  accountName: z.string().trim().min(2, "Enter the name on the account").max(60),
 });
 
 export const withdrawSchema = z.object({

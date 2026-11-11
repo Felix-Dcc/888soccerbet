@@ -3,7 +3,8 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { newId } from "@/lib/clientId";
-import { formatPesewas } from "@/lib/money";
+import { formatPesewas, toPesewas } from "@/lib/money";
+import { formatNaira, toKobo } from "@/lib/nigeria";
 import { FLASH_KEY } from "@/components/FlashNotice";
 import { CopyButton } from "@/components/CopyButton";
 import { BrandMark, Logo } from "@/components/Logo";
@@ -22,7 +23,9 @@ interface Verification {
   status: string;
 }
 
-export function WalletPanel({ minDepositGhs, minWithdrawalGhs, isAdmin = false, verification }: { minDepositGhs: number; minWithdrawalGhs: number; isAdmin?: boolean; verification: Verification }) {
+/** ngnPerGhs: set for a Nigerian player (they pay in Naira on Flutterwave and are paid to a bank account); null for Ghana. */
+export function WalletPanel({ minDepositGhs, minWithdrawalGhs, isAdmin = false, verification, ngnPerGhs = null }: { minDepositGhs: number; minWithdrawalGhs: number; isAdmin?: boolean; verification: Verification; ngnPerGhs?: number | null }) {
+  const ng = ngnPerGhs !== null; // a rate of 0 means Nigeria is closed: the server refuses, and no Naira is shown
   const router = useRouter();
   const [mode, setMode] = useState<Mode>("deposit");
   const depositStart = isAdmin ? 0 : minDepositGhs; // admins start the deposit box empty; players keep the default
@@ -33,6 +36,8 @@ export function WalletPanel({ minDepositGhs, minWithdrawalGhs, isAdmin = false, 
   const showVerification = verification.required || verification.kyc.heldGhs > 0 || verification.ntt.heldGhs > 0;
   const [msisdn, setMsisdn] = useState("");
   const [accountName, setAccountName] = useState(""); // withdrawals only: the name an admin pays by hand
+  const [bankName, setBankName] = useState(""); // Nigerian withdrawals: paid by hand to a bank account
+  const [accountNumber, setAccountNumber] = useState("");
   const [network, setNetwork] = useState<Network>("MTN");
   const [networkPicked, setNetworkPicked] = useState(false); // once chosen by hand, the prefix guess stops overriding it
   const [busy, setBusy] = useState(false);
@@ -45,7 +50,16 @@ export function WalletPanel({ minDepositGhs, minWithdrawalGhs, isAdmin = false, 
   const waitingSince = useRef<number | null>(null);
   const [approveNote, setApproveNote] = useState<string | null>(null);
   // A withdrawal request that just went through: shows the success modal.
-  const [withdrawn, setWithdrawn] = useState<{ ref: string; amount: string; network: Network; msisdn: string } | null>(null);
+  const [withdrawn, setWithdrawn] = useState<WithdrawnInfo | null>(null);
+  // The Naira a GHS amount comes to at today's rate ("" when it can't be worked out yet).
+  const nairaFor = (ghs: number) => {
+    if (!ngnPerGhs || !(ghs > 0)) return "";
+    try {
+      return formatNaira(toKobo(toPesewas(ghs), ngnPerGhs));
+    } catch {
+      return "";
+    }
+  };
   const [review, setReview] = useState(false); // withdrawals confirm the details before sending
 
   // Back from the payment provider's approval page (it adds ?status=&tx_ref= to our wallet URL).
@@ -162,7 +176,11 @@ export function WalletPanel({ minDepositGhs, minWithdrawalGhs, isAdmin = false, 
     const res = await fetch(`/api/wallet/${mode}`, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ amountGhs: Number(amount), msisdn, network, idempotencyKey: newId(), ...(mode === "withdraw" ? { accountName } : {}) }),
+      body: JSON.stringify(
+        ng
+          ? { amountGhs: Number(amount), idempotencyKey: newId(), ...(mode === "withdraw" ? { bankName, accountNumber, accountName } : {}) }
+          : { amountGhs: Number(amount), msisdn, network, idempotencyKey: newId(), ...(mode === "withdraw" ? { accountName } : {}) },
+      ),
     });
     const d = await res.json();
     setBusy(false);
@@ -170,10 +188,17 @@ export function WalletPanel({ minDepositGhs, minWithdrawalGhs, isAdmin = false, 
       if (mode === "deposit") {
         afterCharge(d);
       } else {
-        setWithdrawn({ ref: d.intent.ref, amount: formatPesewas(BigInt(d.intent.amount)), network, msisdn });
+        setWithdrawn({
+          ref: d.intent.ref,
+          amount: formatPesewas(BigInt(d.intent.amount)),
+          to: ng ? `${bankName} · ${accountNumber}` : `${NETWORK_LABEL[network]} · ${msisdn}`,
+          naira: nairaFor(Number(amount)) || null,
+        });
         setReview(false);
         setMsisdn("");
         setAccountName("");
+        setBankName("");
+        setAccountNumber("");
         window.dispatchEvent(new Event("sb:refresh"));
         router.refresh();
       }
@@ -183,13 +208,13 @@ export function WalletPanel({ minDepositGhs, minWithdrawalGhs, isAdmin = false, 
   }
 
   async function payVerification() {
-    if (!/^0\d{9}$/.test(msisdn)) return setMsg({ ok: false, text: "Enter your 10-digit mobile money number first" });
+    if (!ng && !/^0\d{9}$/.test(msisdn)) return setMsg({ ok: false, text: "Enter your 10-digit mobile money number first" });
     setBusy(true);
     setMsg(null);
     const res = await fetch("/api/wallet/verify", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ msisdn, network, idempotencyKey: newId() }),
+      body: JSON.stringify(ng ? { idempotencyKey: newId() } : { msisdn, network, idempotencyKey: newId() }),
     });
     const d = await res.json();
     setBusy(false);
@@ -300,8 +325,9 @@ export function WalletPanel({ minDepositGhs, minWithdrawalGhs, isAdmin = false, 
           <>
             <dl className="space-y-2 rounded-lg border border-line bg-ink-800 p-4 text-sm">
               <div className="flex justify-between gap-3"><dt className="text-fog">Amount</dt><dd className="font-bold text-white">GHS {amount}</dd></div>
-              <div className="flex justify-between gap-3"><dt className="text-fog">Network</dt><dd className="font-semibold text-white">{NETWORK_LABEL[network]}</dd></div>
-              <div className="flex justify-between gap-3"><dt className="text-fog">Account number</dt><dd className="font-semibold text-white">{msisdn}</dd></div>
+              {ng && <div className="flex justify-between gap-3"><dt className="text-fog">You receive</dt><dd className="font-bold text-white">{nairaFor(Number(amount))}</dd></div>}
+              <div className="flex justify-between gap-3"><dt className="text-fog">{ng ? "Bank" : "Network"}</dt><dd className="truncate font-semibold text-white">{ng ? bankName : NETWORK_LABEL[network]}</dd></div>
+              <div className="flex justify-between gap-3"><dt className="text-fog">Account number</dt><dd className="font-semibold text-white">{ng ? accountNumber : msisdn}</dd></div>
               <div className="flex justify-between gap-3"><dt className="text-fog">Account name</dt><dd className="truncate font-semibold text-white">{accountName}</dd></div>
             </dl>
             <button className="btn-lime w-full py-3" disabled={busy || locked}>
@@ -326,7 +352,44 @@ export function WalletPanel({ minDepositGhs, minWithdrawalGhs, isAdmin = false, 
             onChange={(e) => setAmount(Number(e.target.value))}
           />
           {mode === "withdraw" && <p className="mt-1 text-xs text-fog">Minimum withdrawal GHS {minWithdrawalGhs}</p>}
+          {ng && nairaFor(amount) && (
+            <p className="mt-1 text-xs text-fog">
+              {mode === "deposit" ? "You pay" : "You receive"} <span className="font-semibold text-white">{nairaFor(amount)}</span> (₦{ngnPerGhs} per GHS 1)
+            </p>
+          )}
         </div>
+        {ng ? (
+          mode === "withdraw" ? (
+            <>
+              <div>
+                <label className="label" htmlFor="bank">Bank</label>
+                <input id="bank" type="text" autoComplete="off" maxLength={60} required placeholder="e.g. GTBank" className="input" value={bankName} onChange={(e) => setBankName(e.target.value)} />
+              </div>
+              <div>
+                <label className="label" htmlFor="acctno">Account number</label>
+                <input
+                  id="acctno"
+                  type="text"
+                  inputMode="numeric"
+                  pattern="\d{10}"
+                  maxLength={10}
+                  required
+                  placeholder="10-digit account number"
+                  className="input"
+                  value={accountNumber}
+                  onChange={(e) => setAccountNumber(e.target.value.replace(/\D/g, ""))}
+                />
+              </div>
+              <div>
+                <label className="label" htmlFor="acctname">Account name</label>
+                <input id="acctname" type="text" autoComplete="name" maxLength={60} required placeholder="Full name on the account" className="input" value={accountName} onChange={(e) => setAccountName(e.target.value)} />
+              </div>
+            </>
+          ) : (
+            <p className="text-xs text-fog">You&apos;ll pay on Flutterwave&apos;s secure page by card, bank transfer or USSD.</p>
+          )
+        ) : (
+          <>
         {/* Withdrawals are paid by hand, so they ask the way the admin needs it: network, number, then the name on the account. */}
         {mode === "withdraw" && networkField}
         <div>
@@ -361,6 +424,8 @@ export function WalletPanel({ minDepositGhs, minWithdrawalGhs, isAdmin = false, 
           </div>
         ) : (
           networkField
+        )}
+          </>
         )}
         <button className="btn-lime w-full py-3" disabled={busy || locked}>
           {busy ? "Working…" : mode === "deposit" ? "Deposit" : locked ? "Verify to withdraw" : "Request withdrawal"}
@@ -453,7 +518,9 @@ function WithdrawalBanner({ info }: { info: { ref: string; amount: string } }) {
  * the amount, then where the payout stands and its details. Payouts are sent by hand, so the copy
  * says it is on the way, never that it has already landed.
  */
-function WithdrawalSuccess({ info, onClose }: { info: { ref: string; amount: string; network: Network; msisdn: string }; onClose: () => void }) {
+interface WithdrawnInfo { ref: string; amount: string; to: string; naira: string | null }
+
+function WithdrawalSuccess({ info, onClose }: { info: WithdrawnInfo; onClose: () => void }) {
   const [at] = useState(() => new Date());
   useEffect(() => {
     const prev = document.body.style.overflow;
@@ -473,7 +540,7 @@ function WithdrawalSuccess({ info, onClose }: { info: { ref: string; amount: str
   const steps = [
     { label: "Requested", done: true },
     { label: "Balance debited", done: true },
-    { label: "Paid to MoMo", done: false },
+    { label: info.naira ? "Paid to bank" : "Paid to MoMo", done: false },
   ];
 
   return createPortal(
@@ -549,10 +616,14 @@ function WithdrawalSuccess({ info, onClose }: { info: { ref: string; amount: str
         <dl className="divide-y divide-line px-6 py-2 text-sm">
           <div className="flex items-center justify-between gap-4 py-2.5">
             <dt className="shrink-0 text-fog-muted">Sent to</dt>
-            <dd className="min-w-0 truncate text-right font-semibold">
-              {NETWORK_LABEL[info.network]} · <span className="tabular-nums">{info.msisdn}</span>
-            </dd>
+            <dd className="min-w-0 truncate text-right font-semibold tabular-nums">{info.to}</dd>
           </div>
+          {info.naira && (
+            <div className="flex items-center justify-between gap-4 py-2.5">
+              <dt className="shrink-0 text-fog-muted">You receive</dt>
+              <dd className="font-semibold tabular-nums">{info.naira}</dd>
+            </div>
+          )}
           <div className="flex items-center justify-between gap-4 py-2.5">
             <dt className="shrink-0 text-fog-muted">Reference</dt>
             <dd className="flex min-w-0 items-center gap-2">
