@@ -47,6 +47,8 @@ const scoped = (s: Scope) =>
       : Prisma.sql`SELECT id FROM "User" WHERE role = 'USER' AND "referredById" = ${s.adminId}`;
 
 const BETTING_KINDS = Prisma.sql`('BET_LOSS','BET_PAYOUT','VOID_REFUND','CASHOUT')`;
+/** A successful payment counts on the day the money moved (a deposit started at 23:59 and paid at 00:02 is today's); others on the day started. */
+const PAY_AT = Prisma.sql`COALESCE(CASE WHEN p.status = 'SUCCEEDED' THEN p."settledAt" END, p."createdAt")`;
 const n = (v: unknown) => (typeof v === "bigint" ? v : BigInt((v as number | string | null) ?? 0));
 
 export interface Metrics {
@@ -83,10 +85,10 @@ export async function scopeMetrics(scope: Scope, range: Range): Promise<Metrics>
         (SELECT COUNT(*)::int FROM "User" u WHERE u.id IN (${S}) AND u.status = 'SUSPENDED') AS suspended,
         (SELECT COUNT(DISTINCT b."userId")::int FROM "Bet" b WHERE b."userId" IN (${S}) AND b."placedAt" >= ${from} AND b."placedAt" < ${to}) AS bettors,
         (SELECT COUNT(DISTINCT p."userId")::int FROM "PaymentIntent" p WHERE p."userId" IN (${S}) AND p.direction = 'DEPOSIT' AND p.status = 'SUCCEEDED'
-           AND COALESCE(p.metadata->>'purpose','') NOT IN ('VERIFICATION','NTT') AND p."createdAt" >= ${from} AND p."createdAt" < ${to}) AS depositors`,
+           AND COALESCE(p.metadata->>'purpose','') NOT IN ('VERIFICATION','NTT') AND ${PAY_AT} >= ${from} AND ${PAY_AT} < ${to}) AS depositors`,
     prisma.$queryRaw<{ direction: string; status: string; verification: boolean; count: number; total: bigint }[]>`
       SELECT p.direction::text, p.status::text, COALESCE(p.metadata->>'purpose','') IN ('VERIFICATION','NTT') AS verification, COUNT(*)::int AS count, COALESCE(SUM(p.amount),0)::bigint AS total
-      FROM "PaymentIntent" p WHERE p."userId" IN (${S}) AND p."createdAt" >= ${from} AND p."createdAt" < ${to}
+      FROM "PaymentIntent" p WHERE p."userId" IN (${S}) AND ${PAY_AT} >= ${from} AND ${PAY_AT} < ${to}
       GROUP BY 1, 2, 3`,
     prisma.$queryRaw<{ kind: string; total: bigint }[]>`
       SELECT a.kind::text, COALESCE(SUM(e.amount),0)::bigint AS total FROM "LedgerAccount" a JOIN "LedgerEntry" e ON e."accountId" = a.id
@@ -205,9 +207,9 @@ export async function scopeSeries(scope: Scope, range: Range): Promise<SeriesPoi
     SELECT bk.bucket,
       (SELECT COUNT(*)::int FROM "User" u WHERE u.id IN (${S}) AND date_trunc(${U}, u."createdAt") = bk.bucket) AS registrations,
       (SELECT COALESCE(SUM(p.amount),0)::bigint FROM "PaymentIntent" p WHERE p."userId" IN (${S}) AND p.direction = 'DEPOSIT' AND p.status = 'SUCCEEDED'
-         AND COALESCE(p.metadata->>'purpose','') NOT IN ('VERIFICATION','NTT') AND date_trunc(${U}, p."createdAt") = bk.bucket) AS deposits,
+         AND COALESCE(p.metadata->>'purpose','') NOT IN ('VERIFICATION','NTT') AND date_trunc(${U}, ${PAY_AT}) = bk.bucket) AS deposits,
       (SELECT COALESCE(SUM(p.amount),0)::bigint FROM "PaymentIntent" p WHERE p."userId" IN (${S}) AND p.direction = 'WITHDRAWAL' AND p.status = 'SUCCEEDED'
-         AND date_trunc(${U}, p."createdAt") = bk.bucket) AS withdrawals,
+         AND date_trunc(${U}, ${PAY_AT}) = bk.bucket) AS withdrawals,
       (SELECT COALESCE(SUM(b.stake + COALESCE((SELECT SUM(c."stakePortion") FROM "Cashout" c WHERE c."betId" = b.id AND NOT c.full),0)),0)::bigint
          FROM "Bet" b WHERE b."userId" IN (${S}) AND date_trunc(${U}, b."placedAt") = bk.bucket) AS stakes,
       (SELECT COALESCE(SUM(e.amount),0)::bigint FROM "LedgerEntry" e
@@ -301,14 +303,14 @@ export async function recentActivity(scope: Scope, withAudit: boolean, take = 20
   const [regs, bets, pays, logs] = await Promise.all([
     prisma.user.findMany({ where: userWhere, orderBy: { createdAt: "desc" }, take, select: { id: true, email: true, createdAt: true, referralSource: true } }),
     prisma.bet.findMany({ where: { user: userWhere }, orderBy: { placedAt: "desc" }, take, select: { ref: true, stake: true, placedAt: true, userId: true, user: { select: { email: true } } } }),
-    prisma.paymentIntent.findMany({ where: { user: userWhere }, orderBy: { createdAt: "desc" }, take, select: { ref: true, direction: true, status: true, amount: true, createdAt: true, userId: true, user: { select: { email: true } } } }),
+    prisma.paymentIntent.findMany({ where: { user: userWhere }, orderBy: { createdAt: "desc" }, take, select: { ref: true, direction: true, status: true, amount: true, createdAt: true, settledAt: true, userId: true, user: { select: { email: true } } } }),
     withAudit ? prisma.auditLog.findMany({ orderBy: { seq: "desc" }, take, select: { action: true, createdAt: true, targetType: true, actor: { select: { email: true } } } }) : Promise.resolve([]),
   ]);
   const ghs = (p: bigint) => `GHS ${(Number(p) / 100).toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   const items: ActivityItem[] = [
     ...regs.map((u) => ({ at: u.createdAt, kind: "registration" as const, text: `${u.email} registered${u.referralSource ? ` (${u.referralSource === "LINK" ? "referral link" : u.referralSource === "AUTO" ? "auto-assigned" : "referral code"})` : ""}`, href: `/admin/users/${u.id}` })),
     ...bets.map((b) => ({ at: b.placedAt, kind: "bet" as const, text: `${b.user.email} placed ${b.ref} · ${ghs(b.stake)}`, href: `/admin/users/${b.userId}` })),
-    ...pays.map((p) => ({ at: p.createdAt, kind: "payment" as const, text: `${p.user.email} ${p.direction === "DEPOSIT" ? "deposit" : "withdrawal"} ${ghs(p.amount)} · ${p.status.toLowerCase()}`, href: `/admin/users/${p.userId}` })),
+    ...pays.map((p) => ({ at: p.settledAt ?? p.createdAt, kind: "payment" as const, text: `${p.user.email} ${p.direction === "DEPOSIT" ? "deposit" : "withdrawal"} ${ghs(p.amount)} · ${p.status.toLowerCase()}`, href: `/admin/users/${p.userId}` })),
     ...logs.map((l) => ({ at: l.createdAt, kind: "admin" as const, text: `${l.actor?.email ?? "system"} ${actionText(l.action)}`, href: "/admin/audit" })),
   ];
   return items.sort((a, b) => b.at.getTime() - a.at.getTime()).slice(0, take);

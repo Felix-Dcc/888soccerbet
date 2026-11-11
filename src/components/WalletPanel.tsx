@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { newId } from "@/lib/clientId";
@@ -73,15 +73,22 @@ export function WalletPanel({ minDepositGhs, isAdmin = false, verification }: { 
     else setPending(d.intent.ref);
   };
 
-  /** "I've approved it": check now; once credited, go home with the new balance already showing. */
-  async function confirmApproved() {
-    if (!approving) return;
-    setChecking(true);
-    setApproveNote(null);
+  /**
+   * "I've approved it": check now; once credited, go home with the new balance already showing.
+   * `auto`: the background check while waiting, which stays quiet until there's an answer.
+   */
+  const inFlight = useRef(false);
+  async function confirmApproved(auto = false) {
+    if (!approving || inFlight.current) return;
+    inFlight.current = true;
+    if (!auto) {
+      setChecking(true);
+      setApproveNote(null);
+    }
     try {
       const res = await fetch("/api/wallet/deposit/confirm", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ ref: approving.ref }) });
       const d = await res.json().catch(() => ({}));
-      if (!res.ok) return setApproveNote(d.error ?? "Couldn't check right now. Try again in a moment.");
+      if (!res.ok) return auto || setApproveNote(d.error ?? "Couldn't check right now. Try again in a moment.");
       if (d.status === "SUCCEEDED") {
         window.dispatchEvent(new Event("sb:refresh"));
         if (d.purpose === "VERIFICATION") {
@@ -102,13 +109,32 @@ export function WalletPanel({ minDepositGhs, isAdmin = false, verification }: { 
         setApproving(null);
         return setMsg({ ok: false, text: "The payment didn't go through. Nothing was taken." });
       }
-      setApproveNote("We haven't received it yet. Approve the prompt on your phone, then tap again.");
+      if (!auto) setApproveNote("We haven't received it yet. Approve the prompt on your phone, then tap again.");
     } catch {
-      setApproveNote("Network error. Try again.");
+      if (!auto) setApproveNote("Network error. Try again.");
     } finally {
-      setChecking(false);
+      inFlight.current = false;
+      if (!auto) setChecking(false);
     }
   }
+
+  // While waiting for approval, keep checking (every 5s, and as soon as they come back from their MoMo app),
+  // so the money shows without tapping or refreshing. Stops after 10 minutes; the button still works.
+  useEffect(() => {
+    if (!approving) return;
+    const started = Date.now();
+    const tick = () => {
+      if (Date.now() - started < 10 * 60_000) void confirmApproved(true);
+    };
+    const t = setInterval(tick, 5000);
+    const onVisible = () => document.visibilityState === "visible" && tick();
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      clearInterval(t);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- re-armed per deposit; confirmApproved reads the same `approving`
+  }, [approving]);
 
   async function initiate(e: React.FormEvent) {
     e.preventDefault();
@@ -237,7 +263,7 @@ export function WalletPanel({ minDepositGhs, isAdmin = false, verification }: { 
           )}
           <button
             type="button"
-            onClick={confirmApproved}
+            onClick={() => confirmApproved()}
             disabled={checking}
             className={`mt-3 w-full rounded-lg py-3 text-[15px] font-bold transition ${checking ? "bg-[#97C459] text-[#173404]" : "bg-[#16A34A] text-white hover:brightness-110"}`}
           >

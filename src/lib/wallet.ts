@@ -357,8 +357,11 @@ export async function processPaymentEvent(provider: string, ev: NormalisedEvent)
       data: { provider, providerEventId: ev.providerEventId, payloadHash: ev.providerEventId, status: "RECEIVED" },
     });
   } catch (e) {
-    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") return "duplicate";
-    throw e;
+    if (!(e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002")) throw e;
+    // Seen before. Only a finished event is a duplicate: one left RECEIVED by an attempt that failed midway must be
+    // retried, or its deposit is stuck. Still credited once: the intent must be PENDING and the ledger reference is unique.
+    const seen = await prisma.webhookEvent.findUnique({ where: { provider_providerEventId: { provider, providerEventId: ev.providerEventId } }, select: { status: true } });
+    if (seen?.status !== "RECEIVED") return "duplicate";
   }
 
   const intent = await prisma.paymentIntent.findUnique({ where: { ref: ev.ourRef } });
@@ -449,16 +452,23 @@ export async function processPaymentEvent(provider: string, ev: NormalisedEvent)
  * Ask the PSP about deposits still pending after a minute (a webhook can be lost, e.g. sent to the wrong
  * URL). A confirmed outcome goes through processPaymentEvent like a webhook, so it is credited once: a
  * webhook arriving later finds the deposit already settled and is ignored. Runs when a player opens
- * their wallet (their own deposits only).
+ * their wallet (their own deposits only), and every few seconds on the server for everyone's recent ones.
  */
-export async function reconcilePendingDeposits(userId: string): Promise<number> {
+export async function reconcilePendingDeposits(userId?: string, maxAgeMs = 7 * 86_400_000): Promise<number> {
   const provider = paymentProvider();
   if (!provider.checkDeposit) return 0;
   const now = Date.now();
   const pending = await prisma.paymentIntent.findMany({
-    where: { userId, direction: "DEPOSIT", status: "PENDING", provider: provider.name, providerRef: { not: null }, createdAt: { lt: new Date(now - 60_000), gt: new Date(now - 7 * 86_400_000) } },
+    where: {
+      ...(userId ? { userId } : {}),
+      direction: "DEPOSIT",
+      status: "PENDING",
+      provider: provider.name,
+      providerRef: { not: null },
+      createdAt: { lt: new Date(now - 10_000), gt: new Date(now - maxAgeMs) },
+    },
     orderBy: { createdAt: "asc" },
-    take: 5,
+    take: userId ? 5 : 25,
   });
   let settled = 0;
   for (const intent of pending) if (await settleFromProvider(provider, intent)) settled++;

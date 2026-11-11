@@ -36,5 +36,6 @@ export default defineConfig({
     testTimeout: 30000,
     hookTimeout: 120000,
   },
-  resolve: { alias: { "@": resolve(__dirname, "src") } },
+  // "server-only" is Next's build-time marker; outside Next it must resolve to its no-op module.
+  resolve: { alias: { "@": resolve(__dirname, "src"), "server-only": resolve(__dirname, "node_modules/next/dist/compiled/server-only/empty.js") } },
 });

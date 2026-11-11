@@ -37,8 +37,14 @@ export function Header() {
   useEffect(() => {
     load();
     const h = () => load();
+    // Back on the tab (e.g. after approving a MoMo prompt in another app): show the latest balance.
+    const onVisible = () => document.visibilityState === "visible" && load();
     window.addEventListener("sb:refresh", h);
-    return () => window.removeEventListener("sb:refresh", h);
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      window.removeEventListener("sb:refresh", h);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
   }, [load]);
 
   useEffect(() => {

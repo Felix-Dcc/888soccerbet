@@ -216,6 +216,18 @@ describe("wallet", () => {
     expect(await ledgerIsBalanced()).toBe(true);
   });
 
+  it("retries an event an earlier attempt recorded but never finished, crediting it once", async () => {
+    const user = await fundedUser(0);
+    const intent = await initiateDeposit(user.id, 50, "0241234567", randomUUID());
+    const ev = { providerEventId: `evt_${randomUUID()}`, ourRef: intent.ref, status: "SUCCEEDED" as const, amountPesewas: intent.amount };
+    // An attempt that crashed after recording the event: left RECEIVED, nothing credited.
+    await prisma.webhookEvent.create({ data: { provider: "sandbox", providerEventId: ev.providerEventId, payloadHash: ev.providerEventId, status: "RECEIVED" } });
+    expect(await processPaymentEvent("sandbox", ev)).toBe("processed"); // the retry finishes it
+    expect(await processPaymentEvent("sandbox", ev)).toBe("duplicate");
+    expect(await userCashBalance(prisma, user.id)).toBe(toPesewas(50));
+    expect(await ledgerIsBalanced()).toBe(true);
+  });
+
   it("holds a withdrawal immediately and reverses it on failure", async () => {
     const user = await fundedUser(100);
     await prisma.user.update({ where: { id: user.id }, data: { kycStatus: "VERIFIED" } });

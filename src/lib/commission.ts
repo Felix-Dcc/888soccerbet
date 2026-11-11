@@ -45,7 +45,7 @@ async function figuresByAdmin(db: Db, span: Span, adminId?: string): Promise<Map
       FROM "PaymentIntent" p JOIN "User" u ON u.id = p."userId"
       WHERE u.role = 'USER' AND u."referredById" IS NOT NULL ${only} AND p.status = 'SUCCEEDED'
         AND COALESCE(p.metadata->>'purpose', '') NOT IN ('VERIFICATION', 'NTT')
-        AND p."createdAt" >= ${span.from} AND p."createdAt" < ${span.to}
+        AND COALESCE(p."settledAt", p."createdAt") >= ${span.from} AND COALESCE(p."settledAt", p."createdAt") < ${span.to}
       GROUP BY 1`,
   ]);
   const out = new Map<string, Figures>();

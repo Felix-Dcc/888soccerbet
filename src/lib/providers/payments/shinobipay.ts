@@ -125,6 +125,8 @@ export class ShinobiPayProvider implements PaymentProvider {
     if (http >= 500 || http === 429) throw new ShinobiPayError("ShinobiPay unavailable"); // non-2xx: it retries
     const live = json as { status?: string; amount?: number; currency?: string; reference?: string };
     const confirmed = status === "SUCCEEDED" ? live.status === "succeeded" : live.status === "failed";
+    // The event can land a moment before the API shows the final state: make ShinobiPay retry instead of dropping it.
+    if (!confirmed && live.status !== "succeeded" && live.status !== "failed") throw new ShinobiPayError("ShinobiPay intent not final yet");
     if (!confirmed || live.currency !== "GHS" || !Number.isInteger(live.amount)) return { ok: true, event: null };
     if (live.reference && live.reference !== reference) return { ok: true, event: null };
     return { ok: true, event: { providerEventId: body.id, ourRef: reference, status, amountPesewas: BigInt(live.amount!), direction: "DEPOSIT" } };
