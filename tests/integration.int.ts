@@ -33,7 +33,7 @@ import { prisma } from "../src/lib/db";
 import { houseAccountId, userAccountId, postTransaction, userCashBalance, ledgerIsBalanced } from "../src/lib/ledger";
 import { placeBet, BetError } from "../src/lib/betEngine";
 import { setLiveScore, settleBet, settleFixture, voidFixture, SettlementError } from "../src/lib/settlement";
-import { depositPauseUntil, initiateDeposit, initiateWithdrawal, initiateVerificationPayment, confirmDeposit, manualPayoutQueue, processPaymentEvent, reconcilePendingDeposits, recordManualPayout, reviewNttCompliance, reviewVerification, verifyPlayer, verificationState } from "../src/lib/wallet";
+import { depositPauseUntil, initiateDeposit, initiateWithdrawal, initiateVerificationPayment, confirmDeposit, manualPayoutQueue, processPaymentEvent, reconcilePendingDeposits, recordManualPayout, reviewNttCompliance, reviewVerification, verifyPlayer, verificationState, VERIFY_PAYMENTS } from "../src/lib/wallet";
 import { toPesewas } from "../src/lib/money";
 import { referralCode } from "../src/lib/ids";
 import { createBooking, loadBooking, resolvePicks } from "../src/lib/bookings";
@@ -510,40 +510,64 @@ describe("minimums and withdrawal verification", () => {
     }
   });
 
-  it("doesn't count a normal deposit, holds two KYC then two NTT payments, and each approval releases them; then withdrawals unlock", async () => {
+  it("doesn't count a normal deposit, holds five KYC then five NTT payments, and each approval releases them; then withdrawals unlock", async () => {
+    expect(VERIFY_PAYMENTS).toBe(5);
     const user = await fundedUser(0);
     await win(user.id, 1002); // cash 1002
     await succeed(await initiateDeposit(user.id, 500, "0241234567", randomUUID())); // normal deposit
-    expect(await verificationState(user.id)).toMatchObject({ stage: "kyc", kyc: { paid: 0 }, status: "UNVERIFIED" });
+    expect(await verificationState(user.id)).toMatchObject({ stage: "kyc", kyc: { paid: 0, needed: 5 }, status: "UNVERIFIED" });
     await expect(initiateWithdrawal(user.id, 100, "0241234567", randomUUID())).rejects.toMatchObject({ code: "VERIFICATION_REQUIRED" });
 
     // Stage 1: KYC
     await pay(user.id);
-    expect(await verificationState(user.id)).toMatchObject({ kyc: { paid: 1, heldGhs: 500 }, status: "UNVERIFIED" }); // bar half full
+    expect(await verificationState(user.id)).toMatchObject({ kyc: { paid: 1, heldGhs: 500 }, status: "UNVERIFIED" });
     expect(await userCashBalance(prisma, user.id)).toBe(toPesewas(1502)); // held, not spendable
+    await expect(reviewVerification(user.id, true)).rejects.toMatchObject({ code: "NOT_READY" });
+    for (let i = 0; i < 3; i++) await pay(user.id);
+    expect(await verificationState(user.id)).toMatchObject({ kyc: { paid: 4, needed: 5, heldGhs: 2000 }, status: "UNVERIFIED" }); // "Last payment left"
     await expect(reviewVerification(user.id, true)).rejects.toMatchObject({ code: "NOT_READY" });
 
     await pay(user.id);
-    expect(await verificationState(user.id)).toMatchObject({ kyc: { paid: 2, heldGhs: 1000 }, status: "PENDING" }); // bar full
+    expect(await verificationState(user.id)).toMatchObject({ kyc: { paid: 5, heldGhs: 2500 }, status: "PENDING" });
     await expect(initiateVerificationPayment(user.id, "0241234567", randomUUID())).rejects.toMatchObject({ code: "AWAITING_REVIEW" });
     await expect(initiateWithdrawal(user.id, 100, "0241234567", randomUUID())).rejects.toMatchObject({ code: "VERIFICATION_REQUIRED" });
 
-    expect(await reviewVerification(user.id, true)).toEqual({ released: toPesewas(1000), nextStatus: "KYC_APPROVED" });
+    expect(await reviewVerification(user.id, true)).toEqual({ released: toPesewas(2500), nextStatus: "KYC_APPROVED" });
     expect(await verificationState(user.id)).toMatchObject({ stage: "ntt", kyc: { heldGhs: 0 }, status: "KYC_APPROVED" });
-    expect(await userCashBalance(prisma, user.id)).toBe(toPesewas(2502));
+    expect(await userCashBalance(prisma, user.id)).toBe(toPesewas(4002));
     await expect(initiateWithdrawal(user.id, 100, "0241234567", randomUUID())).rejects.toMatchObject({ code: "VERIFICATION_REQUIRED" });
 
     // Stage 2: NTT compliance
+    for (let i = 0; i < 4; i++) await pay(user.id);
+    expect(await verificationState(user.id)).toMatchObject({ ntt: { paid: 4, heldGhs: 2000 }, status: "KYC_APPROVED" });
     await pay(user.id);
-    await pay(user.id);
-    expect(await verificationState(user.id)).toMatchObject({ ntt: { paid: 2, heldGhs: 1000 }, status: "NTT_PENDING" });
+    expect(await verificationState(user.id)).toMatchObject({ ntt: { paid: 5, heldGhs: 2500 }, status: "NTT_PENDING" });
     await expect(initiateVerificationPayment(user.id, "0241234567", randomUUID())).rejects.toMatchObject({ code: "AWAITING_REVIEW" });
-    expect(await reviewNttCompliance(user.id, true)).toEqual({ released: toPesewas(1000), nextStatus: "VERIFIED" });
+    expect(await reviewNttCompliance(user.id, true)).toEqual({ released: toPesewas(2500), nextStatus: "VERIFIED" });
     expect(await verificationState(user.id)).toMatchObject({ ntt: { heldGhs: 0 }, status: "VERIFIED" });
-    expect(await userCashBalance(prisma, user.id)).toBe(toPesewas(3502));
+    expect(await userCashBalance(prisma, user.id)).toBe(toPesewas(6502));
     await expect(initiateVerificationPayment(user.id, "0241234567", randomUUID())).rejects.toMatchObject({ code: "ALREADY_VERIFIED" });
     await initiateWithdrawal(user.id, 100, "0241234567", randomUUID());
-    expect(await userCashBalance(prisma, user.id)).toBe(toPesewas(3402));
+    expect(await userCashBalance(prisma, user.id)).toBe(toPesewas(6402));
+    expect(await ledgerIsBalanced()).toBe(true);
+  });
+
+  it("keeps a stage submitted under the old 2-payment rule complete: no more payments asked, and it can be approved", async () => {
+    const user = await fundedUser(0);
+    await win(user.id, 1002);
+    await pay(user.id);
+    await pay(user.id);
+    await prisma.user.update({ where: { id: user.id }, data: { kycStatus: "PENDING" } }); // submitted back when 2 were enough
+    expect(await verificationState(user.id)).toMatchObject({ kyc: { paid: 5, needed: 5, heldGhs: 1000 }, status: "PENDING" });
+    await expect(initiateVerificationPayment(user.id, "0241234567", randomUUID())).rejects.toMatchObject({ code: "AWAITING_REVIEW" });
+    expect(await reviewVerification(user.id, true)).toEqual({ released: toPesewas(1000), nextStatus: "KYC_APPROVED" });
+
+    await pay(user.id);
+    await pay(user.id);
+    await prisma.user.update({ where: { id: user.id }, data: { kycStatus: "NTT_PENDING" } });
+    expect(await verificationState(user.id)).toMatchObject({ ntt: { paid: 5, heldGhs: 1000 }, status: "NTT_PENDING" });
+    await expect(initiateVerificationPayment(user.id, "0241234567", randomUUID())).rejects.toMatchObject({ code: "AWAITING_REVIEW" });
+    expect(await reviewNttCompliance(user.id, true)).toEqual({ released: toPesewas(1000), nextStatus: "VERIFIED" });
     expect(await ledgerIsBalanced()).toBe(true);
   });
 

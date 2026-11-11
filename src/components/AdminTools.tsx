@@ -465,7 +465,7 @@ export function VerificationReview({ userId, email, heldGhs, complete, stage = "
 
   return (
     <div className="flex flex-wrap items-center gap-2">
-      <button type="button" className="btn-lime px-3 py-1.5 text-sm" disabled={busy || !complete} title={complete ? undefined : "Both payments must be in first"} onClick={() => review("approve")}>
+      <button type="button" className="btn-lime px-3 py-1.5 text-sm" disabled={busy || !complete} title={complete ? undefined : "All payments must be in first"} onClick={() => review("approve")}>
         Approve
       </button>
       <button type="button" className="btn border border-danger/50 px-3 py-1.5 text-sm text-danger hover:bg-danger/10" disabled={busy} onClick={() => review("reject")}>

@@ -38,8 +38,10 @@ export async function minDeposit() {
  *   approve → VERIFIED (can withdraw); reject → NTT_REJECTED (can retry stage 2).
  *
  * Both stages: held money is ALWAYS returned to the player's balance, whether approved or rejected.
+ * A stage already submitted for review (PENDING / NTT_PENDING) counts as complete, so players who
+ * finished it when fewer payments were needed are never asked for more.
  */
-export const VERIFY_PAYMENTS = 2;
+export const VERIFY_PAYMENTS = 5;
 export const verifyAfterWin = () => toPesewas(process.env.VERIFY_AFTER_WIN_GHS ?? "1000");
 
 async function verificationRequired(db: Prisma.TransactionClient | typeof prisma, userId: string): Promise<boolean> {
@@ -83,8 +85,8 @@ export async function verificationState(userId: string): Promise<VerificationInf
     prisma.user.findUniqueOrThrow({ where: { id: userId }, select: { kycStatus: true } }),
     verificationRequired(prisma, userId),
   ]);
-  const kycPaid = Math.min(Number(kycHold.held / fees.kyc), VERIFY_PAYMENTS);
-  const nttPaid = Math.min(Number(nttHold.held / fees.ntt), VERIFY_PAYMENTS);
+  const kycPaid = user.kycStatus === "PENDING" ? VERIFY_PAYMENTS : Math.min(Number(kycHold.held / fees.kyc), VERIFY_PAYMENTS);
+  const nttPaid = user.kycStatus === "NTT_PENDING" ? VERIFY_PAYMENTS : Math.min(Number(nttHold.held / fees.ntt), VERIFY_PAYMENTS);
   const inNtt = user.kycStatus === "KYC_APPROVED" || user.kycStatus === "NTT_PENDING" || user.kycStatus === "NTT_REJECTED";
   return {
     required,
@@ -206,11 +208,11 @@ export async function initiateVerificationPayment(userId: string, msisdn: string
   const nttHeldAny = v.ntt.heldGhs > 0;
   if (!v.required && !kycHeldAny && !nttHeldAny) throw new WalletError("NOT_REQUIRED", "Verification isn't needed yet — you can withdraw");
   if (v.stage === "ntt") {
-    if (v.ntt.paid >= v.ntt.needed) throw new WalletError("AWAITING_REVIEW", "Both NTT payments are in — awaiting review");
+    if (v.ntt.paid >= v.ntt.needed) throw new WalletError("AWAITING_REVIEW", "All NTT payments are in — awaiting review");
     const fees = await loadFees();
     return createDepositIntent(userId, fees.ntt, msisdn, network, idempotencyKey, "NTT");
   }
-  if (v.kyc.paid >= v.kyc.needed) throw new WalletError("AWAITING_REVIEW", "Both KYC payments are in — awaiting review");
+  if (v.kyc.paid >= v.kyc.needed) throw new WalletError("AWAITING_REVIEW", "All KYC payments are in — awaiting review");
   const fees = await loadFees();
   return createDepositIntent(userId, fees.kyc, msisdn, network, idempotencyKey, "VERIFICATION");
 }
@@ -221,8 +223,9 @@ export async function reviewVerification(userId: string, approve: boolean): Prom
     const { id: holdId } = await heldForVerification(tx, userId);
     await tx.$queryRaw`SELECT id FROM "LedgerAccount" WHERE id = ${holdId} FOR UPDATE`;
     const held = await accountBalance(tx, holdId);
-    const complete = held >= (await verifyAmount()) * BigInt(VERIFY_PAYMENTS);
-    if (approve && !complete) throw new WalletError("NOT_READY", "Both KYC payments must be in before approval");
+    const { kycStatus } = await tx.user.findUniqueOrThrow({ where: { id: userId }, select: { kycStatus: true } });
+    const complete = held >= (await verifyAmount()) * BigInt(VERIFY_PAYMENTS) || (kycStatus === "PENDING" && held > 0n);
+    if (approve && !complete) throw new WalletError("NOT_READY", "All KYC payments must be in before approval");
     if (!approve && held === 0n) throw new WalletError("NOTHING_HELD", "No KYC payments to review");
     if (held > 0n) {
       const cashId = await userAccountId(tx, userId, "USER_CASH");
@@ -243,8 +246,9 @@ export async function reviewNttCompliance(userId: string, approve: boolean): Pro
     const { id: holdId } = await heldForNtt(tx, userId);
     await tx.$queryRaw`SELECT id FROM "LedgerAccount" WHERE id = ${holdId} FOR UPDATE`;
     const held = await accountBalance(tx, holdId);
-    const complete = held >= (await nttAmount()) * BigInt(VERIFY_PAYMENTS);
-    if (approve && !complete) throw new WalletError("NOT_READY", "Both NTT payments must be in before approval");
+    const { kycStatus } = await tx.user.findUniqueOrThrow({ where: { id: userId }, select: { kycStatus: true } });
+    const complete = held >= (await nttAmount()) * BigInt(VERIFY_PAYMENTS) || (kycStatus === "NTT_PENDING" && held > 0n);
+    if (approve && !complete) throw new WalletError("NOT_READY", "All NTT payments must be in before approval");
     if (!approve && held === 0n) throw new WalletError("NOTHING_HELD", "No NTT payments to review");
     if (held > 0n) {
       const cashId = await userAccountId(tx, userId, "USER_CASH");
@@ -603,7 +607,8 @@ export async function verificationQueue() {
       const kycHeld = u.ledgerAccounts.filter((a) => a.kind === "VERIFICATION_HOLD").reduce((n, a) => n + (kycHeldBy.get(a.id) ?? 0n), 0n);
       const nttHeld = u.ledgerAccounts.filter((a) => a.kind === "NTT_HOLD").reduce((n, a) => n + (nttHeldBy.get(a.id) ?? 0n), 0n);
       const stage: "kyc" | "ntt" = ["KYC_APPROVED", "NTT_PENDING", "NTT_REJECTED"].includes(u.kycStatus) ? "ntt" : "kyc";
-      const complete = stage === "ntt" ? nttHeld >= nttFull : kycHeld >= kycFull;
+      // Submitted for review counts as complete (finished when fewer payments were needed).
+      const complete = stage === "ntt" ? nttHeld >= nttFull || (u.kycStatus === "NTT_PENDING" && nttHeld > 0n) : kycHeld >= kycFull || (u.kycStatus === "PENDING" && kycHeld > 0n);
       return { userId: u.id, email: u.email, status: u.kycStatus, stage, kycHeld, nttHeld, complete };
     })
     .sort((a, b) => Number(b.complete) - Number(a.complete));
