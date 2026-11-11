@@ -39,7 +39,7 @@ import { referralCode } from "../src/lib/ids";
 import { createBooking, loadBooking, resolvePicks } from "../src/lib/bookings";
 import { registerUser, findUserByIdentifier } from "../src/lib/accounts";
 import { TERMS_VERSION } from "../src/lib/legal";
-import { createAdmin, consumeAccessToken, issueResetLink, setAdminStatus, updateAdminAccess } from "../src/lib/admins";
+import { createAdmin, consumeAccessToken, issueResetLink, promoteToAdmin, setAdminStatus, updateAdminAccess } from "../src/lib/admins";
 import { adminComparison, parseRange, scopeMetrics } from "../src/lib/adminAnalytics";
 import { adjustAdminBalance, adjustBalance, canViewPlayer } from "../src/lib/playerAdmin";
 import { audit, verifyAuditChain } from "../src/lib/audit";
@@ -1770,6 +1770,26 @@ describe("admin system", () => {
       referralSource: source,
       acceptTerms: true,
     });
+
+  it("lets a super admin make an existing player an admin or super admin, and nothing else", async () => {
+    const sa = await makeSuper();
+    const role = await prisma.adminRole.create({ data: { name: `Agent ${uniq()}`, permissions: ["referrals.view"] } });
+    const player = await fundedUser(25);
+    const after = await promoteToAdmin(sa, player.id, { role: "ADMIN", adminRoleId: role.id });
+    expect(after).toMatchObject({ role: "ADMIN", adminRoleId: role.id, status: "ACTIVE" });
+    expect(await userCashBalance(prisma, player.id)).toBe(toPesewas(25)); // keeps their balance
+    const log = await prisma.auditLog.findFirstOrThrow({ where: { action: "ADMIN_PROMOTE", targetId: player.id } });
+    expect(log.actorUserId).toBe(sa.id);
+    await expect(promoteToAdmin(sa, player.id, { role: "SUPER_ADMIN" })).rejects.toMatchObject({ code: "ALREADY_STAFF" }); // not for existing staff
+
+    const other = await fundedUser(0);
+    expect(await promoteToAdmin(sa, other.id, { role: "SUPER_ADMIN", adminRoleId: role.id })).toMatchObject({ role: "SUPER_ADMIN", adminRoleId: null });
+    await expect(promoteToAdmin(sa, sa.id, { role: "ADMIN" })).rejects.toMatchObject({ code: "SELF_EDIT" });
+    const suspended = await fundedUser(0);
+    await prisma.user.update({ where: { id: suspended.id }, data: { status: "SUSPENDED" } });
+    await expect(promoteToAdmin(sa, suspended.id, { role: "ADMIN" })).rejects.toMatchObject({ code: "NOT_ACTIVE" });
+    await expect(promoteToAdmin(sa, (await fundedUser(0)).id, { role: "ADMIN", adminRoleId: "no-such-role" })).rejects.toMatchObject({ code: "BAD_ROLE" });
+  });
 
   it("creates an admin with a unique 8-character code and a single-use setup link", async () => {
     const sa = await makeSuper();

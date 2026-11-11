@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { confirmPassword, requirePermission } from "@/lib/session";
-import { issueResetLink, removeAdmin, setAdminStatus, updateAdminAccess, updateAdminProfile } from "@/lib/admins";
+import { issueResetLink, promoteToAdmin, removeAdmin, setAdminStatus, updateAdminAccess, updateAdminProfile } from "@/lib/admins";
 import { json, errorResponse, clientIp } from "@/lib/http";
 import { siteUrl } from "@/lib/siteUrl";
 
@@ -25,9 +25,10 @@ const schema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("profile"), displayName: z.string().trim().min(2).max(60).optional(), username: username.optional(), password: z.string() }),
   z.object({ action: z.literal("reset"), password: z.string() }),
   z.object({ action: z.literal("remove"), password: z.string() }),
+  z.object({ action: z.literal("promote"), role: z.enum(["ADMIN", "SUPER_ADMIN"]), adminRoleId: z.string().min(1).nullable().optional(), password: z.string() }),
 ]);
 
-/** Change an administrator's access, status or profile, issue a reset link, or remove them. Super admin only. */
+/** Change an administrator's access, status or profile, issue a reset link, remove them, or make a player one. Super admin only. */
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const actor = await requirePermission("admins.manage");
@@ -37,6 +38,10 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     const ip = clientIp(req);
     if (input.action === "access") {
       await updateAdminAccess(actor, id, { role: input.role, adminRoleId: input.adminRoleId, permGrants: input.permGrants, permDenials: input.permDenials }, ip);
+      return json({ ok: true });
+    }
+    if (input.action === "promote") {
+      await promoteToAdmin(actor, id, { role: input.role, adminRoleId: input.adminRoleId }, ip);
       return json({ ok: true });
     }
     if (input.action === "remove") return json({ ok: true, status: (await removeAdmin(actor, id, ip)).status });

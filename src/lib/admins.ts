@@ -231,6 +231,29 @@ export async function updateAdminAccess(actor: User, targetId: string, change: A
   });
 }
 
+/**
+ * Make an existing player an administrator (or super admin). They keep their account, sign-in,
+ * balance and history; the new access applies on their next page load. Active players only.
+ */
+export async function promoteToAdmin(actor: User, targetId: string, access: { role: Extract<Role, "ADMIN" | "SUPER_ADMIN">; adminRoleId?: string | null }, ip?: string) {
+  if (actor.id === targetId) throw new AdminError("SELF_EDIT", "You can't change your own access", 403);
+  return prisma.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT id FROM "User" WHERE id = ${targetId} FOR UPDATE`;
+    const target = await tx.user.findUnique({ where: { id: targetId } });
+    if (!target) throw new AdminError("NOT_FOUND", "User not found", 404);
+    if (target.role !== "USER") throw new AdminError("ALREADY_STAFF", "This account is already an administrator");
+    if (target.status !== "ACTIVE") throw new AdminError("NOT_ACTIVE", "Only an active account can be made an administrator", 422);
+    const admin = access.role === "ADMIN";
+    if (admin && access.adminRoleId && !(await tx.adminRole.findUnique({ where: { id: access.adminRoleId } }))) throw new AdminError("BAD_ROLE", "That role doesn't exist", 422);
+    const after = await tx.user.update({
+      where: { id: targetId },
+      data: { role: access.role, adminRoleId: admin ? (access.adminRoleId ?? null) : null, permGrants: [], permDenials: [] },
+    });
+    await audit({ actorUserId: actor.id, action: "ADMIN_PROMOTE", targetType: "User", targetId, before: accessSnapshot(target), after: accessSnapshot(after), ip }, tx);
+    return after;
+  });
+}
+
 export async function setAdminStatus(actor: User, targetId: string, status: "ACTIVE" | "SUSPENDED", ip?: string) {
   if (actor.id === targetId) throw new AdminError("SELF_EDIT", "You can't change your own status", 403);
   return prisma.$transaction(async (tx) => {

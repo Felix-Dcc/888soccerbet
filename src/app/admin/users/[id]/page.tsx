@@ -7,7 +7,7 @@ import { canViewPlayer } from "@/lib/playerAdmin";
 import { accountBalance } from "@/lib/ledger";
 import { formatMilliOdds } from "@/lib/money";
 import { parseRange, scopeMetrics } from "@/lib/adminAnalytics";
-import { PlayerActions } from "@/components/admin/AdminForms";
+import { PlayerActions, PromoteToAdmin } from "@/components/admin/AdminForms";
 import { Avatar, EmptyState, Figure, Grid, Light, Panel, Pill, Strip, Tabs, betTone, ghs, payTone, statusTone, td, tdNum, when, type Level } from "@/components/admin/kit";
 
 export const dynamic = "force-dynamic";
@@ -228,6 +228,12 @@ export default async function PlayerPage({ params, searchParams }: { params: Pro
                 canVerify={can(u, "verification.review")}
                 verified={p.kycStatus === "VERIFIED"}
               />
+            </Panel>
+          )}
+
+          {can(u, "admins.manage") && p.status === "ACTIVE" && (
+            <Panel title="Make administrator" icon="team">
+              <PromoteToAdmin userId={p.id} email={p.email} roles={await prisma.adminRole.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true, permissions: true } })} />
             </Panel>
           )}
         </div>

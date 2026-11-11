@@ -150,6 +150,73 @@ export function CreateAdminForm({ perms, roles, defaultCommissionBp }: { perms: 
   );
 }
 
+/** Super admin: make an existing player an admin (with a role) or a super admin. */
+export function PromoteToAdmin({ userId, email, roles }: { userId: string; email: string; roles: RoleInfo[] }) {
+  const router = useRouter();
+  const [role, setRole] = useState<"ADMIN" | "SUPER_ADMIN">("ADMIN");
+  const [adminRoleId, setAdminRoleId] = useState("");
+  const [confirm, setConfirm] = useState(false);
+  const roleName = roles.find((r) => r.id === adminRoleId)?.name;
+
+  return (
+    <form
+      className="space-y-4"
+      onSubmit={(e) => {
+        e.preventDefault();
+        setConfirm(true);
+      }}
+    >
+      <p className="text-sm text-fog">They keep their account, sign-in, balance and history, and get console access on their next page load.</p>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div>
+          <label className="label" htmlFor="pa-type">Make them</label>
+          <select id="pa-type" className="input" value={role} onChange={(e) => setRole(e.target.value as typeof role)}>
+            <option value="ADMIN">Admin (permissions from a role)</option>
+            <option value="SUPER_ADMIN">Super admin (everything)</option>
+          </select>
+        </div>
+        {role === "ADMIN" && (
+          <div>
+            <label className="label" htmlFor="pa-role">Role</label>
+            <select id="pa-role" className="input" value={adminRoleId} onChange={(e) => setAdminRoleId(e.target.value)}>
+              <option value="">No role (add permissions later)</option>
+              {roles.map((r) => (
+                <option key={r.id} value={r.id}>
+                  {r.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+      </div>
+      <button className="btn-lime px-5 py-2.5 text-sm">Make administrator</button>
+      <ConfirmDialog
+        open={confirm}
+        title="Make administrator"
+        message={
+          role === "SUPER_ADMIN"
+            ? `${email} becomes a super admin with full access to everything, including money and other admins.`
+            : `${email} becomes an admin${roleName ? ` with the "${roleName}" role` : " with no permissions until you add some"}.`
+        }
+        confirmLabel="Make administrator"
+        onClose={() => setConfirm(false)}
+        onConfirm={async (password) => {
+          const { error } = await send(`/api/admin/admins/${userId}`, "PATCH", {
+            action: "promote",
+            role,
+            adminRoleId: role === "ADMIN" ? adminRoleId || null : null,
+            password,
+          });
+          if (error) return error;
+          setConfirm(false);
+          router.push(`/admin/admins/${userId}`);
+          return null;
+        }}
+      />
+    </form>
+  );
+}
+
 /** Super admin: change another admin's type, role and individual grants/denials. */
 export function AdminAccessEditor({
   adminId,

@@ -283,6 +283,7 @@ const ACTION_TEXT: Record<string, string> = {
   COMMISSION_RATE: "changed an admin's commission rate",
   COMMISSION_PAYOUT: "recorded a commission payout",
   ADMIN_ACCESS_CHANGE: "changed an administrator's access",
+  ADMIN_PROMOTE: "made a player an administrator",
   ADMIN_PROFILE_CHANGE: "edited an administrator's profile",
   ADMIN_RESET_LINK: "sent a password reset link",
   ADMIN_SETUP_COMPLETE: "finished setting up their account",
