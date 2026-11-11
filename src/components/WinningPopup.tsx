@@ -6,7 +6,7 @@ import Link from "next/link";
 import { formatPesewas } from "@/lib/money";
 import { Logo } from "./Logo";
 import { ShareTicket } from "./ShareTicket";
-import trophyArt from "../../public/img/pin/trophy-congratulations.png";
+import trophyArt from "../../public/img/trophy-win.png";
 
 interface Win {
   id: string;
@@ -200,7 +200,7 @@ function WinCard({ win, remaining, onClose }: { win: Win; remaining: number; onC
   );
 }
 
-/** The trophy picture (see public/img/pin/CREDITS.md), cut out of its black backdrop. */
+/** The gold trophy picture (supplied by the site owner, transparent background). */
 function TrophyArt() {
   return (
     <Image
