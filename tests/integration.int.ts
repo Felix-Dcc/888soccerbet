@@ -480,17 +480,44 @@ describe("minimums and withdrawal verification", () => {
     await settleFixture(fixture.id, 1, 0);
   };
 
-  it("isn't needed until a win pays out over GHS 1000", async () => {
-    const user = await fundedUser(0);
-    await win(user.id, 1000); // exactly 1000: not over
-    expect(await verificationState(user.id)).toMatchObject({ required: false });
-    await expect(initiateVerificationPayment(user.id, "0241234567", randomUUID())).rejects.toMatchObject({ code: "NOT_REQUIRED" });
-    await initiateWithdrawal(user.id, 100, "0241234567", randomUUID()); // unverified, but allowed
-    expect(await userCashBalance(prisma, user.id)).toBe(toPesewas(900));
+  it("is triggered only by a win of GHS 1000+ (or a cash out paying that much); never of staff", async () => {
+    const fresh = await fundedUser(500); // never bet
+    expect(await verificationState(fresh.id)).toMatchObject({ required: false });
+    await initiateWithdrawal(fresh.id, 100, "0241234567", randomUUID()); // goes through
 
-    await win(user.id, 1002);
-    expect(await verificationState(user.id)).toMatchObject({ required: true, stage: "kyc", kyc: { paid: 0 } });
-    await expect(initiateWithdrawal(user.id, 100, "0241234567", randomUUID())).rejects.toMatchObject({ code: "VERIFICATION_REQUIRED" });
+    const under = await fundedUser(0);
+    await win(under.id, 998); // just under the trigger
+    expect(await verificationState(under.id)).toMatchObject({ required: false });
+    await initiateWithdrawal(under.id, 100, "0241234567", randomUUID());
+
+    const exactly = await fundedUser(0);
+    await win(exactly.id, 1000); // the trigger itself
+    expect(await verificationState(exactly.id)).toMatchObject({ required: true, stage: "kyc" });
+    await expect(initiateWithdrawal(exactly.id, 100, "0241234567", randomUUID())).rejects.toMatchObject({ code: "VERIFICATION_REQUIRED" });
+
+    // A full cash out settles as WON with potentialPayout 0, so only what it paid decides.
+    const cashOutFor = async (stakeGhs: number) => {
+      const u = await fundedUser(stakeGhs);
+      const { home } = await makeMatch({ home: 2.0, draw: 3.0, away: 4.0 });
+      const placed = await placeBet(u.id, { idempotencyKey: randomUUID(), stakeGhs, acceptOddsChange: false, selections: [{ selectionId: home.id, expectedMilliOdds: 2000 }] });
+      const bet = await prisma.bet.findUniqueOrThrow({ where: { ref: placed.ref } });
+      const quote = await quoteForBet(bet.id);
+      if (!quote.available) throw new Error("cash out unavailable");
+      await cashOut({ betId: bet.id, userId: u.id, expected: quote.offer, idempotencyKey: randomUUID() });
+      const paid = (await prisma.cashout.findFirstOrThrow({ where: { betId: bet.id } })).amount;
+      return { u, paid };
+    };
+    const small = await cashOutFor(800); // pays under GHS 1000
+    expect(small.paid < 100000n).toBe(true);
+    expect(await verificationState(small.u.id)).toMatchObject({ required: false });
+    const big = await cashOutFor(1500);
+    expect(big.paid >= 100000n).toBe(true);
+    expect(await verificationState(big.u.id)).toMatchObject({ required: true });
+    await expect(initiateWithdrawal(big.u.id, 10, "0241234567", randomUUID())).rejects.toMatchObject({ code: "VERIFICATION_REQUIRED" });
+
+    const staff = await prisma.user.create({ data: { email: `adm_${randomUUID()}@test.gh`, passwordHash: "x", role: "ADMIN", referralCode: referralCode() } });
+    expect(await verificationState(staff.id)).toMatchObject({ required: false });
+    await expect(initiateVerificationPayment(staff.id, "0241234567", randomUUID())).rejects.toMatchObject({ code: "NOT_REQUIRED" });
     expect(await ledgerIsBalanced()).toBe(true);
   });
 

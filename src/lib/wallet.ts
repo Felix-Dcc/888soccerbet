@@ -28,8 +28,9 @@ export async function minDeposit() {
 }
 
 /**
- * Two-stage withdrawal verification, triggered once a player wins a bet paying out more than
- * VERIFY_AFTER_WIN_GHS. Each stage requires VERIFY_PAYMENTS separate payments held until admin review.
+ * Two-stage withdrawal verification, required of a player (never staff) once a bet wins GHS
+ * VERIFY_WIN_GHS or more, or a single cash out pays that much. Each stage requires VERIFY_PAYMENTS
+ * separate payments held until admin review.
  *
  * Stage 1 — KYC: payments of kycVerificationFeeGhs, held in VERIFICATION_HOLD.
  *   approve → KYC_APPROVED (moves to stage 2); reject → REJECTED (can retry stage 1).
@@ -42,12 +43,16 @@ export async function minDeposit() {
  * finished it when fewer payments were needed are never asked for more.
  */
 export const VERIFY_PAYMENTS = 5;
-export const verifyAfterWin = () => toPesewas(process.env.VERIFY_AFTER_WIN_GHS ?? "1000");
+/** A win (or a single cash out) of this much or more triggers verification. Fixed here on purpose: the old VERIFY_AFTER_WIN_GHS setting is ignored. */
+export const VERIFY_WIN_GHS = 1000;
 
 async function verificationRequired(db: Prisma.TransactionClient | typeof prisma, userId: string): Promise<boolean> {
   const user = await db.user.findUnique({ where: { id: userId }, select: { role: true } });
-  if (user && isStaff(user)) return false;
-  return !!(await db.bet.findFirst({ where: { userId, status: "WON", potentialPayout: { gt: verifyAfterWin() } }, select: { id: true } }));
+  if (!user || isStaff(user)) return false;
+  const min = toPesewas(VERIFY_WIN_GHS);
+  if (await db.bet.findFirst({ where: { userId, status: "WON", potentialPayout: { gte: min } }, select: { id: true } })) return true;
+  // A full cash out settles its bet as WON with potentialPayout 0, so cash outs are checked by what they paid.
+  return !!(await db.cashout.findFirst({ where: { bet: { userId }, amount: { gte: min } }, select: { id: true } }));
 }
 
 async function loadFees() {

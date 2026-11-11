@@ -29,6 +29,7 @@ export function WalletPanel({ minDepositGhs, minWithdrawalGhs, isAdmin = false, 
   const [amount, setAmount] = useState(depositStart);
   const verified = verification.status === "VERIFIED";
   const locked = mode === "withdraw" && verification.required && !verified;
+  // Hidden until a win of GHS 1000+ (or a cash out of GHS 1000+) makes it apply, or money is already held for review.
   const showVerification = verification.required || verification.kyc.heldGhs > 0 || verification.ntt.heldGhs > 0;
   const [msisdn, setMsisdn] = useState("");
   const [accountName, setAccountName] = useState(""); // withdrawals only: the name an admin pays by hand

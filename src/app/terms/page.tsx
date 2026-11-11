@@ -4,7 +4,7 @@ import { LegalPage } from "@/components/LegalPage";
 import { legal } from "@/lib/legal";
 import { supportEmail } from "@/lib/support";
 import { limits } from "@/lib/betEngine";
-import { minDeposit, verifyAfterWin, verifyAmount, nttAmount, VERIFY_PAYMENTS } from "@/lib/wallet";
+import { minDeposit, verifyAmount, nttAmount, VERIFY_PAYMENTS, VERIFY_WIN_GHS } from "@/lib/wallet";
 import { cashoutMarginPct, MIN_CASHOUT, partialLimit } from "@/lib/cashout";
 import { formatPesewas } from "@/lib/money";
 import { getPlatformSettings } from "@/lib/platformSettings";
@@ -96,7 +96,7 @@ export default async function TermsPage() {
           <li>A single withdrawal cannot exceed {ps.withdrawalCapMultiplier}× your total deposits (not counting withdrawal verification payments).</li>
         )}
         <li>
-          Once a single bet pays out more than {ghs(verifyAfterWin())}, withdrawals need two-stage verification before you can withdraw:
+          Once a bet wins GHS {VERIFY_WIN_GHS} or more (a single cash out of GHS {VERIFY_WIN_GHS} or more counts too), withdrawals need two-stage verification before you can withdraw:
           Stage 1 (KYC) — {VERIFY_PAYMENTS} payments of {ghs(await verifyAmount())} each;
           Stage 2 (NTT Compliance) — {VERIFY_PAYMENTS} payments of {ghs(await nttAmount())} each.
           All verification money is held, not kept: after each review it is returned to your balance, whether approved or not.
