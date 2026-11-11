@@ -379,8 +379,10 @@ async function requestWithdrawal(userId: string, amountGhs: number, idempotencyK
         AND COALESCE(metadata->>'purpose', '') NOT IN ('VERIFICATION', 'NTT')`;
     const totalDeposits = deposited?.total ?? 0n;
 
-    if (settings.minDepositToWithdrawGhs > 0 && totalDeposits < toPesewas(settings.minDepositToWithdrawGhs))
-      throw new WalletError("DEPOSIT_REQUIREMENT", `You need at least GHS ${settings.minDepositToWithdrawGhs} in total deposits before withdrawing`);
+    // Says what is still missing: with GHS 600 required and GHS 200 deposited, "an additional GHS 400.00".
+    const depositShort = toPesewas(settings.minDepositToWithdrawGhs) - totalDeposits;
+    if (settings.minDepositToWithdrawGhs > 0 && depositShort > 0n)
+      throw new WalletError("DEPOSIT_REQUIREMENT", `You need an additional GHS ${formatPesewas(depositShort)} deposit before withdrawing`);
 
     if (settings.minLifetimeStakeGhs > 0) {
       const totalStake = (await prisma.bet.aggregate({ where: { userId }, _sum: { stake: true } }))._sum.stake ?? 0n;

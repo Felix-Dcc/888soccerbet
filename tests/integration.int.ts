@@ -588,9 +588,16 @@ describe("minimums and withdrawal verification", () => {
       for (let i = 0; i < VERIFY_PAYMENTS; i++) await pay(user.id); // 5 x GHS 300 verification payments
       expect(await verifyPlayer(user.id)).toEqual({ released: toPesewas(1500) });
 
-      // GHS 200 real + GHS 1,500 verification: still short of GHS 600 in real deposits.
-      await expect(initiateWithdrawal(user.id, 100, "0241234567", randomUUID())).rejects.toMatchObject({ code: "DEPOSIT_REQUIREMENT" });
-      await succeed(await initiateDeposit(user.id, 400, "0241234567", randomUUID())); // GHS 600 real in total
+      // GHS 200 real + GHS 1,500 verification: still GHS 400 short of GHS 600 in real deposits, and it says so.
+      await expect(initiateWithdrawal(user.id, 100, "0241234567", randomUUID())).rejects.toMatchObject({
+        code: "DEPOSIT_REQUIREMENT",
+        message: "You need an additional GHS 400.00 deposit before withdrawing",
+      });
+      await succeed(await initiateDeposit(user.id, 100, "0241234567", randomUUID())); // GHS 300 real
+      await expect(initiateWithdrawal(user.id, 100, "0241234567", randomUUID())).rejects.toMatchObject({
+        message: "You need an additional GHS 300.00 deposit before withdrawing",
+      });
+      await succeed(await initiateDeposit(user.id, 300, "0241234567", randomUUID())); // GHS 600 real in total
       await initiateWithdrawal(user.id, 100, "0241234567", randomUUID());
 
       await pinSettings({ withdrawalCapMultiplier: 2 }); // cap = 2 x GHS 600 real = GHS 1,200

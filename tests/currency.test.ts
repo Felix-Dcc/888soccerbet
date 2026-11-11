@@ -34,6 +34,7 @@ describe("player currency", () => {
     expect(localizeMessage(NGN, "The minimum cash out is GHS 1.00")).toBe("The minimum cash out is ₦130.00");
     expect(localizeMessage(NGN, "over your daily deposit limit of GHS 1,000.00")).toBe("over your daily deposit limit of ₦130,000.00");
     expect(localizeMessage(NGN, "Withdrawal limited to 10× your total deposits")).toBe("Withdrawal limited to 10× your total deposits");
+    expect(localizeMessage(NGN, "You need an additional GHS 400.00 deposit before withdrawing")).toBe("You need an additional ₦52,000.00 deposit before withdrawing");
   });
 
   it("falls back to GHS when no usable rate is set", () => {
