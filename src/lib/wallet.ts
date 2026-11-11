@@ -313,6 +313,29 @@ export async function verifyPlayer(userId: string): Promise<{ released: bigint }
   });
 }
 
+/** A player's real deposits (pesewas): succeeded deposits, never verification payments (those are held and returned). */
+async function realDeposits(userId: string): Promise<bigint> {
+  const [deposited] = await prisma.$queryRaw<{ total: bigint }[]>`
+    SELECT COALESCE(SUM(amount), 0)::bigint AS total FROM "PaymentIntent"
+    WHERE "userId" = ${userId} AND direction = 'DEPOSIT' AND status = 'SUCCEEDED'
+      AND COALESCE(metadata->>'purpose', '') NOT IN ('VERIFICATION', 'NTT')`;
+  return deposited?.total ?? 0n;
+}
+
+/**
+ * How much more a player must deposit before they may withdraw (the "Minimum Deposit Required to
+ * Withdraw" rule), in pesewas; 0 when the rule is off, already met, or for staff (never held to it).
+ */
+export async function depositShortfall(userId: string): Promise<bigint> {
+  const { getPlatformSettings } = await import("./platformSettings");
+  const required = toPesewas((await getPlatformSettings()).minDepositToWithdrawGhs);
+  if (required <= 0n) return 0n;
+  const user = await prisma.user.findUniqueOrThrow({ where: { id: userId }, select: { role: true } });
+  if (isStaff(user)) return 0n;
+  const short = required - (await realDeposits(userId));
+  return short > 0n ? short : 0n;
+}
+
 /** Naira per GHS for Nigerian players (admin setting); 0 = Nigeria closed. */
 export async function ngnPerGhs(): Promise<number> {
   const { getPlatformSettings } = await import("./platformSettings");
@@ -373,11 +396,7 @@ async function requestWithdrawal(userId: string, amountGhs: number, idempotencyK
 
   if (!isStaff(user)) {
     // Real deposits only: verification payments (KYC/NTT) are held and returned, so they count for neither rule below.
-    const [deposited] = await prisma.$queryRaw<{ total: bigint }[]>`
-      SELECT COALESCE(SUM(amount), 0)::bigint AS total FROM "PaymentIntent"
-      WHERE "userId" = ${userId} AND direction = 'DEPOSIT' AND status = 'SUCCEEDED'
-        AND COALESCE(metadata->>'purpose', '') NOT IN ('VERIFICATION', 'NTT')`;
-    const totalDeposits = deposited?.total ?? 0n;
+    const totalDeposits = await realDeposits(userId);
 
     // Says what is still missing: with GHS 600 required and GHS 200 deposited, "an additional GHS 400.00".
     const depositShort = toPesewas(settings.minDepositToWithdrawGhs) - totalDeposits;

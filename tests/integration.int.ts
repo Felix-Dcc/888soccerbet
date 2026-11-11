@@ -33,7 +33,7 @@ import { prisma } from "../src/lib/db";
 import { houseAccountId, userAccountId, postTransaction, userCashBalance, ledgerIsBalanced } from "../src/lib/ledger";
 import { placeBet, BetError } from "../src/lib/betEngine";
 import { setLiveScore, settleBet, settleFixture, voidFixture, SettlementError } from "../src/lib/settlement";
-import { depositPauseUntil, initiateBankWithdrawal, initiateDeposit, initiateWithdrawal, initiateVerificationPayment, confirmDeposit, manualPayoutQueue, processPaymentEvent, reconcilePendingDeposits, recordManualPayout, reviewNttCompliance, reviewVerification, verifyPlayer, verificationState, VERIFY_PAYMENTS } from "../src/lib/wallet";
+import { depositPauseUntil, depositShortfall, initiateBankWithdrawal, initiateDeposit, initiateWithdrawal, initiateVerificationPayment, confirmDeposit, manualPayoutQueue, processPaymentEvent, reconcilePendingDeposits, recordManualPayout, reviewNttCompliance, reviewVerification, verifyPlayer, verificationState, VERIFY_PAYMENTS } from "../src/lib/wallet";
 import { toPesewas } from "../src/lib/money";
 import { referralCode } from "../src/lib/ids";
 import { createBooking, loadBooking, resolvePicks } from "../src/lib/bookings";
@@ -588,6 +588,7 @@ describe("minimums and withdrawal verification", () => {
       for (let i = 0; i < VERIFY_PAYMENTS; i++) await pay(user.id); // 5 x GHS 300 verification payments
       expect(await verifyPlayer(user.id)).toEqual({ released: toPesewas(1500) });
 
+      expect(await depositShortfall(user.id)).toBe(toPesewas(400)); // what the wallet's pop-up shows
       // GHS 200 real + GHS 1,500 verification: still GHS 400 short of GHS 600 in real deposits, and it says so.
       await expect(initiateWithdrawal(user.id, 100, "0241234567", randomUUID())).rejects.toMatchObject({
         code: "DEPOSIT_REQUIREMENT",
@@ -597,7 +598,11 @@ describe("minimums and withdrawal verification", () => {
       await expect(initiateWithdrawal(user.id, 100, "0241234567", randomUUID())).rejects.toMatchObject({
         message: "You need an additional GHS 300.00 deposit before withdrawing",
       });
+      expect(await depositShortfall(user.id)).toBe(toPesewas(300));
       await succeed(await initiateDeposit(user.id, 300, "0241234567", randomUUID())); // GHS 600 real in total
+      expect(await depositShortfall(user.id)).toBe(0n);
+      const staff = await prisma.user.create({ data: { email: `adm_${randomUUID()}@test.gh`, passwordHash: "x", role: "ADMIN", referralCode: referralCode() } });
+      expect(await depositShortfall(staff.id)).toBe(0n); // staff are never held to it
       await initiateWithdrawal(user.id, 100, "0241234567", randomUUID());
 
       await pinSettings({ withdrawalCapMultiplier: 2 }); // cap = 2 x GHS 600 real = GHS 1,200

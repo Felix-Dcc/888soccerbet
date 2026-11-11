@@ -35,6 +35,8 @@ export function WalletPanel({
   verification,
   nigerian = false,
   depositOnly = false,
+  depositRule = null,
+  support = null,
 }: {
   minDepositGhs: number;
   minWithdrawalGhs: number;
@@ -42,6 +44,9 @@ export function WalletPanel({
   verification: Verification;
   nigerian?: boolean;
   depositOnly?: boolean; // the first-deposit page: no Withdraw tab and no verification box
+  // "Minimum Deposit Required to Withdraw": the rule (GHS) and what this player still has to deposit (pesewas).
+  depositRule?: { requiredGhs: number; shortfall: string } | null;
+  support?: { url: string; label: string } | null; // Telegram support, offered on the pop-up
 }) {
   const ng = nigerian;
   const currency = useCurrency();
@@ -82,6 +87,19 @@ export function WalletPanel({
   // What a Naira amount really comes to once converted (it can be a few kobo off what was typed).
   const exactFor = (n: number) => (typedP(n) > 0n ? moneyIn(currency, typedP(n)) : "");
   const [review, setReview] = useState(false); // withdrawals confirm the details before sending
+  // Shown on tapping Withdraw (or if the server says so) while the player's deposits are short of the rule.
+  const [depositPrompt, setDepositPrompt] = useState(false);
+  const shortfall = depositRule ? BigInt(depositRule.shortfall) : 0n;
+  /** "Deposit now": switch to Deposit with what's missing filled in (never below the minimum deposit). */
+  const depositMissing = () => {
+    const minP = toPesewas(minDepositGhs);
+    setDepositPrompt(false);
+    setMode("deposit");
+    setMsg(null);
+    setPending(null);
+    setReview(false);
+    setAmount(numberIn(currency, shortfall > minP ? shortfall : minP));
+  };
 
   // Back from the payment provider's approval page (it adds ?status=&tx_ref= to our wallet URL).
   useEffect(() => {
@@ -209,6 +227,7 @@ export function WalletPanel({
       if (mode === "deposit") {
         afterCharge(d);
       } else {
+        setDepositPrompt(false);
         setWithdrawn({
           ref: d.intent.ref,
           amount: amountIn(currency, BigInt(d.intent.amount)),
@@ -224,6 +243,9 @@ export function WalletPanel({
         window.dispatchEvent(new Event("sb:refresh"));
         router.refresh();
       }
+    } else if (d.code === "DEPOSIT_REQUIREMENT" && depositRule) {
+      setDepositPrompt(true); // the pop-up explains it, with the way forward
+      router.refresh(); // and brings the amount up to date
     } else {
       setMsg({ ok: false, text: localizeMessage(currency, d.error ?? "Request failed") });
     }
@@ -291,7 +313,14 @@ export function WalletPanel({
         {(["deposit", "withdraw"] as Mode[]).map((m) => (
           <button
             key={m}
-            onClick={() => { setMode(m); setMsg(null); setPending(null); setReview(false); setAmount(m === "deposit" ? depositStart : 0); }}
+            onClick={() => {
+              setMode(m);
+              setMsg(null);
+              setPending(null);
+              setReview(false);
+              setAmount(m === "deposit" ? depositStart : 0);
+              if (m === "withdraw" && shortfall > 0n) setDepositPrompt(true);
+            }}
             className={`rounded-md py-2 text-sm font-semibold capitalize transition ${mode === m ? "bg-lime text-lime-ink" : "text-fog"}`}
           >
             {m}
@@ -482,8 +511,123 @@ export function WalletPanel({
       )}
 
       {withdrawn && <WithdrawalSuccess info={withdrawn} onClose={() => setWithdrawn(null)} />}
+      {depositPrompt && depositRule && shortfall > 0n && (
+        <DepositRequiredDialog
+          required={moneyIn(currency, toPesewas(depositRule.requiredGhs))}
+          deposited={moneyIn(currency, toPesewas(depositRule.requiredGhs) - shortfall)}
+          missing={moneyIn(currency, shortfall)}
+          support={support}
+          onDeposit={depositMissing}
+          onClose={() => setDepositPrompt(false)}
+        />
+      )}
       {isAdmin && withdrawn && <WithdrawalBanner info={withdrawn} />}
     </div>
+  );
+}
+
+/**
+ * Why a withdrawal can't go ahead yet: the player's deposits are short of the platform's "Minimum
+ * Deposit Required to Withdraw". Says what is still missing, and offers to deposit it now or ask support.
+ */
+function DepositRequiredDialog({
+  required,
+  deposited,
+  missing,
+  support,
+  onDeposit,
+  onClose,
+}: {
+  required: string;
+  deposited: string;
+  missing: string;
+  support: { url: string; label: string } | null;
+  onDeposit: () => void;
+  onClose: () => void;
+}) {
+  const depositRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    depositRef.current?.focus();
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      e.stopImmediatePropagation();
+      onClose();
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => {
+      window.removeEventListener("keydown", onKey, true);
+      document.body.style.overflow = prev;
+    };
+  }, [onClose]);
+
+  return createPortal(
+    <div role="dialog" aria-modal="true" aria-labelledby="dep-req-title" aria-describedby="dep-req-text" className="fixed inset-0 z-[70] flex items-end justify-center sm:items-center sm:p-4">
+      <div className="fixed inset-0 animate-fade-in bg-[#04060A]/60 backdrop-blur-[4px]" onClick={onClose} />
+      <div className="relative z-10 w-full max-w-md animate-win-pop overflow-hidden rounded-t-3xl border border-line bg-ink-700 shadow-lift sm:rounded-3xl motion-reduce:animate-none">
+        <div className="h-1 bg-gradient-to-r from-gold via-lime to-gold" aria-hidden />
+        <div className="p-5 sm:p-6">
+          <div className="flex items-start gap-3">
+            <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-gold/15 text-gold" aria-hidden>
+              <svg viewBox="0 0 24 24" className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="4" y="11" width="16" height="10" rx="2" />
+                <path d="M8 11V7a4 4 0 0 1 8 0v4" />
+              </svg>
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-fog-muted">Withdrawal requirement</p>
+              <h2 id="dep-req-title" className="mt-0.5 font-display text-xl font-extrabold leading-tight text-white">
+                Minimum deposit required
+              </h2>
+            </div>
+            <button type="button" onClick={onClose} aria-label="Close" className="grid h-9 w-9 shrink-0 place-items-center rounded-full text-fog hover:bg-ink-500 hover:text-white">
+              ✕
+            </button>
+          </div>
+
+          <div id="dep-req-text" className="mt-4 space-y-2 text-sm leading-relaxed text-fog">
+            <p>
+              To keep accounts secure, withdrawals open once your total deposits reach <strong className="text-white">{required}</strong>.
+            </p>
+            <p>
+              You&apos;ve deposited <strong className="text-white">{deposited}</strong> so far. Deposit <strong className="text-white">{missing}</strong> more to unlock
+              withdrawals.
+            </p>
+          </div>
+
+          <div className="mt-4 flex items-center justify-between gap-3 rounded-2xl border border-line bg-ink-800 px-4 py-3">
+            <div>
+              <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-fog-muted">Still to deposit</p>
+              <p className="mt-0.5 font-display text-2xl font-extrabold tabular-nums text-white">{missing}</p>
+            </div>
+            <span className="rounded-full bg-lime/15 px-2.5 py-1 text-[11px] font-bold text-lime">Added to your balance</span>
+          </div>
+
+          <button ref={depositRef} type="button" onClick={onDeposit} className="btn-lime mt-5 flex w-full items-center justify-center gap-2 py-3.5 text-base">
+            Deposit {missing} now
+            <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+              <path d="M5 12h14M13 6l6 6-6 6" />
+            </svg>
+          </button>
+          {support && (
+            <a
+              href={support.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mt-2.5 flex w-full items-center justify-center gap-2 rounded-xl border border-line bg-ink-800 py-3 text-sm font-semibold text-white hover:border-ink-400"
+            >
+              <svg viewBox="0 0 24 24" className="h-4 w-4 text-lime" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                <path d="m22 2-7 20-4-9-9-4z" />
+                <path d="M22 2 11 13" />
+              </svg>
+              Customer support ({support.label})
+            </a>
+          )}
+        </div>
+      </div>
+    </div>,
+    document.body,
   );
 }
 

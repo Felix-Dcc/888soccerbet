@@ -5,7 +5,8 @@ import { userCashBalance } from "@/lib/ledger";
 import { moneyIn } from "@/lib/currency";
 import { WalletCard } from "@/components/WalletCard";
 import { WalletPanel } from "@/components/WalletPanel";
-import { minDeposit, playerCurrency, reconcilePendingDeposits, verificationState } from "@/lib/wallet";
+import { depositShortfall, minDeposit, playerCurrency, reconcilePendingDeposits, verificationState } from "@/lib/wallet";
+import { telegramSupport } from "@/lib/support";
 import { getPlatformSettings } from "@/lib/platformSettings";
 
 export const dynamic = "force-dynamic";
@@ -16,12 +17,13 @@ export default async function WalletPage() {
   // Settle any deposit whose webhook never came, before showing the balance. Never blocks the page.
   await reconcilePendingDeposits(user.id).catch((e) => console.error("[wallet] reconcile failed:", e instanceof Error ? e.message : e));
 
-  const [balance, intents, verification, settings, currency] = await Promise.all([
+  const [balance, intents, verification, settings, currency, shortfall] = await Promise.all([
     userCashBalance(prisma, user.id),
     prisma.paymentIntent.findMany({ where: { userId: user.id }, orderBy: { createdAt: "desc" }, take: 20 }),
     verificationState(user.id),
     getPlatformSettings(),
     playerCurrency(user),
+    depositShortfall(user.id),
   ]);
 
   return (
@@ -36,6 +38,8 @@ export default async function WalletPage() {
           minDepositGhs={Number(await minDeposit()) / 100}
           minWithdrawalGhs={settings.minWithdrawalGhs}
           nigerian={user.country === "NG"}
+          depositRule={{ requiredGhs: settings.minDepositToWithdrawGhs, shortfall: shortfall.toString() }}
+          support={telegramSupport(settings.telegramSupport)}
           isAdmin={user.role !== "USER"}
           verification={{
             required: verification.required,
