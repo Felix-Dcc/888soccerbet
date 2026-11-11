@@ -16,13 +16,12 @@ export function RegisterForm({ nigeria }: { nigeria: boolean }) {
   );
 }
 
-/** One short step: full name, email, password and confirmation. No phone, birth date or email code. */
+/** One short step: full name, email, password, confirmation and an optional referral code. No phone, birth date or email code. */
 function Form({ nigeria }: { nigeria: boolean }) {
   const router = useRouter();
   const params = useSearchParams();
-  // An agent's referral link (?ref=CODE) still credits the sign-up to them; there is no field to type one.
-  const referralCode = params.get("ref") ?? "";
-  const [form, setForm] = useState({ name: "", email: "", password: "", confirmPassword: "", country: "GH" });
+  const linkCode = params.get("ref") ?? ""; // an agent's referral link fills the code in
+  const [form, setForm] = useState({ name: "", email: "", password: "", confirmPassword: "", country: "GH", referralCode: linkCode });
   const [accepted, setAccepted] = useState(false);
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
@@ -49,7 +48,8 @@ function Form({ nigeria }: { nigeria: boolean }) {
           country: nigeria && form.country === "NG" ? "NG" : "GH",
           acceptTerms: accepted,
           turnstileToken: token,
-          ...(referralCode ? { referralCode, referralSource: "LINK" } : {}),
+          // Unchanged code from the ?ref= link counts as a link sign-up; anything typed is a code.
+          referralSource: form.referralCode && form.referralCode === linkCode ? "LINK" : "CODE",
         }),
       });
       if (res.ok) {
@@ -100,6 +100,10 @@ function Form({ nigeria }: { nigeria: boolean }) {
         <div>
           <label className="label" htmlFor="confirmPassword">Confirm password</label>
           <PasswordInput id="confirmPassword" autoComplete="new-password" value={form.confirmPassword} onChange={set("confirmPassword")} />
+        </div>
+        <div>
+          <label className="label" htmlFor="referralCode">Referral code</label>
+          <input id="referralCode" autoCapitalize="characters" autoComplete="off" placeholder="Optional" className="input uppercase placeholder:normal-case placeholder:text-fog-muted" value={form.referralCode} onChange={onInput("referralCode")} />
         </div>
         {nigeria && (
           <div>

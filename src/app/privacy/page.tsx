@@ -30,7 +30,7 @@ export default async function PrivacyPage() {
           ["Name", "To address you in your account and our emails."],
           ["Email address", "To identify your account, sign you in and contact you about it."],
           ["Password", "To sign you in. We store only a scrypt hash, never the password itself."],
-          ["Referral link (optional)", "To link your account to the Bet Zone agent who invited you."],
+          ["Referral code (optional)", "To link your account to the Bet Zone agent who invited you."],
           ["Consent record", "That you confirmed you are 18 or older, and the date and version of the Terms and this policy you accepted."],
           ["Bets, cash outs and transactions", "To run your wallet, pay winnings and keep the records gaming and anti-money-laundering law require."],
           ["Mobile money numbers on payments", "To send and receive each payment and resolve disputes about it."],
