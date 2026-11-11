@@ -33,7 +33,7 @@ import { prisma } from "../src/lib/db";
 import { houseAccountId, userAccountId, postTransaction, userCashBalance, ledgerIsBalanced } from "../src/lib/ledger";
 import { placeBet, BetError } from "../src/lib/betEngine";
 import { setLiveScore, settleBet, settleFixture, voidFixture, SettlementError } from "../src/lib/settlement";
-import { depositPauseUntil, initiateDeposit, initiateWithdrawal, initiateVerificationPayment, confirmDeposit, manualPayoutQueue, processPaymentEvent, reconcilePendingDeposits, recordManualPayout, reviewVerification, verifyPlayer, verificationState } from "../src/lib/wallet";
+import { depositPauseUntil, initiateDeposit, initiateWithdrawal, initiateVerificationPayment, confirmDeposit, manualPayoutQueue, processPaymentEvent, reconcilePendingDeposits, recordManualPayout, reviewNttCompliance, reviewVerification, verifyPlayer, verificationState } from "../src/lib/wallet";
 import { toPesewas } from "../src/lib/money";
 import { referralCode } from "../src/lib/ids";
 import { createBooking, loadBooking, resolvePicks } from "../src/lib/bookings";
@@ -55,6 +55,21 @@ import { markWinsSeen, unseenWins } from "../src/lib/wins";
 import { ensureVerifyCode, ticketByVerifyCode, ticketByRef, ticketTotals } from "../src/lib/tickets";
 import { cashOut, quoteForBet, runAutoCashouts, setAutoCashout } from "../src/lib/cashout";
 import { confirmEmailCode, requestPasswordReset, requireVerifiedEmail, sendVerificationCode } from "../src/lib/emailFlows";
+import { invalidateSettingsCache, type SettingsPayload } from "../src/lib/platformSettings";
+
+/** Write the Platform Settings row the money paths read, and drop the cached copy so it applies at once. */
+async function pinSettings(data: Partial<SettingsPayload>) {
+  await prisma.platformSettings.upsert({ where: { id: "singleton" }, create: { id: "singleton", ...data }, update: data });
+  invalidateSettingsCache();
+}
+// Money-path tests use small round stakes, deposits and withdrawals with no withdrawal gates;
+// the real minimums (deposit 50, stake 250) have their own test below.
+const TEST_SETTINGS: Partial<SettingsPayload> = {
+  minStakeGhs: 1, minDepositGhs: 1, minWithdrawalGhs: 1,
+  maxStakeGhs: 5000, maxPayoutGhs: 200000,
+  minDepositToWithdrawGhs: 0, minLifetimeStakeGhs: 0, withdrawalCapMultiplier: 0,
+  kycVerificationFeeGhs: 500, nttComplianceFeeGhs: 500,
+};
 
 async function fundedUser(ghs: number) {
   const user = await prisma.user.create({
@@ -95,6 +110,7 @@ async function makeMatch(odds: { home: number; draw?: number; away: number }, st
 }
 
 beforeAll(async () => {
+  await pinSettings(TEST_SETTINGS);
   await houseAccountId(prisma, "HOUSE_PNL");
   await houseAccountId(prisma, "PAYMENT_CLEARING");
 });
@@ -451,16 +467,6 @@ describe("wallet", () => {
 });
 
 describe("minimums and withdrawal verification", () => {
-  // The int config lowers both minimums to GHS 1 for the other tests; restore the real ones here.
-  const withEnv = async (vars: Record<string, string>, fn: () => Promise<void>) => {
-    const old = Object.fromEntries(Object.keys(vars).map((k) => [k, process.env[k]]));
-    Object.assign(process.env, vars);
-    try {
-      await fn();
-    } finally {
-      for (const [k, v] of Object.entries(old)) v === undefined ? delete process.env[k] : (process.env[k] = v);
-    }
-  };
   const succeed = (intent: { ref: string; amount: bigint }) =>
     processPaymentEvent("sandbox", { providerEventId: `evt_${randomUUID()}`, ourRef: intent.ref, status: "SUCCEEDED", amountPesewas: intent.amount });
   const pay = async (userId: string) => succeed(await initiateVerificationPayment(userId, "0241234567", randomUUID()));
@@ -483,13 +489,14 @@ describe("minimums and withdrawal verification", () => {
     expect(await userCashBalance(prisma, user.id)).toBe(toPesewas(900));
 
     await win(user.id, 1002);
-    expect(await verificationState(user.id)).toMatchObject({ required: true, paid: 0 });
+    expect(await verificationState(user.id)).toMatchObject({ required: true, stage: "kyc", kyc: { paid: 0 } });
     await expect(initiateWithdrawal(user.id, 100, "0241234567", randomUUID())).rejects.toMatchObject({ code: "VERIFICATION_REQUIRED" });
     expect(await ledgerIsBalanced()).toBe(true);
   });
 
   it("rejects a deposit under GHS 50 and a stake under GHS 250", async () => {
-    await withEnv({ MIN_DEPOSIT_GHS: "50", MIN_STAKE_GHS: "250" }, async () => {
+    await pinSettings({ minDepositGhs: 50, minStakeGhs: 250 }); // the live defaults
+    try {
       const user = await fundedUser(1000);
       await expect(initiateDeposit(user.id, 49, "0241234567", randomUUID())).rejects.toMatchObject({ code: "DEPOSIT_TOO_LOW" });
       await expect(initiateDeposit(user.id, 50, "0241234567", randomUUID())).resolves.toMatchObject({ status: "PENDING" });
@@ -498,32 +505,45 @@ describe("minimums and withdrawal verification", () => {
         placeBet(user.id, { idempotencyKey: randomUUID(), stakeGhs, acceptOddsChange: false, selections: [{ selectionId: home.id, expectedMilliOdds: 2000 }] });
       await expect(bet(249)).rejects.toBeInstanceOf(BetError);
       await expect(bet(250)).resolves.toBeTruthy();
-    });
+    } finally {
+      await pinSettings(TEST_SETTINGS);
+    }
   });
 
-  it("doesn't count a normal deposit, holds two payments, then approval releases them and unlocks withdrawals", async () => {
+  it("doesn't count a normal deposit, holds two KYC then two NTT payments, and each approval releases them; then withdrawals unlock", async () => {
     const user = await fundedUser(0);
     await win(user.id, 1002); // cash 1002
     await succeed(await initiateDeposit(user.id, 500, "0241234567", randomUUID())); // normal deposit
-    expect(await verificationState(user.id)).toMatchObject({ paid: 0, status: "UNVERIFIED" });
+    expect(await verificationState(user.id)).toMatchObject({ stage: "kyc", kyc: { paid: 0 }, status: "UNVERIFIED" });
     await expect(initiateWithdrawal(user.id, 100, "0241234567", randomUUID())).rejects.toMatchObject({ code: "VERIFICATION_REQUIRED" });
 
+    // Stage 1: KYC
     await pay(user.id);
-    expect(await verificationState(user.id)).toMatchObject({ paid: 1, held: toPesewas(500), status: "UNVERIFIED" }); // bar half full
+    expect(await verificationState(user.id)).toMatchObject({ kyc: { paid: 1, heldGhs: 500 }, status: "UNVERIFIED" }); // bar half full
     expect(await userCashBalance(prisma, user.id)).toBe(toPesewas(1502)); // held, not spendable
     await expect(reviewVerification(user.id, true)).rejects.toMatchObject({ code: "NOT_READY" });
 
     await pay(user.id);
-    expect(await verificationState(user.id)).toMatchObject({ paid: 2, held: toPesewas(1000), status: "PENDING" }); // bar full
+    expect(await verificationState(user.id)).toMatchObject({ kyc: { paid: 2, heldGhs: 1000 }, status: "PENDING" }); // bar full
     await expect(initiateVerificationPayment(user.id, "0241234567", randomUUID())).rejects.toMatchObject({ code: "AWAITING_REVIEW" });
     await expect(initiateWithdrawal(user.id, 100, "0241234567", randomUUID())).rejects.toMatchObject({ code: "VERIFICATION_REQUIRED" });
 
-    expect(await reviewVerification(user.id, true)).toEqual({ released: toPesewas(1000) });
-    expect(await verificationState(user.id)).toMatchObject({ held: 0n, status: "VERIFIED" });
+    expect(await reviewVerification(user.id, true)).toEqual({ released: toPesewas(1000), nextStatus: "KYC_APPROVED" });
+    expect(await verificationState(user.id)).toMatchObject({ stage: "ntt", kyc: { heldGhs: 0 }, status: "KYC_APPROVED" });
     expect(await userCashBalance(prisma, user.id)).toBe(toPesewas(2502));
+    await expect(initiateWithdrawal(user.id, 100, "0241234567", randomUUID())).rejects.toMatchObject({ code: "VERIFICATION_REQUIRED" });
+
+    // Stage 2: NTT compliance
+    await pay(user.id);
+    await pay(user.id);
+    expect(await verificationState(user.id)).toMatchObject({ ntt: { paid: 2, heldGhs: 1000 }, status: "NTT_PENDING" });
+    await expect(initiateVerificationPayment(user.id, "0241234567", randomUUID())).rejects.toMatchObject({ code: "AWAITING_REVIEW" });
+    expect(await reviewNttCompliance(user.id, true)).toEqual({ released: toPesewas(1000), nextStatus: "VERIFIED" });
+    expect(await verificationState(user.id)).toMatchObject({ ntt: { heldGhs: 0 }, status: "VERIFIED" });
+    expect(await userCashBalance(prisma, user.id)).toBe(toPesewas(3502));
     await expect(initiateVerificationPayment(user.id, "0241234567", randomUUID())).rejects.toMatchObject({ code: "ALREADY_VERIFIED" });
     await initiateWithdrawal(user.id, 100, "0241234567", randomUUID());
-    expect(await userCashBalance(prisma, user.id)).toBe(toPesewas(2402));
+    expect(await userCashBalance(prisma, user.id)).toBe(toPesewas(3402));
     expect(await ledgerIsBalanced()).toBe(true);
   });
 
@@ -532,11 +552,11 @@ describe("minimums and withdrawal verification", () => {
     await win(user.id, 1002); // a big win makes verification required
     await expect(initiateWithdrawal(user.id, 100, "0241234567", randomUUID())).rejects.toMatchObject({ code: "VERIFICATION_REQUIRED" });
     await pay(user.id); // only one of the two payments in; GHS 500 held
-    expect(await verificationState(user.id)).toMatchObject({ paid: 1, held: toPesewas(500), status: "UNVERIFIED" });
+    expect(await verificationState(user.id)).toMatchObject({ kyc: { paid: 1, heldGhs: 500 }, status: "UNVERIFIED" });
 
     // Admin verifies directly, without the second payment: held money is released and the account is VERIFIED.
     expect(await verifyPlayer(user.id)).toEqual({ released: toPesewas(500) });
-    expect(await verificationState(user.id)).toMatchObject({ held: 0n, status: "VERIFIED" });
+    expect(await verificationState(user.id)).toMatchObject({ kyc: { heldGhs: 0 }, ntt: { heldGhs: 0 }, status: "VERIFIED" });
     expect(await userCashBalance(prisma, user.id)).toBe(toPesewas(1502)); // 1002 win + 500 released
 
     // The withdrawal now goes through without the standard verification step.
@@ -552,13 +572,13 @@ describe("minimums and withdrawal verification", () => {
     const user = await fundedUser(0);
     await win(user.id, 1002);
     await pay(user.id);
-    expect(await reviewVerification(user.id, false)).toEqual({ released: toPesewas(500) });
-    expect(await verificationState(user.id)).toMatchObject({ paid: 0, held: 0n, status: "REJECTED" });
+    expect(await reviewVerification(user.id, false)).toEqual({ released: toPesewas(500), nextStatus: "REJECTED" });
+    expect(await verificationState(user.id)).toMatchObject({ kyc: { paid: 0, heldGhs: 0 }, status: "REJECTED" });
     expect(await userCashBalance(prisma, user.id)).toBe(toPesewas(1502));
     await expect(reviewVerification(user.id, false)).rejects.toMatchObject({ code: "NOTHING_HELD" });
     await expect(initiateWithdrawal(user.id, 100, "0241234567", randomUUID())).rejects.toMatchObject({ code: "VERIFICATION_REQUIRED" });
     await pay(user.id);
-    expect(await verificationState(user.id)).toMatchObject({ paid: 1 });
+    expect(await verificationState(user.id)).toMatchObject({ kyc: { paid: 1 } });
     expect(await ledgerIsBalanced()).toBe(true);
   });
 });
@@ -2093,6 +2113,18 @@ describe("clearing demo data", () => {
     const tryerCash = await userAccountId(prisma, tryer.id, "USER_CASH");
     await postTransaction(prisma, "DEPOSIT", `deposit:${sbRef}`, [{ accountId: clearing, amount: -toPesewas(50) }, { accountId: tryerCash, amount: toPesewas(50) }]);
     await placeBet(tryer.id, pick(m.home));
+    // A test-address account with a ShinobiPay payout: real money left, so the account and its ledger stay.
+    const payee = await fundedUser(30);
+    await prisma.user.update({ where: { id: payee.id }, data: { kycStatus: "VERIFIED" } });
+    psp.override = { name: "shinobipay", isSandbox: false, payouts: "manual", initiate: async () => ({ providerRef: null, status: "PENDING" as const }), verifyWebhook: async () => ({ ok: false as const }) };
+    try {
+      await initiateWithdrawal(payee.id, 20, "0241234567", randomUUID());
+    } finally {
+      psp.override = null;
+    }
+    // A test-address account whose only ShinobiPay payment failed: no real money, but the provider's record stays, so it's closed.
+    const failedPayer = await fundedUser(0);
+    await prisma.paymentIntent.create({ data: { ref: `DEP-${randomUUID().slice(0, 8)}`, userId: failedPayer.id, direction: "DEPOSIT", amount: toPesewas(50), status: "FAILED", provider: "shinobipay", idempotencyKey: randomUUID() } });
     await settleFixture(m.fixture.id, 2, 0); // everyone on it wins GHS 20
     const realStaff = (await prisma.user.findMany({ where: { role: { not: "USER" } }, select: { email: true } })).filter((u) => !isTestAccount(u.email)).length;
 
@@ -2118,6 +2150,8 @@ describe("clearing demo data", () => {
 
     // The demo side is gone, and staff are never touched.
     expect(await prisma.paymentIntent.count({ where: { provider: "sandbox" } })).toBe(0);
+    expect(await userCashBalance(prisma, payee.id)).toBe(toPesewas(10)); // 30 in, 20 paid out
+    expect((await prisma.user.findUnique({ where: { id: failedPayer.id } }))?.status).toBe("CLOSED");
     const demoLeft = await prisma.user.findUnique({ where: { id: demo.id } });
     expect(demoLeft === null || demoLeft.status === "CLOSED").toBe(true);
 
