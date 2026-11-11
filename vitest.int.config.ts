@@ -28,8 +28,8 @@ export default defineConfig({
     environment: "node",
     include: ["tests/**/*.int.ts"],
     globalSetup: ["tests/int-setup.ts"],
-    // Money-path tests use small round stakes/deposits; the 250 / 50 site minimums have their own tests.
-    env: { DATABASE_URL: TEST_DATABASE_URL, MIN_STAKE_GHS: "1", MIN_DEPOSIT_GHS: "1" },
+    // Stake/deposit/withdrawal limits live in the PlatformSettings row; tests/integration.int.ts pins them.
+    env: { DATABASE_URL: TEST_DATABASE_URL },
     // Shared ledger invariant: run serially.
     fileParallelism: false,
     sequence: { concurrent: false },
