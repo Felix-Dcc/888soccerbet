@@ -42,7 +42,7 @@ export function CreateAdminForm({ perms, roles, defaultCommissionBp }: { perms: 
   // 0 to 100 with at most 2 decimals, or null when invalid.
   const ratePct = /^\d{1,3}(\.\d{1,2})?$/.test(rate.trim()) && Number(rate) <= 100 ? Number(rate) : null;
   const rateLabel = useDefaultRate ? `the default rate (${defaultCommissionBp / 100}%)` : `${ratePct ?? 0}% commission`;
-  const [grants, setGrants] = useState<string[]>(["dashboard.view", "referrals.view"]);
+  const [grants, setGrants] = useState<string[]>(["dashboard.view", "referrals.view", "commission.view"]);
   const [confirm, setConfirm] = useState(false);
   const [link, setLink] = useState<string | null>(null);
   const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLSelectElement>) => setF((s) => ({ ...s, [k]: e.target.value }));

@@ -42,10 +42,10 @@ export const NAV: { href: string; label: string; icon: IconName; anyOf: (Permiss
   { href: "/admin/settlement", label: "Settlement Engine", icon: "check", anyOf: ["settlement.manage"] },
   { href: "/admin/risk", label: "Risk Management", icon: "alert", anyOf: ["bets.view"] },
   { href: "/admin/promotions", label: "Promotions", icon: "referral", anyOf: ["reports.view"] },
-  { href: "/admin/admins", label: "Sub-Admins", icon: "team", anyOf: ["admins.view"] },
+  { href: "/admin/admins", label: "Team", icon: "team", anyOf: ["admins.view"] },
   { href: "/admin/roles", label: "Roles", icon: "roles", anyOf: ["roles.manage"] },
   { href: "/admin/referrals", label: "Referrals", icon: "referral", anyOf: ["referrals.view"] },
-  { href: "/admin/commission", label: "Commission", icon: "chart", anyOf: [] },
+  { href: "/admin/commission", label: "Commission", icon: "chart", anyOf: ["commission.view"] },
   { href: "/admin/audit", label: "Audit Log", icon: "audit", anyOf: ["audit_logs.view"] },
   { href: "/admin/system", label: "Settings", icon: "system", anyOf: ["system.view"] },
 ];

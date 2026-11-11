@@ -5,6 +5,17 @@ import { hashPassword } from "./auth";
 import { normaliseCode, referralCode } from "./ids";
 import { TERMS_VERSION } from "./legal";
 
+/**
+ * The account a referral code belongs to (dashes, spaces and case ignored). Admin codes used to be
+ * "ADM" + the 8 characters they are now, so a link shared before still finds its admin.
+ */
+async function findByReferralCode(raw: string) {
+  const c = normaliseCode(raw);
+  const found = await prisma.user.findUnique({ where: { referralCode: c } });
+  if (found || !/^ADM[A-Z0-9]{8}$/.test(c)) return found;
+  return prisma.user.findUnique({ where: { referralCode: c.slice(3) } });
+}
+
 export class AccountError extends Error {
   constructor(public code: string, message: string, public status = 422) {
     super(message);
@@ -57,13 +68,13 @@ export async function registerUser(input: RegisterInput): Promise<User> {
     // Checked here, never trusted from the browser. Only administrators' codes count (players don't
     // refer players). A suspended admin's code no longer brings in new players; players it already
     // referred keep their attribution.
-    const referrer = await prisma.user.findUnique({ where: { referralCode: normaliseCode(input.referralCode) } });
+    const referrer = await findByReferralCode(input.referralCode);
     if (!referrer || referrer.role === "USER" || referrer.status !== "ACTIVE") throw new AccountError("BAD_REFERRAL", "Referral code not found");
     referredById = referrer.id;
   } else if (process.env.DEFAULT_REFERRAL_CODE) {
     // No code given: the player goes to the default administrator. Never blocks a sign-up: if that
     // code is wrong or its admin isn't active, the player is simply left unattributed.
-    const fallback = await prisma.user.findUnique({ where: { referralCode: normaliseCode(process.env.DEFAULT_REFERRAL_CODE) } });
+    const fallback = await findByReferralCode(process.env.DEFAULT_REFERRAL_CODE);
     if (fallback && fallback.role !== "USER" && fallback.status === "ACTIVE") referredById = fallback.id;
   }
 

@@ -2,7 +2,6 @@ import Link from "next/link";
 import { siteUrl } from "@/lib/siteUrl";
 import { prisma } from "@/lib/db";
 import { previousRange, referralFunnel, scopeMetrics, scopeSeries, type Range } from "@/lib/adminAnalytics";
-import { formatReferralCode } from "@/lib/admins";
 import { CopyButton } from "@/components/CopyButton";
 import { TrendChart } from "./TrendChart";
 import { GgrBreakdown } from "./blocks";
@@ -31,7 +30,7 @@ export async function ReferralDashboard({
   const scope = { kind: "referrer" as const, adminId: admin.id };
   const prevR = previousRange(range);
   const search = q.trim().slice(0, 80);
-  const [m, prev, funnel, series, players] = await Promise.all([
+  const [m, prev, funnel, series, players, rate] = await Promise.all([
     scopeMetrics(scope, range),
     prevR ? scopeMetrics(scope, prevR) : Promise.resolve(null),
     referralFunnel(admin.id),
@@ -42,6 +41,10 @@ export async function ReferralDashboard({
       take: 30,
       select: { id: true, email: true, status: true, kycStatus: true, createdAt: true, referralSource: true },
     }),
+    Promise.all([
+      prisma.user.findUnique({ where: { id: admin.id }, select: { commissionBp: true } }),
+      prisma.platformSettings.findUnique({ where: { id: "singleton" }, select: { defaultCommissionBp: true } }),
+    ]).then(([a, s]) => a?.commissionBp ?? s?.defaultCommissionBp ?? 0),
   ]);
   const ids = players.map((p) => p.id);
   const [deps, stakes] = ids.length
@@ -56,8 +59,8 @@ export async function ReferralDashboard({
     : [[], []];
   const depOf = new Map(deps.map((d) => [d.userId, d.amount]));
   const stakeOf = new Map(stakes.map((s) => [s.userId, { stake: s._sum.stake ?? 0n, n: s._count }]));
-  const code = formatReferralCode(admin.referralCode, true);
-  const url = `${siteUrl()}/register?ref=${encodeURIComponent(admin.referralCode)}`;
+  const code = admin.referralCode;
+  const url = `${siteUrl()}/register?ref=${encodeURIComponent(code)}`;
 
   return (
     <>
@@ -88,7 +91,11 @@ export async function ReferralDashboard({
             ]}
           />
           <p className="mt-3 text-xs text-fog">
-            Commission: see the <Link href="/admin/commission" className="font-semibold text-lime hover:underline">Commission page</Link>. Bonuses: none issued.
+            Commission: {rate / 100}% of net deposits from code sign-ups (
+            <Link href="/admin/commission" className="font-semibold text-lime hover:underline">
+              Commission
+            </Link>
+            ). Bonuses: none issued.
           </p>
         </Panel>
       </div>

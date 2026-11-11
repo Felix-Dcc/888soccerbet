@@ -1,9 +1,9 @@
 import { adminPage } from "@/lib/adminPage";
 import { can } from "@/lib/permissions";
 import { parseRange } from "@/lib/adminAnalytics";
-import { formatReferralCode } from "@/lib/admins";
 import { commissionOverview, myCommission } from "@/lib/commission";
 import { CopyButton } from "@/components/CopyButton";
+import { siteUrl } from "@/lib/siteUrl";
 import { DefaultRateForm, RecordPayoutButton, SetRateButton } from "@/components/admin/CommissionForms";
 import { EmptyState, Figure, Head, Panel, Pill, Range, Strip, ghs, td, tdNum, when } from "@/components/admin/kit";
 
@@ -13,13 +13,14 @@ const pct = (bp: number) => `${bp / 100}%`;
 
 /** Every admin's own commission; super admins also see everyone's and set rates and record payouts. */
 export default async function CommissionPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
-  const gate = await adminPage();
+  const gate = await adminPage(["commission.view"]);
   if (!gate.ok) return gate.deny;
   const u = gate.user;
   const range = parseRange(await searchParams);
   const manage = can(u, "admins.manage");
   const [me, all] = await Promise.all([myCommission(u.id, range), manage ? commissionOverview() : null]);
   const rangeLabel = range.key === "all" ? "all time" : "selected range";
+  const link = `${siteUrl()}/register?ref=${encodeURIComponent(me.code)}`;
 
   return (
     <>
@@ -28,10 +29,14 @@ export default async function CommissionPage({ searchParams }: { searchParams: P
       </Head>
 
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
-        <Panel title="Your code" icon="link">
+        <Panel title="Your referral code and link" icon="link">
           <div className="flex flex-wrap items-center gap-3">
-            <span className="font-mono text-2xl font-bold tracking-[0.12em] text-white">{formatReferralCode(me.code, true)}</span>
-            <CopyButton text={formatReferralCode(me.code, true)} label="Copy code" />
+            <span className="font-mono text-2xl font-bold tracking-[0.12em] text-white">{me.code}</span>
+            <CopyButton text={me.code} label="Copy code" />
+          </div>
+          <div className="mt-3 flex min-w-0 items-center gap-2 rounded-xl border border-line bg-ink-800 px-3 py-2">
+            <span className="min-w-0 flex-1 truncate font-mono text-[13px] text-fog">{link}</span>
+            <CopyButton text={link} label="Copy link" />
           </div>
           <p className="mt-4 flex items-baseline gap-2">
             <span className="font-display text-4xl font-extrabold tabular-nums text-lime">{pct(me.bp)}</span>
@@ -132,7 +137,7 @@ export default async function CommissionPage({ searchParams }: { searchParams: P
                       <tr key={a.id}>
                         <td className={td}>
                           <span className="block max-w-[14rem] truncate font-semibold text-white">{name}</span>
-                          <span className="block font-mono text-[11px] text-fog">{formatReferralCode(a.referralCode, true)}</span>
+                          <span className="block font-mono text-[11px] text-fog">{a.referralCode}</span>
                         </td>
                         <td className={`${td} whitespace-nowrap`}>
                           <span className="font-semibold tabular-nums text-white">{pct(a.bp)}</span> <span className="text-xs text-fog">{a.isDefault ? "default" : "own"}</span>

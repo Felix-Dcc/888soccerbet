@@ -4,7 +4,6 @@ import { prisma } from "@/lib/db";
 import { adminPage } from "@/lib/adminPage";
 import { can, effectivePermissions, PERMISSIONS, permissionGroups, type Permission } from "@/lib/permissions";
 import { parseRange } from "@/lib/adminAnalytics";
-import { formatReferralCode } from "@/lib/admins";
 import { AdminAccessEditor, AdminActions, AdminBalanceCredit, AdminClearHistory } from "@/components/admin/AdminForms";
 import { userCashBalance } from "@/lib/ledger";
 import { formatPesewas } from "@/lib/money";
@@ -50,7 +49,7 @@ export default async function AdminProfilePage({ params, searchParams }: { param
             {admin.role === "SUPER_ADMIN" ? <Pill tone="info">super admin</Pill> : <Pill tone="neutral">{admin.adminRole?.name ?? "custom access"}</Pill>}
             <span>{admin.email}</span>
             {admin.adminUsername && <span>@{admin.adminUsername}</span>}
-            <span className="font-mono">{formatReferralCode(admin.referralCode, true)}</span>
+            <span className="font-mono">{admin.referralCode}</span>
             <span>Last login {ago(admin.lastLoginAt)}</span>
           </div>
         </div>

@@ -14,6 +14,7 @@ import { prisma } from "./db";
 import { hashPassword, hashToken } from "./auth";
 import { audit } from "./audit";
 import { cleanPermissions } from "./permissions";
+import { adminReferralCode } from "./ids";
 
 export class AdminError extends Error {
   constructor(
@@ -25,18 +26,10 @@ export class AdminError extends Error {
   }
 }
 
-const ALPHABET = "ACDEFGHJKLMNPQRSTUVWXYZ2345679";
 const SETUP_TTL_MS = 72 * 3600_000;
 const RESET_TTL_MS = 24 * 3600_000;
 
-/** Stored without dashes (codes are matched after normaliseCode strips them); shown as ADM-NAME-XXXX. */
-/** "ADM" + 8 random symbols. Nothing about the admin (name, username) is in it: codes are shared publicly. */
-export function newAdminReferralCode(): string {
-  const bytes = randomBytes(8);
-  return `ADM${[...bytes].map((b) => ALPHABET[b % ALPHABET.length]).join("")}`;
-}
-/** ADMXXXXXXXX -> ADM-XXXX-XXXX for reading aloud; anything else is shown as stored. */
-export const formatReferralCode = (code: string, staff: boolean) => (staff && /^ADM[A-Z0-9]{8}$/.test(code) ? `ADM-${code.slice(3, 7)}-${code.slice(7)}` : code);
+export const newAdminReferralCode = adminReferralCode;
 
 const accessSnapshot = (u: Pick<User, "role" | "status" | "adminRoleId" | "permGrants" | "permDenials">) => ({
   role: u.role,

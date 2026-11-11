@@ -39,7 +39,7 @@ import { referralCode } from "../src/lib/ids";
 import { createBooking, loadBooking, resolvePicks } from "../src/lib/bookings";
 import { registerUser, findUserByIdentifier } from "../src/lib/accounts";
 import { TERMS_VERSION } from "../src/lib/legal";
-import { createAdmin, consumeAccessToken, formatReferralCode, issueResetLink, setAdminStatus, updateAdminAccess } from "../src/lib/admins";
+import { createAdmin, consumeAccessToken, issueResetLink, setAdminStatus, updateAdminAccess } from "../src/lib/admins";
 import { adminComparison, parseRange, scopeMetrics } from "../src/lib/adminAnalytics";
 import { adjustAdminBalance, adjustBalance, canViewPlayer } from "../src/lib/playerAdmin";
 import { audit, verifyAuditChain } from "../src/lib/audit";
@@ -1731,12 +1731,12 @@ describe("admin system", () => {
       acceptTerms: true,
     });
 
-  it("creates an admin with a unique ADM code and a single-use setup link", async () => {
+  it("creates an admin with a unique 8-character code and a single-use setup link", async () => {
     const sa = await makeSuper();
     const { user, token } = await newAdmin(sa, { permGrants: ["referrals.view", "not.a.permission"] });
-    expect(user.referralCode).toMatch(/^ADM[ACDEFGHJKLMNPQRSTUVWXYZ2345679]{8}$/); // ADM + 8 random: no name in it
-    expect(user.referralCode).not.toMatch(/FELIX/i);
-    expect(formatReferralCode(user.referralCode, true)).toMatch(/^ADM-[A-Z0-9]{4}-[A-Z0-9]{4}$/);
+    expect(user.referralCode).toMatch(/^[ACDEFGHJKLMNPQRSTUVWXYZ2345679]{8}$/); // 8 random, letters and numbers: no name in it
+    expect(user.referralCode).toMatch(/[0-9]/);
+    expect(user.referralCode).toMatch(/[A-Z]/);
     expect(user.permGrants).toEqual(["referrals.view"]); // junk dropped
     await expect(consumeAccessToken(token, "a-strong-password")).resolves.toMatchObject({ userId: user.id });
     await expect(consumeAccessToken(token, "another-password1")).rejects.toMatchObject({ code: "BAD_LINK" }); // single use
@@ -1780,9 +1780,10 @@ describe("admin system", () => {
   it("attributes sign-ups to the admin whose code or link was used, once, server-side", async () => {
     const sa = await makeSuper();
     const { user: admin } = await newAdmin(sa);
-    const shown = formatReferralCode(admin.referralCode, true);
-    const viaLink = await register(shown.toLowerCase(), "LINK"); // dashes and case don't matter
+    const viaLink = await register(` ${admin.referralCode.slice(0, 4)}-${admin.referralCode.slice(4)} `.toLowerCase(), "LINK"); // dashes, spaces and case don't matter
     const viaCode = await register(admin.referralCode);
+    // A link shared before codes were shortened ("ADM" + the 8) still finds the admin.
+    expect(await register(`ADM-${admin.referralCode.slice(0, 4)}-${admin.referralCode.slice(4)}`)).toMatchObject({ referredById: admin.id });
     expect(viaLink).toMatchObject({ referredById: admin.id, referralSource: "LINK" });
     expect(viaCode).toMatchObject({ referredById: admin.id, referralSource: "CODE" });
     expect(viaLink.referredAt).toBeInstanceOf(Date);
