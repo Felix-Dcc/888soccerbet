@@ -19,7 +19,7 @@ const legTime = new Intl.DateTimeFormat("en-GB", {
 const WIN = "text-teal";
 const STATUS: Record<string, { label: string; tone: string }> = {
   WON: { label: "Won", tone: WIN },
-  LOST: { label: "Lost", tone: "text-[#FF6B6B]" },
+  LOST: { label: "Lost", tone: "text-danger" },
   VOID: { label: "Void", tone: "text-fog" },
   REJECTED: { label: "Rejected", tone: "text-fog" },
   PENDING: { label: "Running", tone: "text-gold" },
@@ -46,7 +46,7 @@ function SettledTicket({ bet, verifyCode, owner }: { bet: Ticket; verifyCode: st
   const amount = formatPesewas(ret ?? bet.potentialPayout);
 
   return (
-    <article aria-label={`Ticket ${bet.ref}`} className="theme-dark overflow-hidden rounded-2xl bg-[#14171C] text-white shadow-lift ring-1 ring-white/[0.06]">
+    <article aria-label={`Ticket ${bet.ref}`} className="overflow-hidden rounded-2xl bg-ink-700 text-white shadow-lift ring-1 ring-line">
       <div className="p-4 sm:p-6">
         <div className="flex items-center justify-between gap-3 text-xs tabular-nums text-fog-muted">
           <span>Ticket ID: {bet.ref}</span>
@@ -150,7 +150,7 @@ function SettledTicket({ bet, verifyCode, owner }: { bet: Ticket; verifyCode: st
                       </span>
                     )}
                     {leg.status === "LOST" && (
-                      <span className="text-[#FF6B6B]" aria-label="lost">
+                      <span className="text-danger" aria-label="lost">
                         ✕
                       </span>
                     )}
@@ -189,7 +189,7 @@ function LegMark({ status }: { status: string }) {
     );
   if (status === "LOST")
     return (
-      <span className={`${base} bg-[#FF6B6B] text-white`} aria-label="Lost">
+      <span className={`${base} bg-danger text-snow`} aria-label="Lost">
         ✕
       </span>
     );

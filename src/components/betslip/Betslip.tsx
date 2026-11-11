@@ -140,7 +140,7 @@ export function Betslip({ bare = false }: { bare?: boolean } = {}) {
     <div className={bare ? "" : "card overflow-hidden"}>
       <>
         {!bare && (
-          <div className="theme-dark flex items-center justify-between border-b border-line bg-ink-800 px-4 py-3">
+          <div className="flex items-center justify-between border-b border-line bg-ink-800 px-4 py-3">
             <span className="flex items-center gap-2 font-display font-bold text-white">
               Betslip
               {picks.length > 0 && (

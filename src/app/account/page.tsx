@@ -36,8 +36,8 @@ export default async function AccountPage() {
 
   return (
     <div className="space-y-5">
-      {/* Profile banner: stays on the dark brand body in both themes, like the header. */}
-      <section className="theme-dark relative isolate overflow-hidden rounded-2xl border border-white/[0.08] bg-[linear-gradient(135deg,#17202E_0%,#040913_58%,#0C1421_100%)] p-5 shadow-lift sm:p-7">
+      {/* Profile banner: follows the theme. */}
+      <section className="relative isolate overflow-hidden rounded-2xl border border-line bg-gradient-to-br from-ink-600 via-ink-800 to-ink-600 p-5 shadow-lift sm:p-7">
         <svg aria-hidden className="absolute inset-0 -z-10 h-full w-full" viewBox="0 0 800 220" preserveAspectRatio="none">
           <path d="M260 220 Q520 70 820 30 Q560 120 360 220 Z" fill="#00BA3B" opacity=".12" />
         </svg>

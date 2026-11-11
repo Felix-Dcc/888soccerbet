@@ -49,10 +49,10 @@ export function TableSkeleton({ groups = 2, rows = 4 }: { groups?: number; rows?
   );
 }
 
-/** Dark ticket placeholder while a ticket (or a verification lookup) loads. */
+/** Ticket placeholder while a ticket (or a verification lookup) loads. */
 export function TicketSkeleton() {
   return (
-    <div role="status" aria-label="Loading ticket" className="theme-dark mx-auto max-w-2xl overflow-hidden rounded-2xl bg-[#14171C] ring-1 ring-white/[0.06]">
+    <div role="status" aria-label="Loading ticket" className="mx-auto max-w-2xl overflow-hidden rounded-2xl bg-ink-700 ring-1 ring-line">
       <div className="space-y-4 p-4 sm:p-6" aria-hidden>
         <div className="flex justify-between">
           <div className="skeleton h-3 w-32" />

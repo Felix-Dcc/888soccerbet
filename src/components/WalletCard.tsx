@@ -15,7 +15,7 @@ export function WalletCard({ balance, holder, phone, since }: { balance: bigint;
   return (
     <section
       aria-label="Wallet balance"
-      className="theme-dark group relative isolate flex aspect-[1.586/1] w-full flex-col justify-between overflow-hidden rounded-2xl border border-white/[0.09] bg-[linear-gradient(135deg,#17202E_0%,#040913_52%,#0C1421_100%)] p-5 text-white shadow-[0_28px_50px_-22px_rgba(0,0,0,.9),inset_0_1px_0_rgba(255,255,255,.08)] transition-transform duration-300 ease-out hover:-translate-y-1 sm:p-6"
+      className="group relative isolate flex aspect-[1.586/1] w-full flex-col justify-between overflow-hidden rounded-2xl border border-line bg-gradient-to-br from-ink-600 via-ink-800 to-ink-600 p-5 text-white shadow-lift transition-transform duration-300 ease-out hover:-translate-y-1 sm:p-6"
     >
       {/* the logo's speed swoosh, sweeping across the card */}
       <svg aria-hidden className="absolute inset-0 -z-10 h-full w-full" viewBox="0 0 400 252" preserveAspectRatio="none">

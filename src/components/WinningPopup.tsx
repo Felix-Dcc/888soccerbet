@@ -128,9 +128,9 @@ function WinCard({ win, remaining, onClose }: { win: Win; remaining: number; onC
   const shown = formatPesewas(useCountUp(payout));
 
   return (
-    <div role="dialog" aria-modal="true" aria-labelledby="win-title" aria-describedby="win-amount" className="theme-dark fixed inset-0 z-[70] overflow-y-auto">
-      {/* See-through: the page stays visible behind, dimmed and softly blurred. */}
-      <div className="fixed inset-0 animate-fade-in bg-[#04060A]/55 backdrop-blur-[6px]" onClick={onClose} />
+    <div role="dialog" aria-modal="true" aria-labelledby="win-title" aria-describedby="win-amount" className="fixed inset-0 z-[70] overflow-y-auto">
+      {/* See-through: the page stays visible behind, veiled in the theme's background and softly blurred. */}
+      <div className="fixed inset-0 animate-fade-in bg-ink-900/75 backdrop-blur-[6px]" onClick={onClose} />
       <Confetti />
       <button
         ref={closeRef}
@@ -142,7 +142,7 @@ function WinCard({ win, remaining, onClose }: { win: Win; remaining: number; onC
       </button>
 
       <div className="relative z-10 flex min-h-full items-center justify-center px-5 py-14">
-        <div className="w-full max-w-sm animate-win-pop text-center [text-shadow:0_2px_10px_rgba(0,0,0,.65)] motion-reduce:animate-none">
+        <div className="win-shadow w-full max-w-sm animate-win-pop text-center motion-reduce:animate-none">
           {win.beatPct !== null && win.beatPct > 0 && (
             <p className="mx-auto mb-3 max-w-[16rem] text-[15px] leading-snug text-white/80">
               Your win beats <span className="font-bold text-teal">{win.beatPct}%</span> of wins on Bet Zone this month.
@@ -150,7 +150,7 @@ function WinCard({ win, remaining, onClose }: { win: Win; remaining: number; onC
           )}
           <h2
             id="win-title"
-            className="bg-[linear-gradient(180deg,#FFFFFF_30%,#FFE59A_70%,#F2B232)] bg-clip-text font-display text-[3.4rem] [text-shadow:none] font-black uppercase leading-[0.95] tracking-tight text-transparent drop-shadow-[0_4px_18px_rgba(255,196,64,.35)] sm:text-6xl"
+            className="win-title bg-clip-text font-display text-[3.4rem] [text-shadow:none] font-black uppercase leading-[0.95] tracking-tight text-transparent drop-shadow-[0_4px_18px_rgba(255,196,64,.35)] sm:text-6xl"
           >
             You won!
           </h2>
@@ -181,7 +181,7 @@ function WinCard({ win, remaining, onClose }: { win: Win; remaining: number; onC
             <Link
               href={`/bets/${encodeURIComponent(win.ref)}`}
               onClick={onClose}
-              className="btn h-14 w-full rounded-xl bg-lime text-base font-bold text-lime-ink hover:bg-lime-600"
+              className="btn h-14 w-full rounded-xl bg-lime text-base font-bold text-lime-ink [text-shadow:none] hover:bg-lime-600"
             >
               <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
                 <path d="M3 8a2 2 0 0 0 2-2h14a2 2 0 0 0 2 2v2a2 2 0 0 0 0 4v2a2 2 0 0 0-2 2H5a2 2 0 0 0-2-2v-2a2 2 0 0 0 0-4z" />
@@ -197,7 +197,7 @@ function WinCard({ win, remaining, onClose }: { win: Win; remaining: number; onC
                 code={win.verifyCode}
                 won
                 amount={amount}
-                className="btn h-12 w-full rounded-xl border border-[#FFD24D]/70 bg-[#FFD24D]/10 text-[15px] font-semibold text-[#FFE08A] hover:bg-[#FFD24D]/20"
+                className="win-gold btn h-12 w-full rounded-xl border text-[15px] font-semibold"
               />
             </div>
           </div>

@@ -547,8 +547,8 @@ function WithdrawalSuccess({ info, onClose }: { info: WithdrawnInfo; onClose: ()
     <div role="dialog" aria-modal="true" aria-labelledby="wdr-ok-title" className="fixed inset-0 z-[70] flex items-end justify-center sm:items-center sm:p-4">
       <div className="fixed inset-0 animate-fade-in bg-[#04060A]/60 backdrop-blur-[4px]" onClick={onClose} />
       <div className="relative z-10 max-h-[94vh] w-full max-w-md animate-win-pop overflow-y-auto rounded-t-3xl border border-line bg-ink-700 text-white shadow-lift sm:rounded-3xl motion-reduce:animate-none">
-        {/* receipt head: the logo on the site's dark navy, with a soft green swoosh */}
-        <div className="theme-dark relative isolate flex h-32 items-start justify-center overflow-hidden bg-[linear-gradient(135deg,#17202E_0%,#040913_60%,#0C1421_100%)] pt-5">
+        {/* receipt head: the logo on the theme's card colours, with a soft green swoosh */}
+        <div className="relative isolate flex h-32 items-start justify-center overflow-hidden bg-gradient-to-br from-ink-600 via-ink-800 to-ink-600 pt-5">
           <svg aria-hidden className="absolute inset-0 -z-10 h-full w-full" viewBox="0 0 400 128" preserveAspectRatio="none">
             <path d="M90 128 Q230 30 420 10 Q262 66 150 128 Z" fill="#00BA3B" opacity=".15" />
           </svg>
