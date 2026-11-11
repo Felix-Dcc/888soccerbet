@@ -91,7 +91,7 @@ export default async function TeamPage({ searchParams }: { searchParams: Promise
         icon="team"
         flush
         actions={
-          <nav aria-label="Sort" className="flex items-center gap-1 text-xs">
+          <nav aria-label="Sort" className="flex flex-wrap items-center gap-1 text-xs">
             <span className="text-fog">Sort</span>
             {sorts.map((s) => (
               <Link key={s} href={sortHref(s)} aria-current={s === sort ? "true" : undefined} className={`rounded px-2 py-1 font-semibold ${s === sort ? "bg-ink-500 text-white" : "text-fog hover:text-white"}`}>
@@ -109,14 +109,14 @@ export default async function TeamPage({ searchParams }: { searchParams: Promise
           {sorted.map((a) => (
             <tr key={a.id}>
               <td className={td}>
-                <Link href={`/admin/admins/${a.id}`} className="flex items-center gap-2.5">
+                <Link href={`/admin/admins/${a.id}`} className="flex min-w-0 items-center gap-2.5">
                   <Avatar name={a.displayName ?? a.email} size="h-8 w-8 text-[11px]" />
                   <span className="min-w-0">
-                    <span className="flex items-center gap-2 font-semibold text-white hover:text-lime">
+                    <span className="flex items-center gap-2 break-all font-semibold text-white hover:text-lime">
                       <Light level={a.status === "ACTIVE" ? "ok" : "critical"} />
                       {a.displayName ?? a.email}
                     </span>
-                    <span className="block truncate text-xs text-fog">{a.email}</span>
+                    <span className="block break-all text-xs text-fog">{a.email}</span>
                   </span>
                 </Link>
               </td>

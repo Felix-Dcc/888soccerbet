@@ -113,6 +113,23 @@ model CommissionPayout {
   @@index([adminId])
 }
 
+// An admin asking to be paid commission they are owed; a super admin approves (records the payout) or rejects it.
+model CommissionPayoutRequest {
+  id          String    @id @default(cuid())
+  adminId     String
+  amount      BigInt // pesewas
+  note        String // where to pay them, e.g. a MoMo number
+  status      String    @default("PENDING") // PENDING | APPROVED | REJECTED
+  reason      String? // why it was rejected
+  payoutId    String? // the CommissionPayout an approval recorded
+  decidedById String?
+  decidedAt   DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@index([adminId])
+  @@index([status])
+}
+
 model AdminInvite {
   id          String    @id @default(cuid())
   tokenHash   String    @unique

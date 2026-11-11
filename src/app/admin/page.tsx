@@ -164,7 +164,7 @@ export default async function AdminDashboard({ searchParams }: { searchParams: P
       )}
 
       {/* ── Quick-link cards (Bet Prime style) ── */}
-      <div className="grid gap-4 sm:grid-cols-3">
+      <div className="grid gap-4 lg:grid-cols-3">
         <QuickLink href="/admin/users" icon="players" iconBg="bg-[#7C3AED]/10 text-[#8B5CF6]" title="User Management" desc={`View ${m.players.total.toLocaleString()} registered players`} />
         <QuickLink href="/admin/games" icon="plus" iconBg="bg-[#2563EB]/10 text-[#3B82F6]" title="Match Management" desc="Score & settlement controls" />
         <QuickLink href="/admin/system" icon="coins" iconBg="bg-lime/10 text-lime" title="Finance & Withdrawals" desc={`Payouts & ${ghs(m.money.deposits.total)} deposits`} />
@@ -177,7 +177,8 @@ export default async function AdminDashboard({ searchParams }: { searchParams: P
         </Panel>
         {top && top.length > 0 && (
           <Panel title="Top users by stake" icon="players" flush>
-            <table className="w-full text-left text-sm">
+            <div className="relative overflow-x-auto">
+              <table className="w-full text-left text-sm">
               <thead>
                 <tr className="border-b border-line text-xs text-fog">
                   <th className="px-5 py-2 font-semibold">User</th>
@@ -197,7 +198,8 @@ export default async function AdminDashboard({ searchParams }: { searchParams: P
                   </tr>
                 ))}
               </tbody>
-            </table>
+              </table>
+            </div>
           </Panel>
         )}
       </div>

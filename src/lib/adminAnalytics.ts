@@ -282,6 +282,8 @@ const ACTION_TEXT: Record<string, string> = {
   COMMISSION_DEFAULT_RATE: "changed the default commission rate",
   COMMISSION_RATE: "changed an admin's commission rate",
   COMMISSION_PAYOUT: "recorded a commission payout",
+  COMMISSION_PAYOUT_REQUEST: "requested a commission payout",
+  COMMISSION_PAYOUT_REJECT: "rejected a commission payout request",
   ADMIN_ACCESS_CHANGE: "changed an administrator's access",
   ADMIN_PROMOTE: "made a player an administrator",
   ADMIN_PROFILE_CHANGE: "edited an administrator's profile",

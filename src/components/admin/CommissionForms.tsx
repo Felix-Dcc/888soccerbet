@@ -7,6 +7,7 @@ import { ConfirmDialog, send } from "./ConfirmDialog";
 const URL = "/api/admin/commission";
 // 0 to 100, at most 2 decimals; returns the percentage or null.
 const parsePct = (s: string) => (/^\d{1,3}(\.\d{1,2})?$/.test(s.trim()) && Number(s) <= 100 ? Number(s) : null);
+const money = (n: number) => n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const fmtPct = (bp: number) => `${(bp / 100).toString()}%`;
 
 /** Super admin: the rate every admin without their own rate earns. */
@@ -119,7 +120,7 @@ export function RecordPayoutButton({ adminId, name, owedGhs }: { adminId: string
         message={
           <div className="space-y-3">
             <p>
-              Record commission you paid to <b className="text-white">{name}</b>. They are owed <b className="text-white">GHS {owedGhs.toFixed(2)}</b>. This records the payment; it doesn&apos;t send money.
+              Record commission you paid to <b className="text-white">{name}</b>. They are owed <b className="text-white">GHS {money(owedGhs)}</b>. This records the payment; it doesn&apos;t send money.
             </p>
             <div>
               <label className="label" htmlFor={`cp-amt-${adminId}`}>Amount (GHS)</label>
@@ -135,7 +136,7 @@ export function RecordPayoutButton({ adminId, name, owedGhs }: { adminId: string
         onClose={() => setOpen(false)}
         onConfirm={async (password) => {
           if (value <= 0) return "Enter an amount above zero, up to 2 decimal places";
-          if (value > owedGhs) return `That's more than the GHS ${owedGhs.toFixed(2)} they're owed`;
+          if (value > owedGhs) return `That's more than the GHS ${money(owedGhs)} they're owed`;
           const { error } = await send(URL, "POST", { action: "payout", adminId, amountGhs: value, note: note.trim() || undefined, idempotencyKey: key, password });
           if (error) return error;
           setOpen(false);
@@ -145,5 +146,114 @@ export function RecordPayoutButton({ adminId, name, owedGhs }: { adminId: string
         }}
       />
     </>
+  );
+}
+
+/** An admin asks to be paid commission they are owed (up to that amount); a super admin approves or rejects it. */
+export function RequestPayoutButton({ owedGhs }: { owedGhs: number }) {
+  const router = useRouter();
+  const [open, setOpen] = useState(false);
+  const [amount, setAmount] = useState("");
+  const [note, setNote] = useState("");
+  const value = /^\d+(\.\d{1,2})?$/.test(amount.trim()) ? Number(amount) : 0;
+  return (
+    <>
+      <button type="button" className="btn-lime px-4 py-2 text-sm" onClick={() => { setAmount(owedGhs.toFixed(2)); setOpen(true); }}>
+        Request payout
+      </button>
+      <ConfirmDialog
+        open={open}
+        title="Request a payout"
+        message={
+          <div className="space-y-3">
+            <p>
+              Ask a super admin to pay you commission. You are owed <b className="text-white">GHS {money(owedGhs)}</b>. Once they approve, the payment is recorded here.
+            </p>
+            <div>
+              <label className="label" htmlFor="rq-amt">Amount (GHS)</label>
+              <input id="rq-amt" inputMode="decimal" className="input tabular-nums" value={amount} onChange={(e) => setAmount(e.target.value.replace(/[^\d.]/g, ""))} />
+            </div>
+            <div>
+              <label className="label" htmlFor="rq-note">Where to pay you</label>
+              <input id="rq-note" maxLength={200} placeholder="e.g. MTN MoMo 024 123 4567, Kofi Mensah" className="input" value={note} onChange={(e) => setNote(e.target.value)} />
+            </div>
+          </div>
+        }
+        confirmLabel="Send request"
+        onClose={() => setOpen(false)}
+        onConfirm={async (password) => {
+          if (value <= 0) return "Enter an amount above zero, up to 2 decimal places";
+          if (value > owedGhs) return `You can request up to GHS ${money(owedGhs)}`;
+          if (note.trim().length < 3) return "Say where to pay you, e.g. your MoMo number";
+          const { error } = await send(URL, "POST", { action: "request", amountGhs: value, note: note.trim(), password });
+          if (error) return error;
+          setOpen(false);
+          setNote("");
+          router.refresh();
+          return null;
+        }}
+      />
+    </>
+  );
+}
+
+/** Super admin: approve (record as paid) or reject a waiting payout request. */
+export function DecideRequestButtons({ requestId, name, amountGhs, note }: { requestId: string; name: string; amountGhs: string; note: string }) {
+  const router = useRouter();
+  const [action, setAction] = useState<"approve" | "reject" | null>(null);
+  const [reason, setReason] = useState("");
+  return (
+    <div className="flex justify-end gap-2">
+      <button type="button" className="btn-lime px-3 py-1.5 text-xs" onClick={() => setAction("approve")}>
+        Approve
+      </button>
+      <button type="button" className="btn border border-danger/50 px-3 py-1.5 text-xs text-danger hover:bg-danger/10" onClick={() => { setReason(""); setAction("reject"); }}>
+        Reject
+      </button>
+      <ConfirmDialog
+        open={action === "approve"}
+        title="Approve payout request"
+        message={
+          <>
+            Record <b className="text-white">GHS {amountGhs}</b> as paid to <b className="text-white">{name}</b>. Pay them outside the site to: <b className="text-white">{note}</b>. This doesn&apos;t send money.
+          </>
+        }
+        confirmLabel="Approve"
+        onClose={() => setAction(null)}
+        onConfirm={async (password) => {
+          const { error } = await send(URL, "POST", { action: "approve", requestId, password });
+          if (error) return error;
+          setAction(null);
+          router.refresh();
+          return null;
+        }}
+      />
+      <ConfirmDialog
+        open={action === "reject"}
+        danger
+        title="Reject payout request"
+        message={
+          <div className="space-y-3">
+            <p>
+              Reject <b className="text-white">{name}</b>&apos;s request for <b className="text-white">GHS {amountGhs}</b>? They&apos;ll see your reason and can request again.
+            </p>
+            <div>
+              <label className="label" htmlFor={`rj-${requestId}`}>Reason</label>
+              <input id={`rj-${requestId}`} maxLength={300} className="input" value={reason} onChange={(e) => setReason(e.target.value)} />
+            </div>
+          </div>
+        }
+        confirmLabel="Reject"
+        onClose={() => setAction(null)}
+        onConfirm={async (password) => {
+          if (reason.trim().length < 3) return "Give a reason for rejecting";
+          const { error } = await send(URL, "POST", { action: "reject", requestId, reason: reason.trim(), password });
+          if (error) return error;
+          setAction(null);
+          router.refresh();
+          return null;
+        }}
+      />
+    </div>
   );
 }

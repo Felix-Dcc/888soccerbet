@@ -5,6 +5,7 @@
  * real data; nothing here invents values.
  */
 import Link from "next/link";
+import { FitText } from "./FitText";
 import { formatPesewas } from "@/lib/money";
 
 // Kept here, not in adminAnalytics: client components import this kit, and that module pulls in Prisma.
@@ -130,7 +131,7 @@ export function Panel({
   return (
     <section className={`min-w-0 overflow-hidden rounded-2xl border border-line bg-ink-700 shadow-card ${className}`}>
       {(title || actions) && (
-        <div className={`flex min-h-14 items-center justify-between gap-3 px-5 py-3 ${flush ? "border-b border-line" : ""}`}>
+        <div className={`flex min-h-14 flex-wrap items-center justify-between gap-3 px-5 py-3 ${flush ? "border-b border-line" : ""}`}>
           {title && (
             <h2 className="flex items-center gap-2.5 text-[15px] font-semibold tracking-tight text-white">
               {icon && (
@@ -141,7 +142,7 @@ export function Panel({
               {title}
             </h2>
           )}
-          {actions && <div className="flex items-center gap-2 text-sm">{actions}</div>}
+          {actions && <div className="flex min-w-0 flex-wrap items-center gap-2 text-sm">{actions}</div>}
         </div>
       )}
       <div className={flush ? "" : title || actions ? "px-5 pb-5" : "p-5"}>{children}</div>
@@ -173,10 +174,12 @@ export function Delta({ cur, prev, invert = false }: { cur: number | bigint; pre
 export function Figure({ label, value, delta, note, tone, title }: { label: string; value: React.ReactNode; delta?: React.ReactNode; note?: React.ReactNode; tone?: "good" | "bad"; title?: string }) {
   return (
     <div className="min-w-0 p-4 2xl:p-5" title={title}>
-      <div className="truncate text-[13px] font-medium text-fog">{label}</div>
-      <div className={`mt-2 truncate font-display text-[22px] font-bold leading-none tracking-tight tabular-nums 2xl:text-[26px] ${tone === "good" ? "text-teal" : tone === "bad" ? "text-danger" : "text-white"}`}>{value}</div>
+      <div className="break-words text-[13px] font-medium text-fog">{label}</div>
+      <div className={`mt-2 overflow-hidden font-display text-[22px] font-bold leading-none tracking-tight tabular-nums 2xl:text-[26px] ${tone === "good" ? "text-teal" : tone === "bad" ? "text-danger" : "text-white"}`}>
+        <FitText>{value}</FitText>
+      </div>
       {(delta || note) && (
-        <div className="mt-3 flex items-center gap-2 truncate text-xs text-fog">
+        <div className="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1 break-words text-xs text-fog">
           {delta}
           {note}
         </div>
@@ -358,7 +361,7 @@ export function Grid({ head, right = [], children, minWidth = "40rem" }: { head:
   );
 }
 export const td = "px-5 py-3.5 align-middle";
-export const tdNum = "px-5 py-3.5 text-right tabular-nums";
+export const tdNum = "whitespace-nowrap px-5 py-3.5 text-right tabular-nums";
 
 export function EmptyState({ icon = "check", title, children }: { icon?: IconName; title: string; children?: React.ReactNode }) {
   return (
@@ -463,7 +466,7 @@ export function QuickLink({ href, icon, iconBg, title, desc }: { href: string; i
       </span>
       <div className="min-w-0 flex-1">
         <div className="text-[15px] font-bold text-white">{title}</div>
-        <div className="mt-0.5 truncate text-sm text-fog">{desc}</div>
+        <div className="mt-0.5 break-words text-sm text-fog">{desc}</div>
       </div>
       <Icon name="chevron" className="h-5 w-5 shrink-0 text-fog" />
     </a>

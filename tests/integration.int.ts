@@ -47,7 +47,7 @@ import { listFixtures, listResults, dataVersion } from "../src/lib/queries";
 import { applyMarkets, goLiveManualFixtures, retireOrphanedFeedFixtures, settleRecentlyFinished, syncFixtures, syncLiveOdds, updateLiveScores } from "../src/lib/sync";
 import { createManualFixture, rescheduleManualFixture } from "../src/lib/manualFixtures";
 import { isTestAccount, planDemoCleanup, runDemoCleanup } from "../src/lib/demoCleanup";
-import { myCommission, LIFETIME } from "../src/lib/commission";
+import { decidePayoutRequest, myCommission, LIFETIME, requestPayout } from "../src/lib/commission";
 import { manualFixtureSchema } from "../src/lib/validation";
 import { generateMatch } from "../src/lib/matchGenerator";
 import { advanceScriptedMatches, buildScript, scriptLengthMin, type MatchScript } from "../src/lib/scriptedMatches";
@@ -242,6 +242,38 @@ describe("wallet", () => {
     expect(c.lifetime.depositors).toBe(1);
     expect(c.lifetime.net).toBe(toPesewas(150)); // 100 + 70 - 20
     expect(c.lifetime.earned).toBe(toPesewas(15)); // 10%
+  });
+
+  it("pays commission through a request queue: one waiting at a time, never more than owed, decided once", async () => {
+    const sa = await prisma.user.create({ data: { email: `sa_${randomUUID()}@t.gh`, passwordHash: "x", role: "SUPER_ADMIN", referralCode: referralCode() } });
+    const admin = await prisma.user.create({
+      data: { email: `adm_${randomUUID()}@test.gh`, passwordHash: "x", role: "ADMIN", referralCode: referralCode(), commissionBp: 1000 }, // 10%
+    });
+    const player = await prisma.user.create({
+      data: { email: `t_${randomUUID()}@test.gh`, passwordHash: "x", dateOfBirth: new Date("1990-01-01"), referralCode: referralCode(), referredById: admin.id },
+    });
+    await prisma.paymentIntent.create({
+      data: { ref: `T-${randomUUID().slice(0, 8)}`, userId: player.id, direction: "DEPOSIT", amount: toPesewas(500), status: "SUCCEEDED", provider: "sandbox", idempotencyKey: randomUUID(), settledAt: new Date() },
+    }); // owed GHS 50
+
+    await expect(requestPayout(admin, toPesewas(50.01), "MoMo 0240000000")).rejects.toMatchObject({ code: "OVERPAY" });
+    const first = await requestPayout(admin, toPesewas(20), "MoMo 0240000000");
+    await expect(requestPayout(admin, toPesewas(5), "MoMo 0240000000")).rejects.toMatchObject({ code: "ALREADY_REQUESTED" });
+    await expect(decidePayoutRequest(sa, first.id, false, null)).rejects.toMatchObject({ code: "NO_REASON" });
+    await decidePayoutRequest(sa, first.id, false, "Wrong number");
+    await expect(decidePayoutRequest(sa, first.id, true, null)).rejects.toMatchObject({ code: "ALREADY_DECIDED" });
+    expect((await myCommission(admin.id, LIFETIME)).lifetime.paid).toBe(0n); // a rejection pays nothing
+
+    const second = await requestPayout(admin, toPesewas(30), "MoMo 0240000001");
+    await prisma.user.update({ where: { id: admin.id }, data: { commissionBp: 500 } }); // now owed GHS 25
+    await expect(decidePayoutRequest(sa, second.id, true, null)).rejects.toMatchObject({ code: "OVERPAY" });
+    await prisma.user.update({ where: { id: admin.id }, data: { commissionBp: 1000 } }); // owed GHS 50 again
+    await expect(decidePayoutRequest(sa, second.id, true, null)).resolves.toMatchObject({ status: "APPROVED" });
+    const c = await myCommission(admin.id, LIFETIME);
+    expect(c.lifetime.paid).toBe(toPesewas(30));
+    expect(c.lifetime.owed).toBe(toPesewas(20));
+    expect(c.pending).toBeNull();
+    expect(await prisma.commissionPayout.count({ where: { adminId: admin.id, idempotencyKey: `request:${second.id}` } })).toBe(1);
   });
 
   it("pauses deposits for 5 minutes after every 3rd failed deposit in a row, then allows 3 fresh tries", async () => {
