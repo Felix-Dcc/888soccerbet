@@ -10,6 +10,7 @@ import { WinningPopup } from "./WinningPopup";
 import { SportIcon } from "./SportIcon";
 import { DATA_CHANGED_EVENT, LiveRefresh } from "./LiveRefresh";
 import { CurrencyProvider } from "./CurrencyContext";
+import { DepositGate, GATE_OPEN_PATHS, type DepositGateInfo } from "./DepositGate";
 import type { Currency } from "@/lib/currency";
 import { FlashNotice } from "./FlashNotice";
 
@@ -123,6 +124,7 @@ export function AppShell({
   bonus,
   siteUrl,
   currency,
+  depositGate = null,
   children,
 }: {
   sidebar: React.ReactNode;
@@ -132,6 +134,7 @@ export function AppShell({
   bonus: BonusRules;
   siteUrl: string; // the public address shared links use (betzone.com.co in production)
   currency: Currency; // what the signed-in player sees money in (Naira for Nigerian players)
+  depositGate?: DepositGateInfo | null; // a new player who must make a first deposit before seeing the site
   children: React.ReactNode;
 }) {
   const [slipOpen, setSlipOpen] = useState(false);
@@ -157,6 +160,14 @@ export function AppShell({
     window.addEventListener(OPEN_SLIP_EVENT, onOpen);
     return () => window.removeEventListener(OPEN_SLIP_EVENT, onOpen);
   }, []);
+  // A new player sees only the first-deposit page (the Terms, Privacy and Refund pages stay readable).
+  if (depositGate && !GATE_OPEN_PATHS.includes(path)) {
+    return (
+      <CurrencyProvider value={currency}>
+        <DepositGate info={depositGate} />
+      </CurrencyProvider>
+    );
+  }
   return (
     <CurrencyProvider value={currency}>
     <BetslipProvider minStake={minStakeGhs} bonus={bonus} siteUrl={siteUrl}>

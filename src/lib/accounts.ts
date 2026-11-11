@@ -80,6 +80,7 @@ export async function registerUser(input: RegisterInput): Promise<User> {
           displayName: input.name?.trim() || null,
           passwordHash,
           country,
+          depositRequired: true, // the site opens once their first deposit succeeds
           termsAcceptedAt: new Date(),
           termsVersion: TERMS_VERSION,
           referralCode: referralCode(),

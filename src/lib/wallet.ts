@@ -533,6 +533,8 @@ export async function processPaymentEvent(provider: string, ev: NormalisedEvent)
           { accountId: clearingId, amount: -intent.amount },
           { accountId: target, amount: intent.amount },
         ], { ref: intent.ref });
+        // A spendable deposit opens the site for a new player (verification payments are held, so they don't).
+        if (kind === "DEPOSIT") await tx.user.updateMany({ where: { id: intent.userId, depositRequired: true }, data: { depositRequired: false } });
         await tx.paymentIntent.update({ where: { id: intent.id }, data: { status: "SUCCEEDED", settledAt: new Date() } });
         if (kind === "DEPOSIT") notice = "DEPOSIT"; // verification payments are held, not spendable: no "deposit received"
       } else {

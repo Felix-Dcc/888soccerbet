@@ -10,7 +10,8 @@ import { Splash, SPLASH_SCRIPT } from "@/components/Splash";
 import { THEME_SCRIPT } from "@/lib/theme";
 import { minStakeGhs } from "@/lib/betEngine";
 import { getCurrentUser } from "@/lib/session";
-import { playerCurrency } from "@/lib/wallet";
+import { minDeposit, playerCurrency } from "@/lib/wallet";
+import type { DepositGateInfo } from "@/components/DepositGate";
 import { GHS_CURRENCY, type Currency } from "@/lib/currency";
 import { bonusRules } from "@/lib/bonus";
 import { HotMatches } from "@/components/HotMatches";
@@ -62,18 +63,24 @@ async function HotMatchesWithData() {
   }
 }
 
-/** The signed-in player's display currency; a database hiccup falls back to GHS rather than breaking every page. */
-async function currencyForVisitor(): Promise<Currency> {
+/**
+ * The signed-in player's display currency, and the first-deposit page for a new player who hasn't
+ * deposited yet. A database hiccup falls back to GHS and no gate rather than breaking every page.
+ */
+async function visitor(): Promise<{ currency: Currency; gate: DepositGateInfo | null }> {
   try {
-    return await playerCurrency(await getCurrentUser());
+    const user = await getCurrentUser();
+    const currency = await playerCurrency(user);
+    const gate = user?.depositRequired ? { minDepositGhs: Number(await minDeposit()) / 100, nigerian: user.country === "NG" } : null;
+    return { currency, gate };
   } catch (e) {
-    console.error("[layout] currency unavailable:", e instanceof Error ? e.message : e);
-    return GHS_CURRENCY;
+    console.error("[layout] visitor details unavailable:", e instanceof Error ? e.message : e);
+    return { currency: GHS_CURRENCY, gate: null };
   }
 }
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
-  const [minStake, currency] = await Promise.all([minStakeGhs(), currencyForVisitor()]);
+  const [minStake, { currency, gate }] = await Promise.all([minStakeGhs(), visitor()]);
   return (
     // White is the default; the head script removes it for players who chose dark, and adds a
     // splash class, before hydration. Those differences are expected.
@@ -92,6 +99,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           bonus={bonusRules()}
           siteUrl={siteUrl()}
           currency={currency}
+          depositGate={gate}
           footer={<Footer nigeria={currency.code === "NGN"} />}
           sidebar={
             <Suspense>

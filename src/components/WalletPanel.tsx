@@ -28,7 +28,21 @@ interface Verification {
  * nigerian: a Nigerian player (pays on Flutterwave's checkout, is paid to a bank account). Amounts are
  * shown and typed in the player's currency (Naira for Nigerians) and sent to the API in GHS.
  */
-export function WalletPanel({ minDepositGhs, minWithdrawalGhs, isAdmin = false, verification, nigerian = false }: { minDepositGhs: number; minWithdrawalGhs: number; isAdmin?: boolean; verification: Verification; nigerian?: boolean }) {
+export function WalletPanel({
+  minDepositGhs,
+  minWithdrawalGhs,
+  isAdmin = false,
+  verification,
+  nigerian = false,
+  depositOnly = false,
+}: {
+  minDepositGhs: number;
+  minWithdrawalGhs: number;
+  isAdmin?: boolean;
+  verification: Verification;
+  nigerian?: boolean;
+  depositOnly?: boolean; // the first-deposit page: no Withdraw tab and no verification box
+}) {
   const ng = nigerian;
   const currency = useCurrency();
   const unit = unitOf(currency);
@@ -273,7 +287,7 @@ export function WalletPanel({ minDepositGhs, minWithdrawalGhs, isAdmin = false, 
 
   return (
     <div className="card p-5">
-      <div className="mb-4 grid grid-cols-2 gap-1 rounded-lg bg-ink-800 p-1">
+      {!depositOnly && <div className="mb-4 grid grid-cols-2 gap-1 rounded-lg bg-ink-800 p-1">
         {(["deposit", "withdraw"] as Mode[]).map((m) => (
           <button
             key={m}
@@ -283,9 +297,9 @@ export function WalletPanel({ minDepositGhs, minWithdrawalGhs, isAdmin = false, 
             {m}
           </button>
         ))}
-      </div>
+      </div>}
 
-      {showVerification && <VerificationBar v={verification} busy={busy || !!pending} onPay={payVerification} money={(ghs) => moneyIn(currency, toPesewas(ghs))} />}
+      {!depositOnly && showVerification && <VerificationBar v={verification} busy={busy || !!pending} onPay={payVerification} money={(ghs) => moneyIn(currency, toPesewas(ghs))} />}
 
       {approving ? (
         <section aria-labelledby="approve-title" className="rounded-xl border border-[#EF9F27] bg-[#FAEEDA] p-4">
