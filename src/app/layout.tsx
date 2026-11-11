@@ -3,6 +3,7 @@ import { Suspense } from "react";
 import { Sora, Manrope } from "next/font/google";
 import "./globals.css";
 import { AppShell } from "@/components/AppShell";
+import { siteUrl } from "@/lib/siteUrl";
 import { SideNav, type NavData } from "@/components/SideNav";
 import { Footer, SupportFab } from "@/components/Footer";
 import { Splash, SPLASH_SCRIPT } from "@/components/Splash";
@@ -76,6 +77,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         <AppShell
           minStakeGhs={minStake}
           bonus={bonusRules()}
+          siteUrl={siteUrl()}
           footer={<Footer />}
           sidebar={
             <Suspense>

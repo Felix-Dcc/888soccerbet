@@ -6,7 +6,6 @@ import { useBetslip, type Pick } from "./BetslipContext";
 import { drawSlipImage } from "./slipImage";
 import { combineMilliOdds, formatMilliOdds, formatPesewas, potentialPayout, toPesewas } from "@/lib/money";
 import { multipleBonus } from "@/lib/bonus";
-import { formatStamp } from "@/lib/time";
 import { newId } from "@/lib/clientId";
 import { Logo } from "../Logo";
 
@@ -489,21 +488,28 @@ function Booking({ picks, onLoad }: { picks: Pick[]; onLoad: (picks: Pick[]) => 
 }
 
 /**
- * Booking pop-up, laid out as a ticket: the logo on the brand header, the code as the hero with
- * what it holds, a tear line, then the shareable slip picture and the ways to send it.
+ * Booking pop-up, laid out like a printed betslip: brand header with the country and booking
+ * time, the code as the hero with the total odds, an example bet at GHS 100 with the real
+ * multiple bonus, every selection, then the ways to share it. A sheet on phones, a card above.
  */
 function BookingDialog({ booked, picks, onClose }: { booked: Booked; picks: Pick[]; onClose: () => void }) {
   const { code, image, at } = booked;
+  const { bonus, siteUrl } = useBetslip();
   const closeRef = useRef<HTMLButtonElement>(null);
   const [url, setUrl] = useState<string | null>(null);
-  const [zoom, setZoom] = useState(false);
   const [copied, setCopied] = useState<"code" | "link" | null>(null);
   const [saved, setSaved] = useState(false);
-  const link = `${window.location.origin}/?booking=${encodeURIComponent(code)}`;
+  const link = `${siteUrl}/?booking=${encodeURIComponent(code)}`;
+  const text = `Bet Zone booking code ${code}`;
+  const canShare = typeof navigator.share === "function";
   const canShareFile = !!image && !!navigator.canShare?.({ files: [image] });
   // iOS only puts images in Photos via the share sheet ("Save Image"); elsewhere a download
   // lands in the gallery's Downloads album.
   const ios = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+
+  const combined = combineMilliOdds(picks.map((p) => p.milliOdds));
+  const win = potentialPayout(EXAMPLE_STAKE, combined);
+  const extra = multipleBonus(win, picks.map((p) => p.milliOdds), bonus);
 
   useEffect(() => {
     if (!image) return;
@@ -512,34 +518,34 @@ function BookingDialog({ booked, picks, onClose }: { booked: Booked; picks: Pick
     return () => URL.revokeObjectURL(u);
   }, [image]);
 
-  const zoomRef = useRef(zoom);
-  zoomRef.current = zoom;
   useEffect(() => {
     closeRef.current?.focus();
-    // Capture phase + stop: Escape closes the enlarged picture first, then this pop-up — never
-    // the betslip drawer underneath.
+    // Capture phase + stop: Escape closes this pop-up, never the betslip drawer underneath.
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Escape") return;
       e.stopImmediatePropagation();
-      if (zoomRef.current) setZoom(false);
-      else onClose();
+      onClose();
     };
     window.addEventListener("keydown", onKey, true);
     return () => window.removeEventListener("keydown", onKey, true);
   }, [onClose]);
 
-  async function copy(text: string, what: "code" | "link") {
+  async function copy(value: string, what: "code" | "link") {
     try {
-      await navigator.clipboard.writeText(text);
+      await navigator.clipboard.writeText(value);
       setCopied(what);
       setTimeout(() => setCopied(null), 1500);
     } catch {
       /* clipboard blocked (insecure context): the code stays on screen to copy by hand */
     }
   }
+  function shareInApp() {
+    if (canShare) void navigator.share({ title: text, text, url: link }).catch(() => {});
+    else void copy(link, "link");
+  }
   function save() {
     if (!image || !url) return;
-    if (ios && canShareFile) return void navigator.share({ files: [image], title: `Bet Zone booking ${code}` }).catch(() => {});
+    if (ios && canShareFile) return void navigator.share({ files: [image], title: text }).catch(() => {});
     const a = document.createElement("a");
     a.href = url;
     a.download = image.name;
@@ -547,126 +553,171 @@ function BookingDialog({ booked, picks, onClose }: { booked: Booked; picks: Pick
     setSaved(true);
   }
 
-  const text = `Bet Zone booking code ${code}`;
-  const combined = combineMilliOdds(picks.map((p) => p.milliOdds));
-  const shareBtn = "flex flex-col items-center gap-1.5 text-[11px] font-medium text-fog transition-colors hover:text-white";
-  const shareIcon = "grid h-11 w-11 place-items-center rounded-full transition-transform hover:scale-105";
+  const shareBtn = "flex flex-col items-center gap-1.5 text-center text-[11px] font-medium leading-tight text-fog transition-colors hover:text-white disabled:opacity-40";
+  const shareIcon = "grid h-11 w-11 place-items-center rounded-full bg-ink-500 text-white transition-transform hover:scale-105";
+  const row = "flex items-center justify-between gap-3 tabular-nums";
 
   return (
-    <div role="dialog" aria-modal="true" aria-label={`Booking code ${code}`} className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+    <div role="dialog" aria-modal="true" aria-label={`Booking code ${code}`} className="fixed inset-0 z-[60] flex items-end justify-center sm:items-center sm:p-4">
       <div className="absolute inset-0 bg-black/70" onClick={onClose} />
-      <div className="relative w-full max-w-sm animate-fade-in overflow-hidden rounded-2xl border border-line bg-ink-700 shadow-lift">
-        {/* ticket head: the logo on the site's dark navy, with a soft green swoosh */}
-        <div className="theme-dark relative isolate flex items-center justify-center overflow-hidden bg-[linear-gradient(135deg,#17202E_0%,#040913_60%,#0C1421_100%)] px-6 py-5">
-          <svg aria-hidden className="absolute inset-0 -z-10 h-full w-full" viewBox="0 0 400 120" preserveAspectRatio="none">
-            <path d="M110 120 Q240 26 420 8 Q262 60 156 120 Z" fill="#00BA3B" opacity=".15" />
-          </svg>
-          <Logo size="lg" />
+      <div className="relative flex max-h-[92dvh] w-full max-w-md animate-fade-in flex-col overflow-hidden rounded-t-2xl border border-line bg-ink-800 text-white shadow-lift sm:rounded-2xl">
+        {/* brand header: logo, country, and when it was booked (follows the light/dark theme) */}
+        <div className="flex items-center gap-3 border-b border-line bg-ink-700 py-3 pl-4 pr-2">
+          <Logo size="sm" />
+          <span className="flex shrink-0 items-center gap-1.5 text-sm text-white">
+            <GhanaFlag />
+            Ghana
+          </span>
+          <span className="ml-auto text-right text-xs leading-snug text-fog">
+            Betslip
+            <span className="block tabular-nums">{slipTime(at)}</span>
+          </span>
           <button
             ref={closeRef}
             onClick={onClose}
             aria-label="Close"
-            className="absolute right-2.5 top-2.5 grid h-9 w-9 place-items-center rounded-full text-lg text-white/70 hover:bg-white/10 hover:text-white"
+            className="grid h-9 w-9 shrink-0 place-items-center rounded-full text-lg text-fog hover:bg-ink-600 hover:text-white"
           >
             ✕
           </button>
         </div>
-        <div className="h-1 bg-lime" />
 
-        {/* the code, and what it holds */}
-        <div className="px-6 pb-5 pt-5 text-center">
-          <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-fog">Booking code</p>
-          <p className="mt-1.5 select-all font-display text-[40px] font-extrabold leading-none tracking-[0.08em] text-white">{code}</p>
-          <p className="mt-2 text-xs tabular-nums text-fog-muted">{formatStamp(at)}</p>
-          <div className="mt-4 flex flex-wrap justify-center gap-2 text-xs">
-            <span className="rounded-full bg-ink-600 px-3 py-1 font-semibold text-fog">
-              {picks.length} {picks.length === 1 ? "selection" : "selections"}
-            </span>
-            <span className="rounded-full bg-gold/10 px-3 py-1 font-bold tabular-nums text-gold">Total odds {formatMilliOdds(combined)}</span>
+        <div className="min-h-0 flex-1 overflow-y-auto">
+          {/* the code and the total odds */}
+          <div className="px-6 pb-5 pt-5 text-center">
+            <p className="text-sm text-fog">Booking Code</p>
+            <button
+              onClick={() => copy(code, "code")}
+              aria-label={`Booking code ${code}, copy`}
+              className="mt-1 select-all font-display text-[44px] font-extrabold leading-none tracking-[0.06em] text-lime"
+            >
+              {code}
+            </button>
+            <p aria-live="polite" className="mt-1 h-4 text-[11px] text-fog-muted">
+              {copied === "code" ? "Code copied" : "Tap the code to copy it"}
+            </p>
+            <div className="mx-auto mt-3 flex max-w-[16rem] items-center justify-between rounded-lg bg-ink-600 px-4 py-3">
+              <span className="text-sm text-fog">Odds</span>
+              <span className="text-xl font-extrabold tabular-nums text-white">{formatMilliOdds(combined)}</span>
+            </div>
           </div>
-          <button onClick={() => copy(code, "code")} className="btn-lime mt-5 w-full py-3 text-sm">
-            {copied === "code" ? "✓ Code copied" : "Copy code"}
+
+          {/* an example bet at the slip's real odds and bonus */}
+          <div className="mx-4">
+            <p className="bg-ink-600 px-2 py-1.5 text-sm text-white">Example Bet</p>
+            <dl className="space-y-1.5 bg-ink-700 px-5 py-3 text-sm text-white">
+              <div className={row}>
+                <dt>Stake</dt>
+                <dd>{formatPesewas(EXAMPLE_STAKE)}</dd>
+              </div>
+              <div className={row}>
+                <dt>Bonus</dt>
+                <dd>{formatPesewas(extra)}</dd>
+              </div>
+              <div className={row}>
+                <dt>Payout</dt>
+                <dd>{formatPesewas(win + extra)}</dd>
+              </div>
+            </dl>
+
+            <p className="mt-px bg-ink-600 px-2 py-1.5 text-sm text-white">Selections</p>
+            <ul className="divide-y divide-line bg-ink-700">
+              {picks.map((p) => {
+                const pick = pickLabel(p);
+                return (
+                  <li key={p.selectionId} className="px-5 py-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <span className="flex min-w-0 items-center gap-2 text-[15px] font-bold text-white">
+                        <BallIcon />
+                        <span className="break-words">{pick.tag ?? pick.name}</span>
+                      </span>
+                      <span className="shrink-0 text-[15px] font-bold tabular-nums text-white">{formatMilliOdds(p.milliOdds)}</span>
+                    </div>
+                    <p className="mt-0.5 break-words text-sm text-fog">{p.fixtureName.replace(" v ", " vs ")}</p>
+                    <p className="break-words text-sm text-fog">{p.marketName}</p>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+
+          <a href={siteUrl} className="mx-auto my-4 block w-fit rounded-full bg-lime/15 px-6 py-1.5 text-sm font-semibold text-lime">
+            {siteUrl.replace(/^https?:\/\//, "")}
+          </a>
+        </div>
+
+        {/* ways to share */}
+        <div className="grid grid-cols-5 gap-1 border-t border-line bg-ink-700 px-2 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3">
+          <a href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(link)}`} target="_blank" rel="noopener noreferrer" className={shareBtn}>
+            <span className={shareIcon}>
+              <svg viewBox="0 0 24 24" className="h-[18px] w-[18px]" fill="currentColor" aria-hidden>
+                <path d="M17.8 3h3.1l-6.8 7.8L22 21h-6.2l-4.9-6.4L5.3 21H2.2l7.3-8.3L2 3h6.4l4.4 5.8zm-1.1 16.2h1.7L7.4 4.7H5.6z" />
+              </svg>
+            </span>
+            X / Twitter
+          </a>
+          <a href={`https://wa.me/?text=${encodeURIComponent(`${text}: ${link}`)}`} target="_blank" rel="noopener noreferrer" className={shareBtn}>
+            <span className={shareIcon}>
+              <svg viewBox="0 0 24 24" className="h-5 w-5" fill="currentColor" aria-hidden>
+                <path d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2Zm5.3 14.1c-.2.6-1.3 1.2-1.8 1.2-.5.1-1 .2-3.3-.7-2.8-1.1-4.6-4-4.7-4.2-.1-.2-1.1-1.5-1.1-2.9 0-1.4.7-2 1-2.3.2-.3.5-.3.7-.3h.5c.2 0 .4 0 .6.5l.8 2c.1.2.1.4 0 .5l-.3.5-.4.4c-.1.1-.3.3-.1.6.2.3.8 1.3 1.7 2.1 1.2 1 2.1 1.4 2.4 1.5.3.2.5.1.6-.1l.8-1c.2-.3.4-.2.6-.1l1.9.9c.3.1.5.2.5.3.1.2.1.7-.1 1.4Z" />
+              </svg>
+            </span>
+            Whatsapp
+          </a>
+          <button onClick={shareInApp} className={shareBtn}>
+            <span className={shareIcon}>
+              <svg viewBox="0 0 24 24" className="h-5 w-5" fill="currentColor" aria-hidden>
+                <path d="M4 4h7v7H4zm9 0h7v7h-7zM4 13h7v7H4zm9 0h7v7h-7z" />
+              </svg>
+            </span>
+            Share In App
+          </button>
+          <button onClick={() => copy(link, "link")} className={shareBtn}>
+            <span className={shareIcon}>
+              <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden>
+                <path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1" />
+              </svg>
+            </span>
+            {copied === "link" ? "Copied" : "Copy Link"}
+          </button>
+          <button onClick={save} disabled={!image} className={shareBtn}>
+            <span className={shareIcon}>
+              <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden>
+                <path d="M12 4v11m0 0-4-4m4 4 4-4M5 20h14" />
+              </svg>
+            </span>
+            {saved ? "Saved" : "Save"}
           </button>
         </div>
-
-        {/* tear line */}
-        <div aria-hidden className="mx-6 border-t-2 border-dashed border-line" />
-
-        <div className="px-6 pb-6 pt-5">
-          {url && (
-            <button
-              onClick={() => setZoom(true)}
-              aria-label="Enlarge slip picture"
-              className="group relative mx-auto mb-5 flex w-full items-center gap-3 rounded-xl border border-line bg-ink-600 p-2.5 text-left transition-colors hover:border-ink-400"
-            >
-              <img src={url} alt="" className="h-16 w-auto rounded-md shadow-card" />
-              <span className="min-w-0 flex-1">
-                <span className="block text-sm font-semibold text-white">Shareable slip</span>
-                <span className="block text-xs text-fog-muted">Tap to view full size</span>
-              </span>
-              <svg viewBox="0 0 24 24" className="h-5 w-5 shrink-0 text-fog group-hover:text-white" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden>
-                <circle cx="11" cy="11" r="6" />
-                <path d="m20 20-4.5-4.5M11 8v6M8 11h6" />
-              </svg>
-            </button>
-          )}
-
-          <p className="mb-3 text-center text-[11px] font-bold uppercase tracking-[0.2em] text-fog-muted">Share</p>
-          <div className="grid grid-cols-5 gap-1">
-            <a href={`https://wa.me/?text=${encodeURIComponent(`${text}: ${link}`)}`} target="_blank" rel="noopener noreferrer" className={shareBtn}>
-              <span className={`${shareIcon} bg-[#25D366] text-snow`}>
-                <svg viewBox="0 0 24 24" className="h-5 w-5" fill="currentColor" aria-hidden>
-                  <path d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2Zm5.3 14.1c-.2.6-1.3 1.2-1.8 1.2-.5.1-1 .2-3.3-.7-2.8-1.1-4.6-4-4.7-4.2-.1-.2-1.1-1.5-1.1-2.9 0-1.4.7-2 1-2.3.2-.3.5-.3.7-.3h.5c.2 0 .4 0 .6.5l.8 2c.1.2.1.4 0 .5l-.3.5-.4.4c-.1.1-.3.3-.1.6.2.3.8 1.3 1.7 2.1 1.2 1 2.1 1.4 2.4 1.5.3.2.5.1.6-.1l.8-1c.2-.3.4-.2.6-.1l1.9.9c.3.1.5.2.5.3.1.2.1.7-.1 1.4Z" />
-                </svg>
-              </span>
-              WhatsApp
-            </a>
-            <a href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(link)}`} target="_blank" rel="noopener noreferrer" className={shareBtn}>
-              <span className={`${shareIcon} bg-black text-snow ring-1 ring-fog/25`}>
-                <svg viewBox="0 0 24 24" className="h-[18px] w-[18px]" fill="currentColor" aria-hidden>
-                  <path d="M17.8 3h3.1l-6.8 7.8L22 21h-6.2l-4.9-6.4L5.3 21H2.2l7.3-8.3L2 3h6.4l4.4 5.8zm-1.1 16.2h1.7L7.4 4.7H5.6z" />
-                </svg>
-              </span>
-              X
-            </a>
-            <a href={`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(link)}`} target="_blank" rel="noopener noreferrer" className={shareBtn}>
-              <span className={`${shareIcon} bg-[#1877F2] text-snow`}>
-                <svg viewBox="0 0 24 24" className="h-5 w-5" fill="currentColor" aria-hidden>
-                  <path d="M13.5 21v-7.5h2.5l.4-3h-2.9V8.6c0-.9.3-1.5 1.5-1.5h1.6V4.4A21 21 0 0 0 14.3 4c-2.3 0-3.8 1.4-3.8 3.9v2.6H8v3h2.5V21z" />
-                </svg>
-              </span>
-              Facebook
-            </a>
-            <button onClick={() => copy(link, "link")} className={shareBtn}>
-              <span className={`${shareIcon} bg-ink-500 text-white`}>
-                <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden>
-                  <path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1" />
-                </svg>
-              </span>
-              {copied === "link" ? "Copied" : "Link"}
-            </button>
-            {image ? (
-              <button onClick={save} className={shareBtn}>
-                <span className={`${shareIcon} bg-ink-500 text-white`}>
-                  <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden>
-                    <path d="M12 4v11m0 0-4-4m4 4 4-4M5 20h14" />
-                  </svg>
-                </span>
-                {saved ? "Saved" : "Save"}
-              </button>
-            ) : (
-              <span />
-            )}
-          </div>
-        </div>
       </div>
-
-      {zoom && url && (
-        <div className="absolute inset-0 z-10 flex items-center justify-center p-4" onClick={() => setZoom(false)}>
-          <div className="absolute inset-0 bg-black/80" />
-          <img src={url} alt={`Booking code ${code} with its selections`} className="relative max-h-full w-auto max-w-full rounded-lg shadow-lift sm:max-w-sm" />
-        </div>
-      )}
     </div>
+  );
+}
+
+const EXAMPLE_STAKE = 10_000n; // GHS 100, the same example the saved slip picture uses
+/** "11/11/2026 01:58" in Ghana time. */
+const slipTime = (d: Date) =>
+  new Intl.DateTimeFormat("en-GB", { timeZone: "Africa/Accra", day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit", hour12: false })
+    .format(d)
+    .replace(",", "");
+
+function GhanaFlag() {
+  return (
+    <svg viewBox="0 0 30 20" className="h-4 w-6 rounded-sm" aria-hidden>
+      <rect width="30" height="20" fill="#006B3F" />
+      <rect width="30" height="13.33" fill="#FCD116" />
+      <rect width="30" height="6.67" fill="#CE1126" />
+      <path fill="#000" d="m15 6.9.75 2.3h2.42l-1.96 1.42.75 2.3L15 11.5l-1.96 1.42.75-2.3-1.96-1.42h2.42z" />
+    </svg>
+  );
+}
+
+function BallIcon() {
+  return (
+    <svg viewBox="0 0 24 24" className="h-5 w-5 shrink-0" aria-hidden>
+      <circle cx="12" cy="12" r="10" fill="#fff" stroke="#0C1421" strokeWidth="1.2" />
+      <path fill="#0C1421" d="m12 8 3.8 2.8-1.5 4.5H9.7l-1.5-4.5z" />
+      <path stroke="#0C1421" strokeWidth="1.2" d="M12 8V2.6M15.8 10.8l5.2-1.7M14.3 15.3l3.2 4.4M9.7 15.3l-3.2 4.4M8.2 10.8 3 9.1" />
+    </svg>
   );
 }

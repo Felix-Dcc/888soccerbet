@@ -82,6 +82,7 @@ export function AppShell({
   footer,
   minStakeGhs,
   bonus,
+  siteUrl,
   children,
 }: {
   sidebar: React.ReactNode;
@@ -89,6 +90,7 @@ export function AppShell({
   footer?: React.ReactNode;
   minStakeGhs: number;
   bonus: BonusRules;
+  siteUrl: string; // the public address shared links use (betzone.com.co in production)
   children: React.ReactNode;
 }) {
   const [slipOpen, setSlipOpen] = useState(false);
@@ -115,7 +117,7 @@ export function AppShell({
     return () => window.removeEventListener(OPEN_SLIP_EVENT, onOpen);
   }, []);
   return (
-    <BetslipProvider minStake={minStakeGhs} bonus={bonus}>
+    <BetslipProvider minStake={minStakeGhs} bonus={bonus} siteUrl={siteUrl}>
       {/* Keyboard users jump past the header, sports row and menu straight to the page. */}
       <a
         href="#main"

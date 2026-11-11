@@ -22,6 +22,7 @@ interface BetslipState {
   stake: number;
   minStake: number; // GHS, from the server setting the bet engine enforces
   bonus: BonusRules; // multiple-bonus rates, so the slip can show the bonus before the bet is placed
+  siteUrl: string; // public address for shared booking links
   open: boolean;
   add: (p: Pick) => void;
   remove: (selectionId: string) => void;
@@ -37,7 +38,7 @@ interface BetslipState {
 const Ctx = createContext<BetslipState | null>(null);
 const KEY = "sb.betslip.v1";
 
-export function BetslipProvider({ minStake, bonus, children }: { minStake: number; bonus: BonusRules; children: React.ReactNode }) {
+export function BetslipProvider({ minStake, bonus, siteUrl, children }: { minStake: number; bonus: BonusRules; siteUrl: string; children: React.ReactNode }) {
   const [picks, setPicks] = useState<Pick[]>([]);
   const [stake, setStake] = useState(minStake);
   const [open, setOpen] = useState(false);
@@ -134,8 +135,8 @@ export function BetslipProvider({ minStake, bonus, children }: { minStake: numbe
   const replace = useCallback((next: Pick[]) => setPicks(next), []);
 
   const value = useMemo<BetslipState>(
-    () => ({ picks, stake, minStake, bonus, open, add, remove, has, clear, replace, setStake, setOpen, notice, setNotice }),
-    [picks, stake, minStake, bonus, open, add, remove, has, clear, replace, notice],
+    () => ({ picks, stake, minStake, bonus, siteUrl, open, add, remove, has, clear, replace, setStake, setOpen, notice, setNotice }),
+    [picks, stake, minStake, bonus, siteUrl, open, add, remove, has, clear, replace, notice],
   );
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
