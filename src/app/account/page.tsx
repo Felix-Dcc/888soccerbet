@@ -54,13 +54,7 @@ export default async function AccountPage() {
               <p className="truncate text-sm text-fog">{user.email}</p>
               <div className="mt-2 flex flex-wrap gap-1.5 text-[11px] font-bold">
                 <Pill tone={user.status === "ACTIVE" ? "ok" : "warn"}>{titleCase(user.status)}</Pill>
-                {verified ? (
-                  <Pill tone="ok">Email verified</Pill>
-                ) : (
-                  <Link href="/verify-email" className="rounded-full bg-gold/15 px-2.5 py-0.5 text-gold hover:bg-gold/25">
-                    Verify email →
-                  </Link>
-                )}
+                {verified && <Pill tone="ok">Email verified</Pill>}
                 <Pill tone="muted">Member since {monthYear(user.createdAt)}</Pill>
               </div>
             </div>

@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { FlutterwaveError } from "../src/lib/providers/payments/flutterwave";
 import { FlutterwaveNgProvider } from "../src/lib/providers/payments/flutterwaveNg";
-import { formatNaira, normalizeNgPhone, toKobo } from "../src/lib/nigeria";
+import { formatNaira, toKobo } from "../src/lib/nigeria";
 
 const fw = () => new FlutterwaveNgProvider("FLWSECK_TEST-abc", "hash-123", "https://betzone.com.co");
 const reply = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status });
@@ -19,15 +19,7 @@ const tx = (over: Record<string, unknown> = {}) => ({ status: "success", data: {
 
 afterEach(() => vi.unstubAllGlobals());
 
-describe("Nigerian numbers and Naira", () => {
-  it("normalises Nigerian mobile numbers and refuses anything else", () => {
-    expect(normalizeNgPhone("0803 123 4567")).toBe("+2348031234567");
-    expect(normalizeNgPhone("+234 803 123 4567")).toBe("+2348031234567");
-    expect(normalizeNgPhone("2349031234567")).toBe("+2349031234567");
-    expect(normalizeNgPhone("0241234567")).toBeNull(); // a Ghana number
-    expect(normalizeNgPhone("06031234567")).toBeNull();
-  });
-
+describe("Naira", () => {
   it("converts pesewas to kobo exactly at the admin's rate", () => {
     expect(toKobo(10000n, 130)).toBe(1300000n); // GHS 100 at 130 = ₦13,000.00
     expect(toKobo(5050n, 130)).toBe(656500n); // GHS 50.50 = ₦6,565.00

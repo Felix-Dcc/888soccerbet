@@ -4,7 +4,6 @@ import { registerSchema } from "@/lib/validation";
 import { json, errorResponse, clientIp } from "@/lib/http";
 import { rateLimit } from "@/lib/rateLimit";
 import { verifyTurnstile } from "@/lib/turnstile";
-import { emailVerified, sendVerificationCode } from "@/lib/emailFlows";
 
 export async function POST(req: Request) {
   try {
@@ -18,9 +17,7 @@ export async function POST(req: Request) {
     const input = registerSchema.parse(body);
     const user = await registerUser(input);
     await createSession(user.id);
-    await sendVerificationCode(user);
-    // verify: the browser goes straight to the code page (only when email is set up).
-    return json({ id: user.id, email: user.email, verify: !emailVerified(user) }, { status: 201 });
+    return json({ id: user.id, email: user.email }, { status: 201 });
   } catch (e) {
     return errorResponse(e);
   }

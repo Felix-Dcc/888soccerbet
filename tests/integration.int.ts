@@ -721,35 +721,36 @@ describe("accounts", () => {
   const unique = () => randomUUID().slice(0, 8);
   const phone = () => "05" + String(Math.floor(Math.random() * 1e8)).padStart(8, "0");
 
-  it("registers with a referral code, normalises the phone and allows phone or email login", async () => {
-    const referrer = await registerUser({ email: `r_${unique()}@t.gh`, password: "password1", acceptTerms: true, phone: phone(), dateOfBirth: "1990-01-01" });
+  it("registers with name, email and password and a referral code; logs in by email, or by an older account's phone", async () => {
+    const referrer = await registerUser({ email: `r_${unique()}@t.gh`, password: "password1", acceptTerms: true });
     // Players don't refer players: only an administrator's code is accepted.
     await expect(
-      registerUser({ email: `x_${unique()}@t.gh`, password: "password1", acceptTerms: true, phone: phone(), dateOfBirth: "1990-01-01", referralCode: referrer.referralCode }),
+      registerUser({ email: `x_${unique()}@t.gh`, password: "password1", acceptTerms: true, referralCode: referrer.referralCode }),
     ).rejects.toMatchObject({ code: "BAD_REFERRAL" });
     await prisma.user.update({ where: { id: referrer.id }, data: { role: "ADMIN" } });
-    const p = phone();
-    const intl = "+233 " + p.slice(1);
     const user = await registerUser({
       name: "  Ama Mensah ",
-      email: `U_${unique()}@T.GH`.toLowerCase(), password: "password1", acceptTerms: true, phone: intl, dateOfBirth: "1990-01-01",
+      email: `U_${unique()}@T.GH`.toLowerCase(), password: "password1", acceptTerms: true,
       referralCode: referrer.referralCode.toLowerCase(),
     });
-    expect(user.phone).toBe(p);
+    expect(user).toMatchObject({ phone: null, dateOfBirth: null, emailVerifiedAt: null, country: "GH" });
     expect(user.displayName).toBe("Ama Mensah");
     expect(user.referredById).toBe(referrer.id);
     expect(user.referralCode).not.toBe(referrer.referralCode);
     expect(user.termsVersion).toBe(TERMS_VERSION); // consent recorded with the version accepted
     expect(user.termsAcceptedAt).toBeInstanceOf(Date);
-    expect((await findUserByIdentifier(p))?.id).toBe(user.id);
-    expect((await findUserByIdentifier(intl))?.id).toBe(user.id);
     expect((await findUserByIdentifier(user.email.toUpperCase()))?.id).toBe(user.id);
+    // Accounts made when sign-up asked for a phone still log in with it, in any format.
+    const p = phone();
+    await prisma.user.update({ where: { id: user.id }, data: { phone: p } });
+    expect((await findUserByIdentifier(p))?.id).toBe(user.id);
+    expect((await findUserByIdentifier("+233 " + p.slice(1)))?.id).toBe(user.id);
   });
 
   it("credits sign-ups without a code to the default administrator, never overriding a code and never blocking", async () => {
-    const admin = async () => prisma.user.update({ where: { id: (await registerUser({ email: `a_${unique()}@t.gh`, password: "password1", acceptTerms: true, phone: phone(), dateOfBirth: "1990-01-01" })).id }, data: { role: "ADMIN" } });
+    const admin = async () => prisma.user.update({ where: { id: (await registerUser({ email: `a_${unique()}@t.gh`, password: "password1", acceptTerms: true })).id }, data: { role: "ADMIN" } });
     const [element, other] = [await admin(), await admin()];
-    const signUp = (referralCode?: string) => registerUser({ email: `n_${unique()}@t.gh`, password: "password1", acceptTerms: true, phone: phone(), dateOfBirth: "1990-01-01", referralCode });
+    const signUp = (referralCode?: string) => registerUser({ email: `n_${unique()}@t.gh`, password: "password1", acceptTerms: true, referralCode });
     vi.stubEnv("DEFAULT_REFERRAL_CODE", ` ${element.referralCode.slice(0, 4)}-${element.referralCode.slice(4)} `.toLowerCase()); // typed loosely into Railway
     try {
       expect(await signUp()).toMatchObject({ referredById: element.id, referralSource: "AUTO" });
@@ -761,19 +762,13 @@ describe("accounts", () => {
     }
   });
 
-  it("rejects an unknown referral code, a duplicate phone in another format, a duplicate email, and under-18s", async () => {
-    const p = phone();
+  it("rejects an unknown referral code and a duplicate email", async () => {
     const email = `d_${unique()}@t.gh`;
-    await registerUser({ email, password: "password1", acceptTerms: true, phone: p, dateOfBirth: "1990-01-01" });
-    await expect(registerUser({ email: `x_${unique()}@t.gh`, password: "password1", acceptTerms: true, phone: phone(), dateOfBirth: "1990-01-01", referralCode: "NOPE0000" }))
+    await registerUser({ email, password: "password1", acceptTerms: true });
+    await expect(registerUser({ email: `x_${unique()}@t.gh`, password: "password1", acceptTerms: true, referralCode: "NOPE0000" }))
       .rejects.toMatchObject({ code: "BAD_REFERRAL" });
-    await expect(registerUser({ email: `y_${unique()}@t.gh`, password: "password1", acceptTerms: true, phone: "233" + p.slice(1), dateOfBirth: "1990-01-01" }))
-      .rejects.toMatchObject({ code: "PHONE_TAKEN" });
-    await expect(registerUser({ email, password: "password1", acceptTerms: true, phone: phone(), dateOfBirth: "1990-01-01" }))
+    await expect(registerUser({ email, password: "password1", acceptTerms: true }))
       .rejects.toMatchObject({ code: "EMAIL_TAKEN" });
-    const tooYoung = new Date(); tooYoung.setFullYear(tooYoung.getFullYear() - 17);
-    await expect(registerUser({ email: `z_${unique()}@t.gh`, password: "password1", acceptTerms: true, phone: phone(), dateOfBirth: tooYoung.toISOString().slice(0, 10) }))
-      .rejects.toMatchObject({ code: "UNDERAGE" });
   });
 });
 
@@ -1915,8 +1910,6 @@ describe("admin system", () => {
     registerUser({
       email: `p_${uniq()}@t.gh`,
       password: "password1",
-      phone: "05" + String(Math.floor(Math.random() * 1e8)).padStart(8, "0"),
-      dateOfBirth: "1990-01-01",
       referralCode: code,
       referralSource: source,
       acceptTerms: true,
@@ -2085,50 +2078,28 @@ describe("admin system", () => {
 });
 
 describe("email", () => {
-  beforeAll(() => vi.stubEnv("BREVO_API_KEY", "test")); // the check only applies once email is configured
+  beforeAll(() => vi.stubEnv("BREVO_API_KEY", "test")); // email is set up: still no code is asked for
   afterAll(() => vi.unstubAllEnvs());
   const unique = () => randomUUID().slice(0, 8);
   const phone = () => "05" + String(Math.floor(Math.random() * 1e8)).padStart(8, "0");
   const lastTo = (to: string) => [...mail.sent].reverse().find((m) => m.to === to);
 
-  it("locks money until the emailed code is confirmed; codes are single-use", async () => {
-    const user = await registerUser({ email: `v_${unique()}@t.gh`, password: "password1", acceptTerms: true, phone: phone(), dateOfBirth: "1990-01-01" });
+  it("never asks a new player for an email code: no code is sent and money isn't locked", async () => {
+    const user = await registerUser({ email: `v_${unique()}@t.gh`, password: "password1", acceptTerms: true });
     expect(user.emailVerifiedAt).toBeNull();
-    expect(() => requireVerifiedEmail(user)).toThrow(expect.objectContaining({ code: "EMAIL_UNVERIFIED" }));
-    expect(await sendVerificationCode(user)).toBe(true);
-    const code = lastTo(user.email)!.subject.slice(0, 6);
-    expect(code).toMatch(/^\d{6}$/);
-    const wrong = code === "000000" ? "111111" : "000000";
-    await expect(confirmEmailCode(user.id, wrong)).rejects.toMatchObject({ code: "BAD_CODE" });
-    await confirmEmailCode(user.id, code);
-    const after = await prisma.user.findUniqueOrThrow({ where: { id: user.id } });
-    expect(after.emailVerifiedAt).toBeInstanceOf(Date);
-    expect(() => requireVerifiedEmail(after)).not.toThrow();
-    await expect(confirmEmailCode(user.id, code)).rejects.toMatchObject({ code: "BAD_CODE" }); // used
-    // A confirmation code is never accepted as a password link.
-    await expect(consumeAccessToken(`email-verify:${user.id}:${code}`, "a-strong-password")).rejects.toMatchObject({ code: "BAD_LINK" });
-  });
-
-  it("only the newest code works, and staff never need one", async () => {
-    const user = await registerUser({ email: `n_${unique()}@t.gh`, password: "password1", acceptTerms: true, phone: phone(), dateOfBirth: "1990-01-01" });
-    await sendVerificationCode(user);
-    const first = lastTo(user.email)!.subject.slice(0, 6);
-    await sendVerificationCode(user);
-    const second = lastTo(user.email)!.subject.slice(0, 6);
-    if (first !== second) await expect(confirmEmailCode(user.id, first)).rejects.toMatchObject({ code: "BAD_CODE" });
-    await confirmEmailCode(user.id, second);
-    expect(() => requireVerifiedEmail({ role: "ADMIN", emailVerifiedAt: null })).not.toThrow();
-    vi.stubEnv("BREVO_API_KEY", "");
-    expect(() => requireVerifiedEmail({ role: "USER", emailVerifiedAt: null })).not.toThrow(); // email not set up: nobody is locked out
-    vi.stubEnv("BREVO_API_KEY", "test");
+    expect(() => requireVerifiedEmail(user)).not.toThrow();
+    const before = mail.sent.length;
+    expect(await sendVerificationCode(user)).toBe(false);
+    expect(mail.sent.length).toBe(before);
+    expect(lastTo(user.email)).toBeUndefined();
   });
 
   it("emails a single-use reset link that also confirms the email, and reveals nothing for unknown accounts", async () => {
-    const user = await registerUser({ email: `f_${unique()}@t.gh`, password: "password1", acceptTerms: true, phone: phone(), dateOfBirth: "1990-01-01" });
+    const user = await registerUser({ email: `f_${unique()}@t.gh`, password: "password1", acceptTerms: true });
     const before = mail.sent.length;
     await requestPasswordReset(`nobody_${unique()}@t.gh`);
     expect(mail.sent.length).toBe(before); // nothing sent, same answer to the caller
-    await requestPasswordReset(user.phone!);
+    await requestPasswordReset(user.email);
     const link = lastTo(user.email)!.text.match(/\/account\/setup\/([\w-]+)/)![1]!;
     await expect(consumeAccessToken(link, "a-new-password1")).resolves.toMatchObject({ userId: user.id, role: "USER" });
     await expect(consumeAccessToken(link, "a-new-password2")).rejects.toMatchObject({ code: "BAD_LINK" });
@@ -2292,7 +2263,6 @@ describe("super admin from environment", () => {
 });
 
 describe("Nigeria (Naira on Flutterwave, GHS balances, bank payouts by hand)", () => {
-  const ngPhone = () => `080${Math.floor(10_000_000 + Math.random() * 89_999_999)}`;
   const ngUser = async (ghs: number) => {
     const u = await fundedUser(ghs);
     await prisma.user.update({ where: { id: u.id }, data: { country: "NG", kycStatus: "VERIFIED" } });
@@ -2301,17 +2271,14 @@ describe("Nigeria (Naira on Flutterwave, GHS balances, bank payouts by hand)", (
   beforeAll(() => pinSettings({ ngnPerGhs: 130 }));
   afterAll(() => pinSettings({ ngnPerGhs: 0 }));
 
-  it("opens sign-up only once a Naira rate is set, with a Nigerian number they can log in by", async () => {
-    const local = ngPhone();
-    const input = { name: "Ada Obi", email: `ng_${randomUUID()}@t.gh`, password: "password1", phone: local, dateOfBirth: "1990-01-01", country: "NG" as const, acceptTerms: true as const };
+  it("opens Nigerian sign-up only once a Naira rate is set", async () => {
+    const input = { name: "Ada Obi", email: `ng_${randomUUID()}@t.gh`, password: "password1", country: "NG" as const, acceptTerms: true as const };
     await pinSettings({ ngnPerGhs: 0 });
     await expect(registerUser(input)).rejects.toMatchObject({ code: "NIGERIA_CLOSED" });
     await pinSettings({ ngnPerGhs: 130 });
-    await expect(registerUser({ ...input, phone: "0241234567" })).rejects.toMatchObject({ code: "BAD_PHONE" }); // a Ghana number
     const u = await registerUser(input);
-    expect(u).toMatchObject({ country: "NG", phone: `+234${local.slice(1)}` });
-    expect((await findUserByIdentifier(local))?.id).toBe(u.id);
-    expect((await findUserByIdentifier(`+234 ${local.slice(1)}`))?.id).toBe(u.id);
+    expect(u).toMatchObject({ country: "NG", phone: null });
+    expect((await findUserByIdentifier(input.email))?.id).toBe(u.id);
   });
 
   it("credits a Naira deposit its GHS amount, and only when the Naira asked was paid", async () => {

@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach } from "vitest";
-import { normalizePhone, isAdult, extendSelfExclusion } from "../src/lib/accounts";
+import { normalizePhone, extendSelfExclusion } from "../src/lib/accounts";
 import { isBettable } from "../src/lib/markets";
 import { normaliseCode } from "../src/lib/ids";
 import { registerSchema, withdrawSchema } from "../src/lib/validation";
@@ -18,14 +18,6 @@ describe("normalizePhone", () => {
     expect(normalizePhone("02412345678")).toBeNull();
     expect(normalizePhone("+44 7700 900123")).toBeNull();
     expect(normalizePhone("me@example.com")).toBeNull();
-  });
-});
-
-describe("isAdult", () => {
-  const now = new Date("2026-10-23T12:00:00Z");
-  it("is true from the 18th birthday onwards", () => {
-    expect(isAdult(new Date("2008-10-23T00:00:00Z"), now)).toBe(true);
-    expect(isAdult(new Date("2008-10-24T00:00:00Z"), now)).toBe(false);
   });
 });
 

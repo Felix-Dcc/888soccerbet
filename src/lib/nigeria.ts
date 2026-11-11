@@ -11,14 +11,6 @@ export const COUNTRY_NAME: Record<Country, string> = { GH: "Ghana", NG: "Nigeria
 /** Withdrawals of Nigerian players: always paid by hand to a bank account. */
 export const NG_BANK_PROVIDER = "ng_bank";
 
-/** Nigerian mobile number -> "+234XXXXXXXXXX". Accepts 0XXXXXXXXXX, 234XXXXXXXXXX and +234... with spaces or dashes. */
-export function normalizeNgPhone(raw: string): string | null {
-  const d = raw.replace(/[\s\-()]/g, "").replace(/^\+/, "");
-  if (/^0[789][01]\d{8}$/.test(d)) return `+234${d.slice(1)}`;
-  if (/^234[789][01]\d{8}$/.test(d)) return `+${d}`;
-  return null;
-}
-
 /** GHS pesewas -> kobo at ngnPerGhs Naira per GHS. Exact: one pesewa is ngnPerGhs kobo. */
 export function toKobo(pesewas: bigint, ngnPerGhs: number): bigint {
   if (!Number.isInteger(ngnPerGhs) || ngnPerGhs <= 0) throw new Error("no Naira rate set");

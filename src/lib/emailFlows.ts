@@ -18,8 +18,8 @@ const RESET_TTL_MS = 30 * 60_000;
 /** A 6-digit code is too small to be unique on its own, so its hash is bound to the user. */
 const codeHash = (userId: string, code: string) => hashToken(`email-verify:${userId}:${code}`);
 
-// Only enforced once email can actually be sent: without BREVO_API_KEY no code would ever arrive.
-const needsVerifying = (u: Pick<User, "role" | "emailVerifiedAt">) => !!process.env.BREVO_API_KEY && u.role === "USER" && !u.emailVerifiedAt;
+// Email verification is off: sign-up takes only a name, email and password, and no code is ever sent or asked for.
+const needsVerifying = (_u: Pick<User, "role" | "emailVerifiedAt">) => false;
 
 /** For the UI: false only while this player still has to enter their code. */
 export const emailVerified = (u: Pick<User, "role" | "emailVerifiedAt">) => !needsVerifying(u);
