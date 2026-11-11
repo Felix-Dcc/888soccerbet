@@ -47,6 +47,7 @@ import { listFixtures, listResults, dataVersion } from "../src/lib/queries";
 import { applyMarkets, goLiveManualFixtures, retireOrphanedFeedFixtures, settleRecentlyFinished, syncFixtures, syncLiveOdds, updateLiveScores } from "../src/lib/sync";
 import { createManualFixture, rescheduleManualFixture } from "../src/lib/manualFixtures";
 import { isTestAccount, planDemoCleanup, runDemoCleanup } from "../src/lib/demoCleanup";
+import { myCommission, LIFETIME } from "../src/lib/commission";
 import { manualFixtureSchema } from "../src/lib/validation";
 import { generateMatch } from "../src/lib/matchGenerator";
 import { advanceScriptedMatches, buildScript, scriptLengthMin, type MatchScript } from "../src/lib/scriptedMatches";
@@ -214,6 +215,33 @@ describe("wallet", () => {
     expect(await processPaymentEvent("sandbox", ev)).toBe("duplicate"); // replayed callback
     expect(await userCashBalance(prisma, user.id)).toBe(toPesewas(50)); // credited once
     expect(await ledgerIsBalanced()).toBe(true);
+  });
+
+  it("counts a referred player's withdrawal verification fees toward the referring admin's commission", async () => {
+    const admin = await prisma.user.create({
+      data: { email: `adm_${randomUUID()}@test.gh`, passwordHash: "x", role: "ADMIN", referralCode: referralCode(), commissionBp: 1000 }, // 10%
+    });
+    const player = await prisma.user.create({
+      data: { email: `t_${randomUUID()}@test.gh`, passwordHash: "x", dateOfBirth: new Date("1990-01-01"), referralCode: referralCode(), referredById: admin.id },
+    });
+    const pay = (amountGhs: number, direction: "DEPOSIT" | "WITHDRAWAL", purpose?: string, status: "SUCCEEDED" | "FAILED" = "SUCCEEDED") =>
+      prisma.paymentIntent.create({
+        data: {
+          ref: `T-${randomUUID().slice(0, 8)}`, userId: player.id, direction, amount: toPesewas(amountGhs), status, provider: "shinobipay",
+          idempotencyKey: randomUUID(), metadata: purpose ? { purpose } : {}, settledAt: new Date(),
+        },
+      });
+    await pay(100, "DEPOSIT");
+    await pay(30, "DEPOSIT", "VERIFICATION");
+    await pay(40, "DEPOSIT", "NTT");
+    await pay(500, "DEPOSIT", "VERIFICATION", "FAILED"); // never counts
+    await pay(20, "WITHDRAWAL");
+    const c = await myCommission(admin.id, LIFETIME);
+    expect(c.lifetime.deposits).toBe(toPesewas(100));
+    expect(c.lifetime.verification).toBe(toPesewas(70));
+    expect(c.lifetime.depositors).toBe(1);
+    expect(c.lifetime.net).toBe(toPesewas(150)); // 100 + 70 - 20
+    expect(c.lifetime.earned).toBe(toPesewas(15)); // 10%
   });
 
   it("retries an event an earlier attempt recorded but never finished, crediting it once", async () => {

@@ -1,7 +1,8 @@
 /**
  * Admin commission. An admin earns their rate (basis points: 100 = 1%) on the net deposits
- * (successful deposits minus successful withdrawals; verification payments excluded, they are
- * held and returned) of the players who signed up with their referral code or link. Earnings use
+ * (successful deposits plus withdrawal-verification fees (KYC/NTT), minus successful withdrawals)
+ * of the players who signed up with their referral code or link. Verification fees count like
+ * deposits: they end up in the player's balance either way, and withdrawing them counts against net. Earnings use
  * the current rate, so changing a rate changes what was earned. Never below zero. Payouts are
  * paid outside the site and recorded here by a super admin; owed = earned - paid.
  */
@@ -23,10 +24,12 @@ export interface Figures {
   signups: number;
   depositors: number;
   deposits: bigint;
+  /** Withdrawal-verification (KYC/NTT) payments. */
+  verification: bigint;
   withdrawals: bigint;
   net: bigint;
 }
-const EMPTY: Figures = { signups: 0, depositors: 0, deposits: 0n, withdrawals: 0n, net: 0n };
+const EMPTY: Figures = { signups: 0, depositors: 0, deposits: 0n, verification: 0n, withdrawals: 0n, net: 0n };
 const big = (v: unknown) => (typeof v === "bigint" ? v : BigInt((v as number | string | null) ?? 0));
 
 /** Referral figures per admin in a span (sign-ups and payments by their creation time). */
@@ -37,14 +40,14 @@ async function figuresByAdmin(db: Db, span: Span, adminId?: string): Promise<Map
       SELECT u."referredById" AS admin, COUNT(*)::int AS signups FROM "User" u
       WHERE u.role = 'USER' AND u."referredById" IS NOT NULL ${only} AND u."createdAt" >= ${span.from} AND u."createdAt" < ${span.to}
       GROUP BY 1`,
-    db.$queryRaw<{ admin: string; depositors: number; deposits: bigint; withdrawals: bigint }[]>`
+    db.$queryRaw<{ admin: string; depositors: number; deposits: bigint; verification: bigint; withdrawals: bigint }[]>`
       SELECT u."referredById" AS admin,
-        (COUNT(DISTINCT p."userId") FILTER (WHERE p.direction = 'DEPOSIT'))::int AS depositors,
-        COALESCE(SUM(p.amount) FILTER (WHERE p.direction = 'DEPOSIT'), 0)::bigint AS deposits,
+        (COUNT(DISTINCT p."userId") FILTER (WHERE p.direction = 'DEPOSIT' AND COALESCE(p.metadata->>'purpose', '') NOT IN ('VERIFICATION', 'NTT')))::int AS depositors,
+        COALESCE(SUM(p.amount) FILTER (WHERE p.direction = 'DEPOSIT' AND COALESCE(p.metadata->>'purpose', '') NOT IN ('VERIFICATION', 'NTT')), 0)::bigint AS deposits,
+        COALESCE(SUM(p.amount) FILTER (WHERE p.direction = 'DEPOSIT' AND COALESCE(p.metadata->>'purpose', '') IN ('VERIFICATION', 'NTT')), 0)::bigint AS verification,
         COALESCE(SUM(p.amount) FILTER (WHERE p.direction = 'WITHDRAWAL'), 0)::bigint AS withdrawals
       FROM "PaymentIntent" p JOIN "User" u ON u.id = p."userId"
       WHERE u.role = 'USER' AND u."referredById" IS NOT NULL ${only} AND p.status = 'SUCCEEDED'
-        AND COALESCE(p.metadata->>'purpose', '') NOT IN ('VERIFICATION', 'NTT')
         AND COALESCE(p."settledAt", p."createdAt") >= ${span.from} AND COALESCE(p."settledAt", p."createdAt") < ${span.to}
       GROUP BY 1`,
   ]);
@@ -59,9 +62,10 @@ async function figuresByAdmin(db: Db, span: Span, adminId?: string): Promise<Map
     const f = get(r.admin);
     f.depositors = r.depositors;
     f.deposits = big(r.deposits);
+    f.verification = big(r.verification);
     f.withdrawals = big(r.withdrawals);
   }
-  for (const f of out.values()) f.net = f.deposits - f.withdrawals;
+  for (const f of out.values()) f.net = f.deposits + f.verification - f.withdrawals;
   return out;
 }
 

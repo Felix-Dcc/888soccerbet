@@ -43,8 +43,8 @@ export default async function CommissionPage({ searchParams }: { searchParams: P
             <span className="text-sm text-fog">commission · {me.isDefault ? "default rate" : "your own rate"}</span>
           </p>
           <p className="mt-3 text-xs text-fog">
-            You earn this rate on the net deposits (successful deposits minus successful withdrawals) of players who signed up with your referral code or
-            link. It always uses the current rate. Payouts are recorded by a super admin.
+            You earn this rate on the net deposits (successful deposits plus withdrawal verification fees, minus successful withdrawals) of players who
+            signed up with your referral code or link. It always uses the current rate. Payouts are recorded by a super admin.
           </p>
         </Panel>
 
@@ -57,10 +57,11 @@ export default async function CommissionPage({ searchParams }: { searchParams: P
         </Panel>
       </div>
 
-      <Strip>
+      <Strip cols="grid-cols-2 sm:grid-cols-4 lg:grid-cols-7">
         <Figure label="Code sign-ups" value={me.range.signups} note={`${me.lifetime.signups} lifetime`} title="Players who signed up with your referral code or link" />
         <Figure label="Depositors" value={me.range.depositors} title="Of those players, how many deposited" />
         <Figure label="Deposits" value={ghs(me.range.deposits)} />
+        <Figure label="Verification fees" value={ghs(me.range.verification)} title="Withdrawal verification (KYC/NTT) payments by your players" />
         <Figure label="Withdrawals" value={ghs(me.range.withdrawals)} />
         <Figure label="Net deposits" value={ghs(me.range.net)} />
         <Figure label="Commission" value={ghs(me.range.commission)} note={`at ${pct(me.bp)} · ${rangeLabel}`} />
@@ -112,13 +113,14 @@ export default async function CommissionPage({ searchParams }: { searchParams: P
 
           <Panel title="Admins · lifetime" icon="team" flush>
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[60rem] text-sm">
+              <table className="w-full min-w-[66rem] text-sm">
                 <thead className="text-left text-[11px] uppercase tracking-wider text-fog">
                   <tr>
                     <th className={td}>Admin</th>
                     <th className={td}>Rate</th>
                     <th className={tdNum}>Sign-ups</th>
                     <th className={tdNum}>Deposits</th>
+                    <th className={tdNum}>Verification</th>
                     <th className={tdNum}>Withdrawals</th>
                     <th className={tdNum}>Net deposits</th>
                     <th className={tdNum}>Earned</th>
@@ -144,6 +146,7 @@ export default async function CommissionPage({ searchParams }: { searchParams: P
                         </td>
                         <td className={tdNum}>{a.signups}</td>
                         <td className={tdNum}>{ghs(a.deposits)}</td>
+                        <td className={tdNum}>{ghs(a.verification)}</td>
                         <td className={tdNum}>{ghs(a.withdrawals)}</td>
                         <td className={tdNum}>{ghs(a.net)}</td>
                         <td className={`${tdNum} text-lime`}>{ghs(a.earned)}</td>
