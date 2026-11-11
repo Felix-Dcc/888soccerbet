@@ -19,11 +19,11 @@ export const dynamic = "force-dynamic";
 /** Home banners, all exactly 16:9 (1600x900) so they fill the slider without cropping. */
 const BANNERS: { src: StaticImageData; label: string; href?: string }[] = [
   // Every banner's "Bet now" jumps to the match list further down this page.
-  { src: banner1, label: "Every match. Every moment. Bet now", href: "/#all-matches" },
-  { src: banner2, label: "Bet smart. Win big. Bet now", href: "/#all-matches" },
-  { src: banner3, label: "Back your team. Bet now", href: "/#all-matches" },
-  { src: banner4, label: "Bet on all major sports. Bet now", href: "/#all-matches" },
-  { src: banner5, label: "Bet on the action", href: "/#all-matches" },
+  { src: banner1, label: "17 Pro Max promo: bet, win and stand a chance to win an iPhone 17 Pro Max. Bet now", href: "/#all-matches" },
+  { src: banner2, label: "Bet on tennis: live matches, top tournaments, best odds. Bet now", href: "/#all-matches" },
+  { src: banner3, label: "Back your team. Bet and win big. Bet now", href: "/#all-matches" },
+  { src: banner4, label: "Bet on your favourite sports. Bet now", href: "/#all-matches" },
+  { src: banner5, label: "Rivalries ignite. Bet and win big. Bet now", href: "/#all-matches" },
 ];
 
 const hasMainMarket = (f: UiFixture) => f.markets.some((m) => (m.type === "MATCH_RESULT" || m.type === "MONEYLINE") && m.status === "OPEN");
@@ -95,7 +95,7 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
 function BannerSlide({ src, label, href, priority }: { src: StaticImageData; label: string; href?: string; priority: boolean }) {
   // Later slides load eagerly too: they sit off-screen sideways, so lazy loading would show a blur on first slide-in.
   const img = (
-    <Image src={src} alt={label} fill priority={priority} loading={priority ? undefined : "eager"} placeholder="blur" sizes="(min-width: 1280px) 900px, 100vw" className="object-cover" draggable={false} />
+    <Image src={src} alt={label} fill priority={priority} loading={priority ? undefined : "eager"} placeholder="blur" sizes="(min-width: 1024px) 720px, 100vw" className="object-cover" draggable={false} />
   );
   return href ? (
     <Link href={href} className="relative block h-full">
