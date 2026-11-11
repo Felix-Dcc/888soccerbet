@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 
 const schema = z
   .object({
-    token: z.string().min(20).max(100),
+    token: z.string().min(12).max(100),
     email: z.string().email("Enter a valid email").max(200).transform((s) => s.toLowerCase().trim()),
     password: z.string().min(10, "Use at least 10 characters").max(200),
     confirmPassword: z.string(),

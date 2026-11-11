@@ -25,5 +25,7 @@ function mixedCode(len: number): string {
 export const bookingCode = () => mixedCode(6);
 /** An administrator's referral code: 8 characters mixing letters and numbers (e.g. "AE9MC1PK"). Shared publicly, so nothing about the admin is in it. */
 export const adminReferralCode = () => mixedCode(8);
+/** Admin invite code: 12 random symbols (~59 bits). It grants admin access, so it must stay unguessable even though it's short. */
+export const adminInviteCode = () => mixedCode(12);
 /** Codes are typed by hand; accept any case and stray spaces/dashes. */
 export const normaliseCode = (raw: string) => raw.toUpperCase().replace(/[\s-]/g, "");

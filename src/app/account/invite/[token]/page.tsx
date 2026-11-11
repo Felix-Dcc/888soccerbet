@@ -10,7 +10,7 @@ export const metadata: Metadata = { title: "Admin invite — Bet Zone", robots: 
 /** An administrator invite: the new admin chooses their own email and password. */
 export default async function AdminInvitePage({ params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
-  const valid = token.length >= 20 && token.length <= 100 && (await adminInviteValid(token));
+  const valid = token.length >= 12 && token.length <= 100 && (await adminInviteValid(token));
   return (
     <AuthShell title={valid ? "Set up your admin account" : "Invite link not valid"}>
       {valid ? (

@@ -30,7 +30,7 @@ export async function POST(req: Request) {
     confirmPassword(actor, password);
     const commissionBp = commissionPct == null ? null : Math.round(commissionPct * 100);
     const { token, expiresAt } = await createAdminInvite(actor, { ...access, commissionBp }, clientIp(req));
-    return json({ inviteUrl: `${siteUrl()}/account/invite/${token}`, expiresAt }, { status: 201 });
+    return json({ inviteUrl: `${siteUrl()}/invite/${token}`, expiresAt }, { status: 201 });
   } catch (e) {
     return errorResponse(e);
   }

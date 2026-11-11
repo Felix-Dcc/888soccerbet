@@ -14,7 +14,7 @@ import { prisma } from "./db";
 import { hashPassword, hashToken } from "./auth";
 import { audit } from "./audit";
 import { cleanPermissions } from "./permissions";
-import { adminReferralCode } from "./ids";
+import { adminInviteCode, adminReferralCode } from "./ids";
 
 export class AdminError extends Error {
   constructor(
@@ -121,7 +121,7 @@ export async function createAdminInvite(actor: User, access: InviteAccess, ip?: 
     const bp = access.commissionBp ?? null;
     if (bp !== null && (!Number.isInteger(bp) || bp < 0 || bp > 10_000)) throw new AdminError("BAD_RATE", "Enter a commission rate from 0% to 100%, up to 2 decimal places", 422);
     const admin = access.role === "ADMIN";
-    const token = randomBytes(32).toString("base64url");
+    const token = adminInviteCode();
     const invite = await tx.adminInvite.create({
       data: {
         tokenHash: hashToken(token),
